@@ -1,0 +1,46 @@
+HELP.md
+target/
+uploads/
+*.log
+.tmp-sock/
+
+### Secrets: real values only in .env (or .env.local...), never in the committed template ###
+.env
+.env.*
+!.env.example
+
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+settings.xml
+/encoded_application.properties
+src/main/resources/application.properties
