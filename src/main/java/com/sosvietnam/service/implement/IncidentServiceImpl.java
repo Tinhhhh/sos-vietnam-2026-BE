@@ -47,15 +47,26 @@ public class IncidentServiceImpl implements IncidentService {
     private static final String INCIDENT_TOPIC = "/topic/incidents";
     private static final int MAX_MEDIA_PER_INCIDENT = 10;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final long MAX_AUDIO_BYTES = 10L * 1024 * 1024;
     private static final long MAX_VIDEO_BYTES = 15L * 1024 * 1024;
-    private static final Map<String, String> EXTENSION_BY_TYPE = Map.of(
-            "image/jpeg", "jpg",
-            "image/png", "png",
-            "image/webp", "webp",
-            "image/gif", "gif",
-            "video/mp4", "mp4",
-            "video/webm", "webm",
-            "video/quicktime", "mov"
+    private static final Map<String, String> EXTENSION_BY_TYPE = Map.ofEntries(
+            Map.entry("image/jpeg", "jpg"),
+            Map.entry("image/png", "png"),
+            Map.entry("image/webp", "webp"),
+            Map.entry("image/gif", "gif"),
+            Map.entry("video/mp4", "mp4"),
+            Map.entry("video/webm", "webm"),
+            Map.entry("video/quicktime", "mov"),
+            Map.entry("audio/mpeg", "mp3"),
+            Map.entry("audio/mp3", "mp3"),
+            Map.entry("audio/wav", "wav"),
+            Map.entry("audio/x-wav", "wav"),
+            Map.entry("audio/ogg", "ogg"),
+            Map.entry("audio/aac", "aac"),
+            Map.entry("audio/m4a", "m4a"),
+            Map.entry("audio/x-m4a", "m4a"),
+            Map.entry("audio/mp4", "m4a"),
+            Map.entry("audio/webm", "weba")
     );
 
     private final IncidentRepository incidentRepository;
@@ -161,14 +172,17 @@ public class IncidentServiceImpl implements IncidentService {
                 throw new SosException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Định dạng không hỗ trợ: " + file.getOriginalFilename());
             }
             boolean isVideo = contentType.startsWith("video/");
-            if (file.getSize() > (isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
-                throw new SosException(HttpStatus.PAYLOAD_TOO_LARGE,
-                        (isVideo ? "Video tối đa 15MB: " : "Ảnh tối đa 10MB: ") + file.getOriginalFilename());
+            boolean isAudio = contentType.startsWith("audio/");
+            long maxSize = isVideo ? MAX_VIDEO_BYTES : (isAudio ? MAX_AUDIO_BYTES : MAX_IMAGE_BYTES);
+            if (file.getSize() > maxSize) {
+                String label = isVideo ? "Video tối đa 15MB: " : (isAudio ? "File ghi âm tối đa 10MB: " : "Ảnh tối đa 10MB: ");
+                throw new SosException(HttpStatus.PAYLOAD_TOO_LARGE, label + file.getOriginalFilename());
             }
 
             String fileName = mediaStorageService.store(mediaFolder(id), file, extension);
+            String mediaType = isVideo ? "VIDEO" : (isAudio ? "AUDIO" : "IMAGE");
             added.add(IncidentMediaItem.builder()
-                    .type(isVideo ? "VIDEO" : "IMAGE")
+                    .type(mediaType)
                     .fileName(fileName)
                     .originalName(file.getOriginalFilename())
                     .contentType(contentType)

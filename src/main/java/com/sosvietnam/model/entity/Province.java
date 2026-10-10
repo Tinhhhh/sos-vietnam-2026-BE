@@ -1,5 +1,6 @@
 package com.sosvietnam.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.locationtech.jts.geom.Geometry;
@@ -29,6 +30,7 @@ public class Province {
     @Column(name = "center_lng")
     private Double centerLng;
 
+    @JsonIgnore
     @Column(columnDefinition = "geometry(Geometry, 4326)")
     private Geometry geometry;
 }
