@@ -1,5 +1,6 @@
 package com.sosvietnam.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -43,6 +44,7 @@ public class RescueStation {
     @Column(name = "longitude")
     private Double longitude;
 
+    @JsonIgnore
     @Column(columnDefinition = "geometry(Point, 4326)")
     private Point location;
 }

@@ -1,5 +1,6 @@
 package com.sosvietnam.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.locationtech.jts.geom.Geometry;
@@ -42,7 +43,7 @@ public class Ward {
     @Column(name = "center_lng")
     private Double centerLng;
 
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     @Column(columnDefinition = "geometry(Geometry, 4326)")
     private Geometry geometry;
 
