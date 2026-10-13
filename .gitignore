@@ -42,5 +42,3 @@ build/
 .vscode/
 
 settings.xml
-/encoded_application.properties
-src/main/resources/application.properties
