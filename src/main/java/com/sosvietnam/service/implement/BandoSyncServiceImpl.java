@@ -45,7 +45,6 @@ public class BandoSyncServiceImpl implements BandoSyncService {
         syncFromNationalDatabase();
     }
 
-    @Transactional
     @Override
     public synchronized Map<String, Object> syncFromNationalDatabase() {
         Map<String, Object> result = new HashMap<>();
@@ -76,49 +75,71 @@ public class BandoSyncServiceImpl implements BandoSyncService {
 
             JsonNode rootNode = objectMapper.readTree(response.body());
             if (!rootNode.isArray()) {
-                throw new RuntimeException("Dữ liệu trả về không hợp lệ");
+                throw new RuntimeException("Dữ liệu trả về không hợp lệ từ máy chủ bản đồ");
             }
 
-            int countUpdated = 0;
-            int countNew = 0;
+            // 1. Tải toàn bộ Wards vào in-memory HashMap (chỉ 1 câu SELECT)
+            List<Ward> allWards = wardRepository.findAll();
+            Map<String, Ward> wardMap = new HashMap<>(allWards.size() * 2);
+            for (Ward ward : allWards) {
+                if (ward.getMalk() != null) {
+                    wardMap.put(normalizeMalk(ward.getMalk()), ward);
+                    wardMap.put(ward.getMalk().toLowerCase(), ward);
+                }
+            }
+
+            List<Ward> toUpdate = new ArrayList<>();
             LocalDateTime now = LocalDateTime.now();
 
+            // 2. Đối soát dữ liệu cực nhanh trong RAM (O(1))
             for (JsonNode item : rootNode) {
                 String magoc = item.path("magoc").asText("");
-                if ("0".equals(magoc)) continue; // Bỏ qua tỉnh, chỉ quét xã/phường
+                if ("0".equals(magoc)) continue; // Bỏ qua cấp tỉnh, chỉ quét xã/phường
 
                 String malk = item.path("malk").asText("");
-                String ten = item.path("ten").asText("");
-                String truocSapNhap = item.path("truocsapnhap").asText("");
+                String ten = item.path("ten").asText("").trim();
+                String truocSapNhap = item.path("truocsapnhap").asText("").trim();
 
-                Optional<Ward> existingOpt = wardRepository.findByMalk(malk);
-                if (existingOpt.isPresent()) {
-                    Ward ward = existingOpt.get();
-                    if (!Objects.equals(ward.getSapNhapTu(), truocSapNhap) || !Objects.equals(ward.getName(), ten)) {
+                Ward ward = wardMap.get(normalizeMalk(malk));
+                if (ward != null) {
+                    boolean changed = false;
+                    if (!ten.isEmpty() && !Objects.equals(ward.getName(), ten)) {
                         ward.setName(ten);
+                        changed = true;
+                    }
+                    if (!truocSapNhap.isEmpty() && !Objects.equals(ward.getSapNhapTu(), truocSapNhap)) {
                         ward.setSapNhapTu(truocSapNhap);
+                        changed = true;
+                    }
+                    if (changed) {
                         ward.setLastSyncedAt(now);
-                        wardRepository.save(ward);
-                        countUpdated++;
+                        toUpdate.add(ward);
                     }
                 }
             }
 
+            // 3. Batch Update toàn bộ thay đổi cùng lúc (chỉ 1 lần lưu)
+            if (!toUpdate.isEmpty()) {
+                wardRepository.saveAll(toUpdate);
+            }
+
+            int countUpdated = toUpdate.size();
             this.updatedCount = countUpdated;
             this.lastSyncTime = now;
             this.lastStatus = "SUCCESS";
             this.isSyncing = false;
 
-            log.info("✅ [BANDO SYNC] Hoàn tất đồng bộ: Đã cập nhật {} xã/phường mới nhất.", countUpdated);
+            log.info("✅ [BANDO SYNC] Hoàn tất đồng bộ: Đã cập nhật {}/{} xã/phường mới nhất.", countUpdated, allWards.size());
 
             result.put("ok", true);
-            result.put("message", "Đồng bộ thành công từ CSDL Quốc gia 2026");
+            result.put("message", "Đồng bộ thành công từ CSDL Quốc gia");
+            result.put("totalWardsInSystem", allWards.size());
             result.put("updatedCount", countUpdated);
             result.put("lastSyncTime", now.toString());
             return result;
 
         } catch (Exception e) {
-            log.error("❌ [BANDO SYNC ERROR]: {}", e.getMessage());
+            log.error("❌ [BANDO SYNC ERROR]: {}", e.getMessage(), e);
             this.lastStatus = "ERROR";
             this.isSyncing = false;
 
@@ -126,6 +147,22 @@ public class BandoSyncServiceImpl implements BandoSyncService {
             result.put("message", "Lỗi đồng bộ: " + e.getMessage());
             return result;
         }
+    }
+
+    /**
+     * Chuẩn hóa malk để khớp chính xác giữa GeoJSON ID và Bando API:
+     * Ví dụ:
+     *   "ward-01-diaphanhanhchinhcapxa_2025_3256" -> "diaphanhanhchinhcapxa_2025.3256"
+     *   "diaphanhanhchinhcapxa_2025.3256" -> "diaphanhanhchinhcapxa_2025.3256"
+     */
+    private String normalizeMalk(String malk) {
+        if (malk == null || malk.isBlank()) {
+            return "";
+        }
+        return malk.trim()
+                .replaceFirst("^ward-[0-9A-Za-z]+-", "")
+                .replaceAll("_(?=[0-9]+$)", ".")
+                .toLowerCase();
     }
 
     @Override

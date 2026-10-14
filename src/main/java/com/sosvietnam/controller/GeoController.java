@@ -4,10 +4,13 @@ import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.service.BandoSyncService;
 import com.sosvietnam.service.GeoService;
+
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.lang.annotation.Documented;
 import java.util.List;
 import java.util.Map;
 
@@ -25,8 +28,7 @@ public class GeoController {
         return ResponseEntity.ok(Map.of(
                 "ok", true,
                 "totalProvinces", provinces.size(),
-                "provinces", provinces
-        ));
+                "provinces", provinces));
     }
 
     @GetMapping("/wards")
@@ -35,10 +37,10 @@ public class GeoController {
         return ResponseEntity.ok(Map.of(
                 "ok", true,
                 "totalWards", wards.size(),
-                "wards", wards
-        ));
+                "wards", wards));
     }
 
+    @Operation(summary = "Get Ward and Province via reverse geocoding Lat/Lng")
     @GetMapping("/resolve")
     public ResponseEntity<Map<String, Object>> resolveLocation(@RequestParam double lat, @RequestParam double lng) {
         Map<String, Object> location = geoService.resolveLocation(lat, lng);
