@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Trạm cứu hộ (công an, PCCC, CSGT, bệnh viện...), không kèm geometry. */
+/** Trạm cứu hộ (công an, PCCC, bệnh viện...), không kèm geometry. */
 @Data
 @Builder
 @NoArgsConstructor

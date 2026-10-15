@@ -4,6 +4,7 @@ import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.RefreshToken;
 import com.sosvietnam.model.entity.Role;
+import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.request.AuthenticationRequest;
 import com.sosvietnam.model.payload.request.RegistrationRequest;
@@ -44,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthenServiceImpl implements AuthenService {
 
     // Role mặc định cho tài khoản tự đăng ký qua API công khai
-    private static final String PUBLIC_REGISTER_ROLE = "CITIZEN";
+    private static final String PUBLIC_REGISTER_ROLE = RoleName.CITIZEN.getRole();
 
     private final AuthenticationManager authenticationManager;
     private final AccountRepository accountRepository;

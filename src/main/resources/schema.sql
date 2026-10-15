@@ -1,4 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+-- Accent-insensitive search (RescueStationSpecification): unaccent('Cần Thơ') = 'Can Tho', 'Đ' -> 'D'
+CREATE EXTENSION IF NOT EXISTS unaccent;
 ALTER TABLE IF EXISTS rescue_stations ALTER COLUMN phone TYPE VARCHAR(100);
 -- Checksum of each seed file already loaded (DataSeeder skips a file whose checksum is unchanged)
 CREATE TABLE IF NOT EXISTS seed_versions (
@@ -13,3 +15,4 @@ ALTER TABLE seed_versions ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ;
 -- creates a column but never updates it, so a new enum constant (e.g. MOBILE_POLICE) would be rejected.
 ALTER TABLE IF EXISTS accounts DROP CONSTRAINT IF EXISTS accounts_agency_type_check;
 ALTER TABLE IF EXISTS rescue_stations DROP CONSTRAINT IF EXISTS rescue_stations_agency_type_check;
+ALTER TABLE IF EXISTS rescue_stations DROP CONSTRAINT IF EXISTS rescue_stations_level_check;

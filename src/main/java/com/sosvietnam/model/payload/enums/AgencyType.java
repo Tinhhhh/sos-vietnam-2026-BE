@@ -7,18 +7,14 @@ import java.util.Set;
 
 /**
  * Lực lượng nghiệp vụ, kèm các cấp đơn vị (UnitLevel) mà lực lượng đó có.
- * TRAFFIC_RESCUE và MILITARY chưa được phân cấp nên nhận mọi cấp.
+ * CSGT thuộc Công an nên dùng POLICE.
  */
 @Getter
 public enum AgencyType {
     POLICE("Công An", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
     MOBILE_POLICE("Cảnh Sát Cơ Động", EnumSet.of(UnitLevel.PROVINCE)),
-    // Phòng CSGT (PROVINCE) và đội CSGT địa bàn (WARD)
-    CSGT("Cảnh Sát Giao Thông", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
     FIRE("Cảnh Sát PCCC & CNCH", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
-    HOSPITAL("Y Tế - Cấp Cứu 115", EnumSet.of(UnitLevel.PROVINCE)),
-    TRAFFIC_RESCUE("Cứu Hộ Giao Thông", EnumSet.allOf(UnitLevel.class)),
-    MILITARY("Quân Sự", EnumSet.allOf(UnitLevel.class));
+    HOSPITAL("Y Tế - Cấp Cứu 115", EnumSet.of(UnitLevel.PROVINCE));
 
     private final String label;
     private final Set<UnitLevel> levels;

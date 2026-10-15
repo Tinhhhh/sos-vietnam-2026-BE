@@ -3,6 +3,7 @@ package com.sosvietnam.service;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.response.DataStatusResponse;
+import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
 import com.sosvietnam.model.payload.response.ProvinceResponse;
 import com.sosvietnam.model.payload.response.StationResponse;
@@ -20,7 +21,8 @@ public interface GeoService {
 
     List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit);
 
-    List<StationResponse> getStations(String province, AgencyType agencyType, StationLevel level);
+    ListResponse getStations(int pageNo, int pageSize, String province, AgencyType agencyType, StationLevel level,
+                             String sortBy, String sortDir);
 
     List<DataStatusResponse> getDataStatus();
 }

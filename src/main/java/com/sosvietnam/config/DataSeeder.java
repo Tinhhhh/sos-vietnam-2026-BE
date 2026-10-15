@@ -6,6 +6,7 @@ import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.repository.AccountRepository;
@@ -47,7 +48,7 @@ public class DataSeeder implements CommandLineRunner {
     private static final String STATIONS_FILE = "data/rescue_stations.json";
     private static final String STATIONS_SEED_NAME = SeedVersion.RESCUE_STATIONS;
     // Tăng số này khi đổi cách đọc file (thêm cột, đổi mapping) để lần khởi động sau nạp lại dù file không đổi
-    private static final String STATIONS_SEED_FORMAT = "2";
+    private static final String STATIONS_SEED_FORMAT = "4";
     private static final String PLACEHOLDER = "Đang cập nhật";
     private static final String UPSERT_STATION_SQL =
             "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province, ward, "
@@ -78,14 +79,13 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedRoles() {
-        List<String> defaultRoles = List.of("ADMIN", "OFFICER", "CITIZEN");
-        for (String rName : defaultRoles) {
-            if (!roleRepository.existsByRoleName(rName)) {
+        for (RoleName roleName : RoleName.values()) {
+            if (!roleRepository.existsByRoleName(roleName.getRole())) {
                 roleRepository.save(Role.builder()
-                        .roleName(rName)
-                        .description("Quyền hệ thống: " + rName)
+                        .roleName(roleName.getRole())
+                        .description(roleName.getDescription())
                         .build());
-                log.info("🛡️ [INIT ROLE] Seeded role: {}", rName);
+                log.info("🛡️ [INIT ROLE] Seeded role: {}", roleName.getRole());
             }
         }
     }
@@ -97,7 +97,7 @@ public class DataSeeder implements CommandLineRunner {
         }
         Account admin = accountRepository.findByEmail("admin@sos.vn").orElse(null);
         if (admin == null) {
-            Role adminRole = roleRepository.findByRoleName("ADMIN").orElse(null);
+            Role adminRole = roleRepository.findByRoleName(RoleName.ADMIN.getRole()).orElse(null);
             admin = Account.builder()
                     .firstName("Quản Trị")
                     .lastName("Hệ Thống")
@@ -106,7 +106,6 @@ public class DataSeeder implements CommandLineRunner {
                     .phone("0988888888")
                     .address("Bộ Chỉ Huy SOS Việt Nam")
                     .role(adminRole)
-                    .agencyType(AgencyType.MILITARY)
                     .unitLevel(UnitLevel.NATIONAL)
                     .province("TP. Hà Nội")
                     .ward("Phường Hàng Trống")
@@ -150,8 +149,8 @@ public class DataSeeder implements CommandLineRunner {
             try (InputStream in = resource.getInputStream()) {
                 accountsNode = objectMapper.readTree(in).path("accounts");
             }
-            Role officerRole = roleRepository.findByRoleName("OFFICER")
-                    .orElseThrow(() -> new IllegalStateException("Role OFFICER chưa được khởi tạo"));
+            Role officerRole = roleRepository.findByRoleName(RoleName.OFFICER.getRole())
+                    .orElseThrow(() -> new IllegalStateException("Role " + RoleName.OFFICER.getRole() + " chưa được khởi tạo"));
 
             int created = 0;
             int updated = 0;
@@ -276,7 +275,7 @@ public class DataSeeder implements CommandLineRunner {
         return new Object[] {
                 code,
                 truncate(name, 200),
-                toAgencyType(sn.path("agency").asText("police"), level, name).name(),
+                toAgencyType(sn.path("agency").asText("police")).name(),
                 level == null ? null : level.name(),
                 normalizePhoneNumber(sn.path("phone").asText(null)),
                 sn.path("address").asText(null),
@@ -294,29 +293,19 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * "agency" trong file: police | csgt | fire | hospital | traffic-rescue | military.
-     * File ghi các doanh nghiệp cứu hộ giao thông (level "enterprise") là csgt, nên trạm csgt cấp
-     * doanh nghiệp mà tên không phải đơn vị CSGT thì tính là TRAFFIC_RESCUE.
+     * "agency" trong file: police | csgt | fire | hospital | traffic-rescue.
+     * CSGT thuộc Công an, các trạm cứu hộ giao thông chưa chuẩn hoá: tạm tính là POLICE.
      */
-    static AgencyType toAgencyType(String rawAgency, StationLevel level, String name) {
-        String agency = rawAgency.trim().toUpperCase().replace('-', '_');
-        return switch (agency) {
-            case "CSGT" -> level == StationLevel.ENTERPRISE && !isCsgtUnitName(name)
-                    ? AgencyType.TRAFFIC_RESCUE
-                    : AgencyType.CSGT;
-            case "TRAFFIC_RESCUE" -> AgencyType.TRAFFIC_RESCUE;
+    static AgencyType toAgencyType(String rawAgency) {
+        return switch (rawAgency.trim().toUpperCase()) {
             case "FIRE" -> AgencyType.FIRE;
             case "HOSPITAL" -> AgencyType.HOSPITAL;
-            case "MILITARY" -> AgencyType.MILITARY;
+            case "MOBILE_POLICE", "MOBILE-POLICE" -> AgencyType.MOBILE_POLICE;
             default -> AgencyType.POLICE;
         };
     }
 
-    private static boolean isCsgtUnitName(String name) {
-        String n = name.toLowerCase();
-        return n.contains("csgt") || n.contains("cảnh sát giao thông");
-    }
-
+    /** "level" trong file: national | province | ward | enterprise; giá trị lạ lưu null. */
     static StationLevel toStationLevel(String rawLevel) {
         if (!StringUtils.hasText(rawLevel)) {
             return null;

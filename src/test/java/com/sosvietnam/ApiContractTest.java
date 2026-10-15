@@ -18,6 +18,7 @@ import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.model.payload.response.DataStatusResponse;
+import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.model.payload.response.IncidentResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
 import com.sosvietnam.model.payload.response.StationResponse;
@@ -273,20 +274,37 @@ class ApiContractTest {
 
     @Test
     void stationsList_isPublic_andPassesFilters() throws Exception {
-        when(geoService.getStations(any(), any(), any())).thenReturn(List.of(StationResponse.builder()
-                .id(1L).name("Phòng CSGT Công An TP. Cần Thơ").agencyType(AgencyType.CSGT).level(StationLevel.PROVINCE)
-                .facilityType("Trụ sở chính").build()));
-        mvc.perform(get("/api/v1/stations").param("province", "Cần Thơ").param("agency", "CSGT").param("level", "PROVINCE"))
+        StationResponse station = StationResponse.builder()
+                .id(1L).name("Công An TP. Cần Thơ").agencyType(AgencyType.POLICE).level(StationLevel.PROVINCE)
+                .facilityType("Trụ sở chính").build();
+        when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
+                .thenReturn(new ListResponse(List.of(station), 1, 5, 6, 2, true));
+        mvc.perform(get("/api/v1/stations").param("pageNo", "1").param("pageSize", "5").param("province", "c")
+                        .param("agency", "POLICE").param("level", "PROVINCE").param("sortBy", "name").param("sortDir", "desc"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].agency_type").value("CSGT"))
-                .andExpect(jsonPath("$.data[0].level").value("PROVINCE"))
-                .andExpect(jsonPath("$.data[0].facility_type").value("Trụ sở chính"));
-        verify(geoService).getStations("Cần Thơ", AgencyType.CSGT, StationLevel.PROVINCE);
+                .andExpect(jsonPath("$.data.content[0].agency_type").value("POLICE"))
+                .andExpect(jsonPath("$.data.content[0].level").value("PROVINCE"))
+                .andExpect(jsonPath("$.data.content[0].facility_type").value("Trụ sở chính"))
+                .andExpect(jsonPath("$.data.page_no").value(1))
+                .andExpect(jsonPath("$.data.page_size").value(5))
+                .andExpect(jsonPath("$.data.total_elements").value(6))
+                .andExpect(jsonPath("$.data.total_pages").value(2))
+                .andExpect(jsonPath("$.data.last").value(true));
+        verify(geoService).getStations(1, 5, "c", AgencyType.POLICE, StationLevel.PROVINCE, "name", "desc");
     }
 
     @Test
-    void stationsList_unknownLevel_returns400() throws Exception {
+    void stationsList_defaultsLikeHivTmss() throws Exception {
+        when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
+                .thenReturn(new ListResponse(List.of(), 0, 10, 0, 0, true));
+        mvc.perform(get("/api/v1/stations")).andExpect(status().isOk());
+        verify(geoService).getStations(0, 10, null, null, null, "id", "asc");
+    }
+
+    @Test
+    void stationsList_removedEnumValues_return400() throws Exception {
         mvc.perform(get("/api/v1/stations").param("level", "DISTRICT")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").param("agency", "CSGT")).andExpect(status().isBadRequest());
     }
 
     @Test

@@ -2,33 +2,19 @@ package com.sosvietnam.repository;
 
 import com.sosvietnam.model.entity.RescueStation;
 import com.sosvietnam.model.payload.enums.AgencyType;
-import com.sosvietnam.model.payload.enums.StationLevel;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface RescueStationRepository extends JpaRepository<RescueStation, Long> {
+public interface RescueStationRepository extends JpaRepository<RescueStation, Long>, JpaSpecificationExecutor<RescueStation> {
 
     List<RescueStation> findByAgencyType(AgencyType agencyType);
 
     List<RescueStation> findByProvince(String province);
-
-    // Tham số null = không lọc theo tiêu chí đó
-    @Query("""
-        SELECT s FROM RescueStation s
-        WHERE (:province IS NULL OR s.province = :province)
-          AND (:agencyType IS NULL OR s.agencyType = :agencyType)
-          AND (:level IS NULL OR s.level = :level)
-        ORDER BY s.province, s.name
-        """)
-    List<RescueStation> findStations(
-        @Param("province") String province,
-        @Param("agencyType") AgencyType agencyType,
-        @Param("level") StationLevel level
-    );
 
     @Query(value = """
         SELECT * FROM rescue_stations s

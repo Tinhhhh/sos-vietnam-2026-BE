@@ -3,6 +3,7 @@ package com.sosvietnam.security;
 import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
+import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.RoleRepository;
 import io.jsonwebtoken.*;
@@ -92,7 +93,7 @@ public class JwtTokenProvider {
         Account account = accountRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Account not found with email: " + username));
 
-        String roleName = account.getRole() != null ? account.getRole().getRoleName() : "CITIZEN";
+        String roleName = account.getRole() != null ? account.getRole().getRoleName() : RoleName.CITIZEN.getRole();
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
@@ -165,7 +166,7 @@ public class JwtTokenProvider {
                 .getPayload();
 
         String roleName = claims.get("role", String.class);
-        Role role = roleName != null ? roleRepository.findByRoleName(roleName).orElse(null) : null;
+        Role role = RoleName.isExistRole(roleName) ? roleRepository.findByRoleName(roleName).orElse(null) : null;
 
         return AccessToken.builder()
                 .jwtId(claims.getId() != null ? UUID.fromString(claims.getId()) : null)
