@@ -45,6 +45,14 @@ public class GeoController {
                 geoService.resolveLocation(lat, lng));
     }
 
+    @Operation(summary = "Get map data versions",
+            description = "Version, last update and last check of boundaries and rescue stations. Role required: OFFICER, ADMIN")
+    @GetMapping("/data-status")
+    public ResponseEntity<Object> getDataStatus() {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved data status",
+                geoService.getDataStatus());
+    }
+
     @Operation(summary = "Get boundary sync status", description = "Role required: ADMIN")
     @GetMapping("/sync-status")
     public ResponseEntity<Object> getSyncStatus() {

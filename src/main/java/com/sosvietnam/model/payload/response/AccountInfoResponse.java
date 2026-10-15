@@ -44,21 +44,24 @@ public class AccountInfoResponse {
     @JsonProperty(value = "agency_type", index = 8)
     private String agencyType;
 
-    @JsonProperty(value = "province", index = 9)
+    @JsonProperty(value = "unit_level", index = 9)
+    private String unitLevel;
+
+    @JsonProperty(value = "province", index = 10)
     private String province;
 
-    @JsonProperty(value = "ward", index = 10)
+    @JsonProperty(value = "ward", index = 11)
     private String ward;
 
-    @JsonProperty(value = "is_locked", index = 11)
+    @JsonProperty(value = "is_locked", index = 12)
     private boolean locked;
 
-    @JsonProperty(value = "created_date", index = 12)
+    @JsonProperty(value = "created_date", index = 13)
     private LocalDateTime createdDate;
 
-    @JsonProperty(value = "role_id", index = 13)
+    @JsonProperty(value = "role_id", index = 14)
     private Long roleId;
 
-    @JsonProperty(value = "role_name", index = 14)
+    @JsonProperty(value = "role_name", index = 15)
     private String roleName;
 }

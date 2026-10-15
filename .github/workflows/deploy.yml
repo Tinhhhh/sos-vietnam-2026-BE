@@ -6,13 +6,31 @@ on:
       - main
   workflow_dispatch:
 
+# Push mới lên main thì huỷ lần deploy cũ đang chạy, chỉ deploy bản mới nhất
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy:
+    # Chặn "Run workflow" từ branch khác main deploy đè lên prod
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Test fail thì dừng luôn, không build image / không deploy
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run tests
+        run: sh ./mvnw -B test
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

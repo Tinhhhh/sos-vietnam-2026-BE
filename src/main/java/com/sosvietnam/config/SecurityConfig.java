@@ -1,5 +1,6 @@
 package com.sosvietnam.config;
 
+import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.security.CustomLogoutHandler;
 import com.sosvietnam.security.JwtAuthenticationEntryPoint;
 import com.sosvietnam.security.JwtAuthenticationFilter;
@@ -34,6 +35,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter authenticationFilter;
     private final CustomLogoutHandler logoutHandler;
 
+    private static final String ADMIN = RoleName.ADMIN.getRole();
+    private static final String[] STAFF = {RoleName.OFFICER.getRole(), RoleName.ADMIN.getRole()};
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
@@ -49,18 +53,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
                         // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─
-                        .requestMatchers("/api/v1/geo/sync-status", "/api/v1/geo/sync-now").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations/**").permitAll()
+                        .requestMatchers("/api/v1/geo/sync-status", "/api/v1/geo/sync-now").hasAuthority(ADMIN)
+                        // phiên bản dữ liệu + thời tiết tại đơn vị: chỉ màn hình trực ban dùng
+                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/data-status", "/api/v1/weather/**")
+                                .hasAnyAuthority(STAFF)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations", "/api/v1/stations/**").permitAll()
 
                         // ── Incident: người dân gửi SOS + ảnh không cần đăng nhập ─────
                         .requestMatchers(HttpMethod.POST, "/api/v1/incidents", "/api/v1/incidents/*/media").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/media/*").permitAll()
                         // xem danh sách + phân công là việc của trực ban
-                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/recent").hasAnyAuthority("OFFICER", "ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch").hasAnyAuthority("OFFICER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/recent").hasAnyAuthority(STAFF)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch").hasAnyAuthority(STAFF)
 
                         // ── Quản trị ────────────────────────────────────────────────
-                        .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasAuthority(ADMIN)
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)

@@ -1,23 +1,38 @@
 package com.sosvietnam;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.model.entity.RescueStation;
+import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.StationLevel;
+import com.sosvietnam.model.payload.exception.SosException;
+import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
+import com.sosvietnam.repository.SeedVersionRepository;
 import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.implement.GeoServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -27,8 +42,10 @@ class GeoServiceMappingTest {
     final ProvinceRepository provinceRepo = mock(ProvinceRepository.class);
     final WardRepository wardRepo = mock(WardRepository.class);
     final RescueStationRepository stationRepo = mock(RescueStationRepository.class);
-    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, new ModelMapper());
-    final ObjectMapper json = new ObjectMapper();
+    final SeedVersionRepository seedRepo = mock(SeedVersionRepository.class);
+    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper());
+    final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     final GeometryFactory gf = new GeometryFactory();
 
     @Test
@@ -60,5 +77,58 @@ class GeoServiceMappingTest {
         var r = service.resolveLocation(10, 10);
         assertThat(r.getProvinceCode()).isNull();
         assertThat(r.getWard()).isEqualTo("Vùng ngoài ranh giới");
+    }
+
+    @Test
+    void stationList_hasDirectoryFields_andBlankProvinceMeansNoFilter() throws Exception {
+        RescueStation station = RescueStation.builder().id(9L).name("Công An TP. Cần Thơ").agencyType(AgencyType.POLICE)
+                .level(StationLevel.PROVINCE).officer("Trung tá A").email("congan@cantho.gov.vn")
+                .services("Tiếp nhận tin báo ANTT").facilityType("Trụ sở chính")
+                .latitude(10.03).longitude(105.78).location(gf.createPoint(new Coordinate(105.78, 10.03))).build();
+        when(stationRepo.findAll(ArgumentMatchers.<Specification<RescueStation>>any(), any(Pageable.class)))
+                .thenAnswer(i -> new PageImpl<>(List.of(station), i.getArgument(1), 21));
+
+        ListResponse page = service.getStations(2, 10, "c", AgencyType.POLICE, null, "name", "DESC");
+        assertThat(page.getPageNo()).isEqualTo(2);
+        assertThat(page.getTotalElements()).isEqualTo(21);
+        assertThat(page.getTotalPages()).isEqualTo(3);
+        assertThat(page.isLast()).isTrue();
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(stationRepo).findAll(ArgumentMatchers.<Specification<RescueStation>>any(), pageable.capture());
+        assertThat(pageable.getValue().getSort().getOrderFor("name").getDirection()).isEqualTo(Sort.Direction.DESC);
+
+        String out = json.writeValueAsString(page);
+        assertThat(out).contains("\"content\":[", "\"level\":\"PROVINCE\"", "\"officer\":\"Trung tá A\"",
+                        "\"email\":\"congan@cantho.gov.vn\"", "\"services\":\"Tiếp nhận tin báo ANTT\"",
+                        "\"facility_type\":\"Trụ sở chính\"", "\"total_pages\":3")
+                .doesNotContain("location", "code");
+    }
+
+    @Test
+    void stationList_rejectsBadPagingAndSort() {
+        assertThatThrownBy(() -> service.getStations(-1, 10, null, null, null, "id", "asc")).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getStations(0, 0, null, null, null, "id", "asc")).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getStations(0, 1001, null, null, null, "id", "asc")).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getStations(0, 10, null, null, null, "location", "asc")).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getStations(0, 10, null, null, null, "id", "up")).isInstanceOf(SosException.class);
+        verifyNoInteractions(stationRepo);
+    }
+
+    @Test
+    void dataStatus_listsBothDatasets_evenBeforeFirstSync() throws Exception {
+        Instant applied = Instant.parse("2026-10-15T01:00:00Z");
+        when(seedRepo.findById(SeedVersion.RESCUE_STATIONS)).thenReturn(Optional.of(SeedVersion.builder()
+                .name(SeedVersion.RESCUE_STATIONS).checksum("x").version("2026.10.15").appliedAt(applied).checkedAt(applied).build()));
+        when(seedRepo.findById(SeedVersion.BOUNDARIES)).thenReturn(Optional.empty());
+        when(wardRepo.count()).thenReturn(3321L);
+        when(stationRepo.count()).thenReturn(3717L);
+
+        var status = service.getDataStatus();
+        assertThat(status).extracting("dataset").containsExactly("boundaries", "rescue_stations");
+        assertThat(status.get(0).getVersion()).isNull();
+        assertThat(status.get(0).getTotal()).isEqualTo(3321);
+        assertThat(json.writeValueAsString(status.get(1)))
+                .contains("\"version\":\"2026.10.15\"", "\"updated_at\":\"2026-10-15T01:00:00Z\"", "\"total\":3717");
     }
 }
