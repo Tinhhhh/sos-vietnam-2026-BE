@@ -6,3 +6,7 @@ CREATE TABLE IF NOT EXISTS seed_versions (
     checksum VARCHAR(64) NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Enum columns are validated in Java. Hibernate adds a CHECK with the enum values when it
+-- creates a column but never updates it, so a new enum constant (e.g. MOBILE_POLICE) would be rejected.
+ALTER TABLE IF EXISTS accounts DROP CONSTRAINT IF EXISTS accounts_agency_type_check;
+ALTER TABLE IF EXISTS rescue_stations DROP CONSTRAINT IF EXISTS rescue_stations_agency_type_check;

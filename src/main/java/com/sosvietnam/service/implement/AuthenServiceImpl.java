@@ -180,6 +180,7 @@ public class AuthenServiceImpl implements AuthenService {
                 .phone(account.getPhone())
                 .address(account.getAddress())
                 .agencyType(account.getAgencyType() != null ? account.getAgencyType().name() : null)
+                .unitLevel(account.getUnitLevel() != null ? account.getUnitLevel().name() : null)
                 .province(account.getProvince())
                 .ward(account.getWard())
                 .locked(account.isLocked())

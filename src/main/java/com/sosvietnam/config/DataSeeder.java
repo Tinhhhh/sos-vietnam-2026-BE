@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.RescueStationRepository;
 import com.sosvietnam.repository.RoleRepository;
@@ -38,6 +39,7 @@ public class DataSeeder implements CommandLineRunner {
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
+    private static final String TEST_ACCOUNTS_FILE = "data/test_accounts.json";
     private static final String STATIONS_FILE = "data/rescue_stations.json";
     private static final String STATIONS_SEED_NAME = "rescue_stations";
     private static final String UPSERT_STATION_SQL =
@@ -52,12 +54,16 @@ public class DataSeeder implements CommandLineRunner {
     @Value("${app.seed.admin-password:}")
     private String adminPassword;
 
-    // Dispatcher role removed; no dispatcher password needed.
+    // From .env (SEED_TEST_ACCOUNT_PASSWORD), shared by every account in data/test_accounts.json.
+    // Empty = the test accounts are not imported.
+    @Value("${app.seed.test-account-password:}")
+    private String testAccountPassword;
 
     @Override
     public void run(String... args) throws Exception {
         seedRoles();
         seedDefaultAccounts();
+        seedTestAccounts();
         seedRescueStations();
     }
 
@@ -91,19 +97,91 @@ public class DataSeeder implements CommandLineRunner {
                     .address("Bộ Chỉ Huy SOS Việt Nam")
                     .role(adminRole)
                     .agencyType(AgencyType.MILITARY)
+                    .unitLevel(UnitLevel.NATIONAL)
                     .province("TP. Hà Nội")
                     .ward("Phường Hàng Trống")
                     .isActive(true)
                     .build();
             accountRepository.save(admin);
             log.info("👑 [INIT ACCOUNT] Seeded Admin Account: admin@sos.vn");
-        } else if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
-            admin.setPassword(passwordEncoder.encode(adminPassword));
-            accountRepository.save(admin);
-            log.info("👑 [INIT ACCOUNT] Synchronized Admin Account password for: admin@sos.vn");
+        } else {
+            boolean changed = false;
+            if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
+                admin.setPassword(passwordEncoder.encode(adminPassword));
+                changed = true;
+                log.info("👑 [INIT ACCOUNT] Synchronized Admin Account password for: admin@sos.vn");
+            }
+            if (admin.getUnitLevel() != UnitLevel.NATIONAL) {
+                admin.setUnitLevel(UnitLevel.NATIONAL);
+                changed = true;
+            }
+            if (changed) {
+                accountRepository.save(admin);
+            }
         }
+    }
 
-        // Dispatcher role removed; no dispatcher account is seeded.
+    /**
+     * Nạp tài khoản trực ban test từ data/test_accounts.json (theo email): chưa có thì tạo,
+     * có rồi thì cập nhật lực lượng / cấp / địa bàn và đồng bộ mật khẩu với .env.
+     */
+    private void seedTestAccounts() {
+        if (!StringUtils.hasText(testAccountPassword)) {
+            log.info("[INIT TEST ACCOUNTS] Skipped: set SEED_TEST_ACCOUNT_PASSWORD in .env to import {}", TEST_ACCOUNTS_FILE);
+            return;
+        }
+        try {
+            ClassPathResource resource = new ClassPathResource(TEST_ACCOUNTS_FILE);
+            if (!resource.exists()) {
+                log.warn("⚠️ [INIT TEST ACCOUNTS] {} not found in classpath", TEST_ACCOUNTS_FILE);
+                return;
+            }
+            JsonNode accountsNode;
+            try (InputStream in = resource.getInputStream()) {
+                accountsNode = objectMapper.readTree(in).path("accounts");
+            }
+            Role officerRole = roleRepository.findByRoleName("OFFICER")
+                    .orElseThrow(() -> new IllegalStateException("Role OFFICER chưa được khởi tạo"));
+
+            int created = 0;
+            int updated = 0;
+            for (JsonNode node : accountsNode) {
+                String email = node.path("email").asText("").trim();
+                AgencyType agency = AgencyType.valueOf(node.path("agency_type").asText());
+                UnitLevel level = UnitLevel.valueOf(node.path("unit_level").asText());
+                if (!StringUtils.hasText(email) || !agency.supports(level)) {
+                    log.warn("⚠️ [INIT TEST ACCOUNTS] Skipped {}: {} has no level {}", email, agency, level);
+                    continue;
+                }
+
+                Account account = accountRepository.findByEmail(email).orElse(null);
+                boolean isNew = account == null;
+                if (isNew) {
+                    account = Account.builder().email(email).role(officerRole).isActive(true).build();
+                }
+                account.setLastName(textOrNull(node, "last_name"));
+                account.setFirstName(textOrNull(node, "first_name"));
+                account.setAgencyType(agency);
+                account.setUnitLevel(level);
+                account.setProvince(textOrNull(node, "province"));
+                account.setWard(textOrNull(node, "ward"));
+                account.setAddress(textOrNull(node, "address"));
+                if (isNew || !passwordEncoder.matches(testAccountPassword, account.getPassword())) {
+                    account.setPassword(passwordEncoder.encode(testAccountPassword));
+                }
+                accountRepository.save(account);
+                if (isNew) created++;
+                else updated++;
+            }
+            log.info("[INIT TEST ACCOUNTS] {} created, {} updated from {}", created, updated, TEST_ACCOUNTS_FILE);
+        } catch (Exception e) {
+            log.error("❌ [INIT TEST ACCOUNTS] Failed to import test accounts: {}", e.getMessage(), e);
+        }
+    }
+
+    private static String textOrNull(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() || value.asText().isBlank() ? null : value.asText().trim();
     }
 
     private void seedRescueStations() {

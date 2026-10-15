@@ -1,0 +1,26 @@
+package com.sosvietnam.model.payload.enums;
+
+import lombok.Getter;
+
+/**
+ * Cấp của đơn vị mà tài khoản trực ban thuộc về (accounts.unit_level).
+ * Tên gọi theo lực lượng:
+ * - Công an:            WARD = Công an xã/phường,  PROVINCE = Công an tỉnh/TP
+ * - Cảnh sát cơ động:   chỉ PROVINCE (lực lượng địa phương; cấp Bộ không nằm trong hệ thống)
+ * - PCCC & CNCH:        WARD = cấp Đội,             PROVINCE = cấp Phòng
+ * - Y tế:               chỉ 1 cấp, dùng PROVINCE
+ * - NATIONAL: Trung tâm chỉ huy (tài khoản ADMIN)
+ * Tài khoản CITIZEN không có cấp (null).
+ */
+@Getter
+public enum UnitLevel {
+    NATIONAL("Cấp Bộ"),
+    PROVINCE("Cấp Tỉnh/TP"),
+    WARD("Cấp Xã/Phường");
+
+    private final String label;
+
+    UnitLevel(String label) {
+        this.label = label;
+    }
+}

@@ -2,6 +2,7 @@ package com.sosvietnam.model.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.UnitLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
@@ -66,6 +67,11 @@ public class Account {
     @Enumerated(EnumType.STRING)
     @Column(name = "agency_type", length = 30)
     private AgencyType agencyType;
+
+    // Cấp đơn vị trực ban (xã/phường, tỉnh, Bộ); null với tài khoản người dân
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unit_level", length = 20)
+    private UnitLevel unitLevel;
 
     @Column(name = "province", length = 150)
     private String province;
