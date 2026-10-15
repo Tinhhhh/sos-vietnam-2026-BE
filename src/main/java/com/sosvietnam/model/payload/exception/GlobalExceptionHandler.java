@@ -3,18 +3,27 @@ package com.sosvietnam.model.payload.exception;
 import com.sosvietnam.util.DateUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Gom mọi lỗi về 1 format chung (ExceptionResponse), giống HIV-TMSS.
+ * FE đọc field "message" (hoặc "data" với lỗi validate) để hiển thị.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -41,6 +50,64 @@ public class GlobalExceptionHandler {
                                 .httpStatus(exception.getHttpStatus().value())
                                 .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
                                 .message(exception.getMessage())
+                                .build()
+                );
+    }
+
+    // Gọi sai đường dẫn API -> 404 thay vì 500
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ExceptionResponse> handleNoResourceFoundException(NoResourceFoundException exception) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(
+                        ExceptionResponse.builder()
+                                .httpStatus(HttpStatus.NOT_FOUND.value())
+                                .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                .message("Không tìm thấy API: /" + exception.getResourcePath())
+                                .build()
+                );
+    }
+
+    // Sai email / mật khẩu khi đăng nhập
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ExceptionResponse> handleBadCredentialsException(BadCredentialsException exception) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .body(
+                        ExceptionResponse.builder()
+                                .httpStatus(HttpStatus.UNAUTHORIZED.value())
+                                .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                .message("Email hoặc mật khẩu không chính xác")
+                                .build()
+                );
+    }
+
+    // Body JSON sai cú pháp / sai kiểu / có field lạ (ObjectMapper đang bật FAIL_ON_UNKNOWN_PROPERTIES) -> 400 thay vì 500
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ExceptionResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException exception) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(
+                        ExceptionResponse.builder()
+                                .httpStatus(HttpStatus.BAD_REQUEST.value())
+                                .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                .message("Dữ liệu gửi lên không hợp lệ")
+                                .error(exception.getMostSpecificCause().getMessage())
+                                .build()
+                );
+    }
+
+    // Thiếu / sai kiểu query param (vd: /geo/resolve thiếu lat) -> 400 thay vì 500
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ExceptionResponse> handleBadRequestParameter(Exception exception) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(
+                        ExceptionResponse.builder()
+                                .httpStatus(HttpStatus.BAD_REQUEST.value())
+                                .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                .message("Tham số không hợp lệ")
+                                .error(exception.getMessage())
                                 .build()
                 );
     }

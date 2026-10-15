@@ -19,4 +19,4 @@ Cấu hình R2:
 3. Trong `.env`: điền `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, đặt `STORAGE_PROVIDER=r2`.
 4. `mvn spring-boot:run` → log phải có `Cloudflare R2 bucket 'sos-vietnam-media' is reachable`.
 
-Ảnh trên R2 không public: `GET /api/incidents/{id}/media/{file}` trả 302 sang link có chữ ký, hết hạn sau `app.storage.r2.presign-ttl` (10 phút).
+Ảnh trên R2 không public: `GET /api/v1/incidents/{id}/media/{file}` trả 302 sang link có chữ ký, hết hạn sau `app.storage.r2.presign-ttl` (10 phút).

@@ -4,6 +4,7 @@ import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.RefreshToken;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.repository.RefreshTokenRepository;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.stereotype.Component;
 
+/** Logout: thu hồi access token hiện tại (blacklist) và refresh token đi kèm (revoked trong DB). */
 @Component
 @RequiredArgsConstructor
 public class CustomLogoutHandler implements LogoutHandler {
@@ -34,7 +36,15 @@ public class CustomLogoutHandler implements LogoutHandler {
 
         // Terminate current accessToken and refreshToken
         jwt = authHeader.substring(7);
-        AccessToken token = jwtTokenProvider.getTokenFromJwt(jwt);
+        AccessToken token;
+        try {
+            token = jwtTokenProvider.getTokenFromJwt(jwt);
+        } catch (JwtException | IllegalArgumentException e) {
+            // Token hết hạn / sai chữ ký: không còn gì để thu hồi, coi như đã logout (tránh lỗi 500)
+            logger.debug("Logout with invalid token: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
+            return;
+        }
         RefreshToken refreshToken = refreshTokenRepository.findByJitId(token.getJwtId());
         if (refreshToken != null) {
             refreshToken.setExpired(true);

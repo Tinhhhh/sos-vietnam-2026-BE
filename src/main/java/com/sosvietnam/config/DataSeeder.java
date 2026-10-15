@@ -38,12 +38,10 @@ public class DataSeeder implements CommandLineRunner {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
 
-    // From .env (SEED_ADMIN_PASSWORD / SEED_DISPATCHER_PASSWORD). Empty = don't
-    // create that account,
-    // so a fresh server never comes up with a password that is written in this
-    // public repo.
-    @Value("${app.seed.admin-password:admin123}")
-    private String adminPassword; // default password if not set
+    // From .env (SEED_ADMIN_PASSWORD). Empty = don't seed the admin account,
+    // so a fresh server never comes up with a password written in this public repo.
+    @Value("${app.seed.admin-password:}")
+    private String adminPassword;
 
     // Dispatcher role removed; no dispatcher password needed.
 
@@ -68,10 +66,14 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedDefaultAccounts() {
-        if (!accountRepository.existsByEmail("admin@sos.vn")
-                && hasSeedPassword("admin@sos.vn", adminPassword, "SEED_ADMIN_PASSWORD")) {
+        if (!StringUtils.hasText(adminPassword)) {
+            log.warn("⚠️ [INIT ACCOUNT] admin@sos.vn not seeded: set SEED_ADMIN_PASSWORD in .env");
+            return;
+        }
+        Account admin = accountRepository.findByEmail("admin@sos.vn").orElse(null);
+        if (admin == null) {
             Role adminRole = roleRepository.findByRoleName("ADMIN").orElse(null);
-            Account admin = Account.builder()
+            admin = Account.builder()
                     .firstName("Quản Trị")
                     .lastName("Hệ Thống")
                     .email("admin@sos.vn")
@@ -86,22 +88,13 @@ public class DataSeeder implements CommandLineRunner {
                     .build();
             accountRepository.save(admin);
             log.info("👑 [INIT ACCOUNT] Seeded Admin Account: admin@sos.vn");
+        } else if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
+            admin.setPassword(passwordEncoder.encode(adminPassword));
+            accountRepository.save(admin);
+            log.info("👑 [INIT ACCOUNT] Synchronized Admin Account password for: admin@sos.vn");
         }
 
         // Dispatcher role removed; no dispatcher account is seeded.
-    }
-
-    private static boolean hasSeedPassword(String email, String password, String envName) {
-        if (StringUtils.hasText(password)) {
-            return true;
-        }
-        // For admin, allow default password when env var missing
-        if ("admin@sos.vn".equals(email) && "SEED_ADMIN_PASSWORD".equals(envName)) {
-            log.info("⚠️ [INIT ACCOUNT] {} using default password as {} not provided", email, envName);
-            return true;
-        }
-        log.warn("⚠️ [INIT ACCOUNT] {} not created: set {} in .env to seed it", email, envName);
-        return false;
     }
 
     private void seedRescueStations() {

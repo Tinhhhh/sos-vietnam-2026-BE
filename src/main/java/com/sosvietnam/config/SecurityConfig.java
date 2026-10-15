@@ -3,6 +3,7 @@ package com.sosvietnam.config;
 import com.sosvietnam.security.CustomLogoutHandler;
 import com.sosvietnam.security.JwtAuthenticationEntryPoint;
 import com.sosvietnam.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+/**
+ * Phân quyền theo URL (kiểu HIV-TMSS). Authority = role_name trong bảng roles: ADMIN, OFFICER, CITIZEN.
+ * JWT được đọc ở JwtAuthenticationFilter; thiếu / sai token -> JwtAuthenticationEntryPoint trả 401.
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -33,26 +38,41 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(withDefaults())
-                .authorizeHttpRequests(request ->
-                        request.requestMatchers(
-                                        "/swagger-ui/**",
-                                        "/v3/api-docs/**",
-                                        "/api/v1/auth/**",
-                                        "/api/geo/**",
-                                        "/api/stations/**",
-                                        "/api/incidents/**",
-                                        "/ws/**",
-                                        "/ws-raw/**",
-                                        "/error").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/accounts").hasAnyAuthority("ADMIN", "DISPATCHER", "OFFICER", "CITIZEN")
-                                .requestMatchers(HttpMethod.PUT, "/api/v1/accounts").hasAnyAuthority("ADMIN", "DISPATCHER", "OFFICER", "CITIZEN")
-                                .requestMatchers("/api/v1/accounts/admin/**").hasAuthority("ADMIN")
-                                .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
-                                .anyRequest().authenticated()
+                .authorizeHttpRequests(request -> request
+                        // ── Swagger, WebSocket, error ────────────────────────────────
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
+                                "/ws/**", "/ws-raw/**", "/error").permitAll()
+
+                        // ── Auth: /me cần đăng nhập, còn lại công khai ──────────────
+                        // (phải khai báo /me TRƯỚC "/api/v1/auth/**", rule nào khớp trước thắng)
+                        .requestMatchers("/api/v1/auth/me").authenticated()
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+
+                        // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─
+                        .requestMatchers("/api/v1/geo/sync-status", "/api/v1/geo/sync-now").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations/**").permitAll()
+
+                        // ── Incident: người dân gửi SOS + ảnh không cần đăng nhập ─────
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents", "/api/v1/incidents/*/media").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/media/*").permitAll()
+                        // xem danh sách + phân công là việc của trực ban
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/recent").hasAnyAuthority("OFFICER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch").hasAnyAuthority("OFFICER", "ADMIN")
+
+                        // ── Quản trị ────────────────────────────────────────────────
+                        .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint));
+                .exceptionHandling(e -> e
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        // Đã đăng nhập nhưng sai quyền -> 403 dạng JSON (mặc định Spring trả body rỗng)
+                        .accessDeniedHandler((req, res, ex) -> {
+                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            res.setContentType("application/json;charset=UTF-8");
+                            res.getWriter().write("{\"http_status\": 403, \"message\": \"Tài khoản không có quyền thực hiện thao tác này\"}");
+                        }));
 
         // Note: Logout is handled via AuthController POST /api/v1/auth/logout using CustomLogoutHandler identical to HIV-TMSS
         return http.build();

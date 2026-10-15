@@ -1,19 +1,20 @@
 package com.sosvietnam.service;
 
-import com.sosvietnam.model.entity.Province;
-import com.sosvietnam.model.entity.RescueStation;
-import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.response.LocationResponse;
+import com.sosvietnam.model.payload.response.ProvinceResponse;
+import com.sosvietnam.model.payload.response.StationResponse;
+import com.sosvietnam.model.payload.response.WardResponse;
 
 import java.util.List;
-import java.util.Map;
 
+/** Tra cứu địa giới hành chính (tỉnh, xã/phường) và trạm cứu hộ gần nhất. */
 public interface GeoService {
-    List<Province> getAllProvinces();
+    List<ProvinceResponse> getAllProvinces();
 
-    List<Ward> getWardsByProvince(String provinceCode);
+    List<WardResponse> getWardsByProvince(String provinceCode);
 
-    Map<String, Object> resolveLocation(double lat, double lng);
+    LocationResponse resolveLocation(double lat, double lng);
 
-    List<RescueStation> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit);
+    List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit);
 }

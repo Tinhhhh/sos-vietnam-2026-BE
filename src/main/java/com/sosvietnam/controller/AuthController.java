@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
+/** API xác thực: đăng nhập, refresh token, đăng xuất, đăng ký công khai (CITIZEN), thông tin tài khoản hiện tại. */
 @RestController
 @OpenAPIDefinition(info = @Info(
         title = "SOS Vietnam REST API", version = "1.0", description = "API documentation for SOS Vietnam",
@@ -43,33 +44,34 @@ public class AuthController {
     private final AuthenService authService;
     private final CustomLogoutHandler logoutHandler;
 
-    @Operation(summary = "Login to the system")
+    @Operation(summary = "Login to the system", description = "Login with email + password. Role required: none")
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<Object> signIn(@RequestBody @Valid AuthenticationRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully Sign in", authService.authenticate(request));
     }
 
-    @Operation(summary = "Refresh token if expired")
+    @Operation(summary = "Refresh token if expired", description = "Send the refresh token as 'Authorization: Bearer <refresh_token>'. Role required: none")
     @PostMapping("/refresh-token")
     public ResponseEntity<Object> refreshToken(HttpServletRequest request, HttpServletResponse response) throws IOException {
         return ResponseBuilder.returnData(HttpStatus.OK, "Generate new Refresh Token and Access Token successfully", authService.refreshToken(request, response));
     }
 
-    @Operation(summary = "Logout of the system")
+    @Operation(summary = "Logout of the system", description = "Revokes the current access token and its refresh token. Role required: logged in")
     @PostMapping("/logout")
     public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
         logoutHandler.logout(request, response, authentication);
         return ResponseBuilder.returnMessage(HttpStatus.OK, "Logged out successfully");
     }
 
-    @Operation(summary = "Register a new account")
+    @Operation(summary = "Register a new citizen account", description = "Public sign-up always creates a CITIZEN account. Role required: none")
     @PostMapping("/register")
     public ResponseEntity<Object> register(@RequestBody @Valid RegistrationRequest request) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Your account is created successfully", authService.register(request));
+        authService.register(request);
+        return ResponseBuilder.returnMessage(HttpStatus.OK, "Your account is created successfully");
     }
 
-    @Operation(summary = "Get current authenticated account details")
+    @Operation(summary = "Get current authenticated account details", description = "Role required: logged in")
     @GetMapping("/me")
     public ResponseEntity<Object> getCurrentUser() {
         return ResponseBuilder.returnData(HttpStatus.OK, "Current user account", authService.getCurrentAccount());
