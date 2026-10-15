@@ -2,7 +2,9 @@ package com.sosvietnam.service.implement;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.entity.Ward;
+import com.sosvietnam.repository.SeedVersionRepository;
 import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.BandoSyncService;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -26,6 +32,7 @@ import java.util.*;
 public class BandoSyncServiceImpl implements BandoSyncService {
 
     private final WardRepository wardRepository;
+    private final SeedVersionRepository seedVersionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
@@ -123,6 +130,8 @@ public class BandoSyncServiceImpl implements BandoSyncService {
                 wardRepository.saveAll(toUpdate);
             }
 
+            recordBoundariesVersion(response.body());
+
             int countUpdated = toUpdate.size();
             this.updatedCount = countUpdated;
             this.lastSyncTime = now;
@@ -147,6 +156,27 @@ public class BandoSyncServiceImpl implements BandoSyncService {
             result.put("message", "Lỗi đồng bộ: " + e.getMessage());
             return result;
         }
+    }
+
+    /**
+     * Ghi seed_versions "boundaries" cho GET /geo/data-status: checked_at mỗi lần đồng bộ,
+     * version + applied_at chỉ đổi khi dữ liệu bando trả về khác lần trước.
+     */
+    private void recordBoundariesVersion(String body) throws NoSuchAlgorithmException {
+        String checksum = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
+        Instant now = Instant.now();
+        SeedVersion seed = seedVersionRepository.findById(SeedVersion.BOUNDARIES).orElse(null);
+        if (seed == null || !checksum.equals(seed.getChecksum())) {
+            seed = SeedVersion.builder()
+                    .name(SeedVersion.BOUNDARIES)
+                    .checksum(checksum)
+                    .version(SeedVersion.versionOf(now))
+                    .appliedAt(now)
+                    .build();
+        }
+        seed.setCheckedAt(now);
+        seedVersionRepository.save(seed);
     }
 
     /**

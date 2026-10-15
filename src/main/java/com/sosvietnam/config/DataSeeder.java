@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
+import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.RescueStationRepository;
@@ -21,7 +23,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -41,12 +45,18 @@ public class DataSeeder implements CommandLineRunner {
 
     private static final String TEST_ACCOUNTS_FILE = "data/test_accounts.json";
     private static final String STATIONS_FILE = "data/rescue_stations.json";
-    private static final String STATIONS_SEED_NAME = "rescue_stations";
+    private static final String STATIONS_SEED_NAME = SeedVersion.RESCUE_STATIONS;
+    // Tăng số này khi đổi cách đọc file (thêm cột, đổi mapping) để lần khởi động sau nạp lại dù file không đổi
+    private static final String STATIONS_SEED_FORMAT = "2";
+    private static final String PLACEHOLDER = "Đang cập nhật";
     private static final String UPSERT_STATION_SQL =
-            "INSERT INTO rescue_stations (code, name, agency_type, phone, address, province, ward, latitude, longitude, location) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)) "
+            "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province, ward, "
+            + "officer, email, services, facility_type, latitude, longitude, location) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)) "
             + "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, agency_type = EXCLUDED.agency_type, "
-            + "phone = EXCLUDED.phone, address = EXCLUDED.address, province = EXCLUDED.province, ward = EXCLUDED.ward, "
+            + "level = EXCLUDED.level, phone = EXCLUDED.phone, address = EXCLUDED.address, "
+            + "province = EXCLUDED.province, ward = EXCLUDED.ward, officer = EXCLUDED.officer, email = EXCLUDED.email, "
+            + "services = EXCLUDED.services, facility_type = EXCLUDED.facility_type, "
             + "latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, location = EXCLUDED.location";
 
     // From .env (SEED_ADMIN_PASSWORD). Empty = don't seed the admin account,
@@ -196,17 +206,27 @@ public class DataSeeder implements CommandLineRunner {
                 content = in.readAllBytes();
             }
 
-            // 1. File không đổi so với lần nạp trước thì bỏ qua
-            String checksum = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+            // 1. File không đổi so với lần nạp trước thì bỏ qua (chỉ ghi lại thời điểm kiểm tra)
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(STATIONS_SEED_FORMAT.getBytes(StandardCharsets.UTF_8));
+            String checksum = HexFormat.of().formatHex(digest.digest(content));
             List<String> applied = jdbcTemplate.queryForList(
                     "SELECT checksum FROM seed_versions WHERE name = ?", String.class, STATIONS_SEED_NAME);
             if (!applied.isEmpty() && checksum.equals(applied.get(0))) {
+                jdbcTemplate.update("UPDATE seed_versions SET checked_at = now(), "
+                        + "version = COALESCE(version, to_char(applied_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY.MM.DD')) "
+                        + "WHERE name = ?", STATIONS_SEED_NAME);
                 log.info("🏢 [INIT STATIONS] {} unchanged, skip ({} stations in DB)",
                         STATIONS_FILE, rescueStationRepository.count());
                 return;
             }
 
-            JsonNode stationsNode = objectMapper.readTree(content).get("stations");
+            JsonNode root = objectMapper.readTree(content);
+            // "version" ở đầu file nếu người cập nhật dữ liệu có ghi, không thì lấy ngày nạp
+            String version = StringUtils.hasText(root.path("version").asText(null))
+                    ? root.path("version").asText()
+                    : SeedVersion.versionOf(Instant.now());
+            JsonNode stationsNode = root.get("stations");
             if (stationsNode == null || !stationsNode.isArray()) {
                 log.warn("⚠️ [INIT STATIONS] {} has no \"stations\" array", STATIONS_FILE);
                 return;
@@ -230,9 +250,10 @@ public class DataSeeder implements CommandLineRunner {
                 int removed = jdbcTemplate.update(
                         "DELETE FROM rescue_stations WHERE code IS NULL OR code <> ALL (?)",
                         ps -> ps.setArray(1, ps.getConnection().createArrayOf("varchar", codes.toArray())));
-                jdbcTemplate.update("INSERT INTO seed_versions (name, checksum, applied_at) VALUES (?, ?, now()) "
-                        + "ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = now()",
-                        STATIONS_SEED_NAME, checksum);
+                jdbcTemplate.update("INSERT INTO seed_versions (name, checksum, version, applied_at, checked_at) "
+                        + "VALUES (?, ?, ?, now(), now()) ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum, "
+                        + "version = EXCLUDED.version, applied_at = now(), checked_at = now()",
+                        STATIONS_SEED_NAME, checksum, version);
                 log.info("🏢 [INIT STATIONS] Synced {} stations from {} ({} removed)",
                         batchArgs.size(), STATIONS_FILE, removed);
             });
@@ -251,33 +272,70 @@ public class DataSeeder implements CommandLineRunner {
             return null;
         }
 
-        String rawAgency = sn.path("agency").asText("police").trim().toUpperCase();
-        String agencyType;
-        if ("CSGT".equals(rawAgency) || "TRAFFIC_RESCUE".equals(rawAgency)) {
-            agencyType = AgencyType.TRAFFIC_RESCUE.name();
-        } else if ("FIRE".equals(rawAgency)) {
-            agencyType = AgencyType.FIRE.name();
-        } else if ("HOSPITAL".equals(rawAgency)) {
-            agencyType = AgencyType.HOSPITAL.name();
-        } else if ("MILITARY".equals(rawAgency)) {
-            agencyType = AgencyType.MILITARY.name();
-        } else {
-            agencyType = AgencyType.POLICE.name();
-        }
-
+        StationLevel level = toStationLevel(sn.path("level").asText(null));
         return new Object[] {
                 code,
-                name.length() > 200 ? name.substring(0, 200) : name,
-                agencyType,
+                truncate(name, 200),
+                toAgencyType(sn.path("agency").asText("police"), level, name).name(),
+                level == null ? null : level.name(),
                 normalizePhoneNumber(sn.path("phone").asText(null)),
                 sn.path("address").asText(null),
                 sn.path("province").asText(null),
                 sn.path("ward").asText(null),
+                truncate(cleanText(sn, "officer"), 200),
+                truncate(cleanText(sn, "email"), 150),
+                cleanText(sn, "services"),
+                truncate(cleanText(sn, "facility_type"), 100),
                 lat,
                 lng,
                 lng, // ST_MakePoint(lng, lat)
                 lat
         };
+    }
+
+    /**
+     * "agency" trong file: police | csgt | fire | hospital | traffic-rescue | military.
+     * File ghi các doanh nghiệp cứu hộ giao thông (level "enterprise") là csgt, nên trạm csgt cấp
+     * doanh nghiệp mà tên không phải đơn vị CSGT thì tính là TRAFFIC_RESCUE.
+     */
+    static AgencyType toAgencyType(String rawAgency, StationLevel level, String name) {
+        String agency = rawAgency.trim().toUpperCase().replace('-', '_');
+        return switch (agency) {
+            case "CSGT" -> level == StationLevel.ENTERPRISE && !isCsgtUnitName(name)
+                    ? AgencyType.TRAFFIC_RESCUE
+                    : AgencyType.CSGT;
+            case "TRAFFIC_RESCUE" -> AgencyType.TRAFFIC_RESCUE;
+            case "FIRE" -> AgencyType.FIRE;
+            case "HOSPITAL" -> AgencyType.HOSPITAL;
+            case "MILITARY" -> AgencyType.MILITARY;
+            default -> AgencyType.POLICE;
+        };
+    }
+
+    private static boolean isCsgtUnitName(String name) {
+        String n = name.toLowerCase();
+        return n.contains("csgt") || n.contains("cảnh sát giao thông");
+    }
+
+    static StationLevel toStationLevel(String rawLevel) {
+        if (!StringUtils.hasText(rawLevel)) {
+            return null;
+        }
+        try {
+            return StationLevel.valueOf(rawLevel.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Giá trị chữ của field, null khi trống hoặc là "Đang cập nhật". */
+    private static String cleanText(JsonNode node, String field) {
+        String value = textOrNull(node, field);
+        return value == null || value.equalsIgnoreCase(PLACEHOLDER) ? null : value;
+    }
+
+    private static String truncate(String value, int max) {
+        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
     private String normalizePhoneNumber(String rawPhone) {

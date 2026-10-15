@@ -1,14 +1,18 @@
 package com.sosvietnam.service.implement;
 
 import com.sosvietnam.model.entity.Province;
+import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.StationLevel;
+import com.sosvietnam.model.payload.response.DataStatusResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
 import com.sosvietnam.model.payload.response.ProvinceResponse;
 import com.sosvietnam.model.payload.response.StationResponse;
 import com.sosvietnam.model.payload.response.WardResponse;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
+import com.sosvietnam.repository.SeedVersionRepository;
 import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.GeoService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +22,7 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +40,7 @@ public class GeoServiceImpl implements GeoService {
     private final ProvinceRepository provinceRepository;
     private final WardRepository wardRepository;
     private final RescueStationRepository rescueStationRepository;
+    private final SeedVersionRepository seedVersionRepository;
     private final ModelMapper modelMapper;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -96,5 +102,31 @@ public class GeoServiceImpl implements GeoService {
         return rescueStationRepository.findNearestStations(lat, lng, agencyStr, radiusMeters, limit).stream()
                 .map(station -> modelMapper.map(station, StationResponse.class))
                 .toList();
+    }
+
+    @Override
+    public List<StationResponse> getStations(String province, AgencyType agencyType, StationLevel level) {
+        String provinceFilter = StringUtils.hasText(province) ? province.trim() : null;
+        return rescueStationRepository.findStations(provinceFilter, agencyType, level).stream()
+                .map(station -> modelMapper.map(station, StationResponse.class))
+                .toList();
+    }
+
+    @Override
+    public List<DataStatusResponse> getDataStatus() {
+        return List.of(
+                toDataStatus(SeedVersion.BOUNDARIES, wardRepository.count()),
+                toDataStatus(SeedVersion.RESCUE_STATIONS, rescueStationRepository.count()));
+    }
+
+    private DataStatusResponse toDataStatus(String dataset, long total) {
+        Optional<SeedVersion> seed = seedVersionRepository.findById(dataset);
+        return DataStatusResponse.builder()
+                .dataset(dataset)
+                .version(seed.map(SeedVersion::getVersion).orElse(null))
+                .updatedAt(seed.map(SeedVersion::getAppliedAt).orElse(null))
+                .checkedAt(seed.map(SeedVersion::getCheckedAt).orElse(null))
+                .total(total)
+                .build();
     }
 }

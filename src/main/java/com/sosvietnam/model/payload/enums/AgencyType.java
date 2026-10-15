@@ -13,6 +13,8 @@ import java.util.Set;
 public enum AgencyType {
     POLICE("Công An", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
     MOBILE_POLICE("Cảnh Sát Cơ Động", EnumSet.of(UnitLevel.PROVINCE)),
+    // Phòng CSGT (PROVINCE) và đội CSGT địa bàn (WARD)
+    CSGT("Cảnh Sát Giao Thông", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
     FIRE("Cảnh Sát PCCC & CNCH", EnumSet.of(UnitLevel.PROVINCE, UnitLevel.WARD)),
     HOSPITAL("Y Tế - Cấp Cứu 115", EnumSet.of(UnitLevel.PROVINCE)),
     TRAFFIC_RESCUE("Cứu Hộ Giao Thông", EnumSet.allOf(UnitLevel.class)),

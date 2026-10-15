@@ -8,15 +8,20 @@ import com.sosvietnam.controller.AuthController;
 import com.sosvietnam.controller.GeoController;
 import com.sosvietnam.controller.IncidentController;
 import com.sosvietnam.controller.StationController;
+import com.sosvietnam.controller.WeatherController;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.RefreshToken;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
+import com.sosvietnam.model.payload.response.DataStatusResponse;
 import com.sosvietnam.model.payload.response.IncidentResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
+import com.sosvietnam.model.payload.response.StationResponse;
+import com.sosvietnam.model.payload.response.WeatherResponse;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.RefreshTokenRepository;
 import com.sosvietnam.repository.RoleRepository;
@@ -24,6 +29,7 @@ import com.sosvietnam.security.*;
 import com.sosvietnam.service.BandoSyncService;
 import com.sosvietnam.service.GeoService;
 import com.sosvietnam.service.IncidentService;
+import com.sosvietnam.service.WeatherService;
 import com.sosvietnam.service.implement.AuthenServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +57,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Test HTTP thật qua MockMvc với SecurityConfig + JWT filter thật.
  * Chỉ giả lập (mock) tầng repository/DB vì môi trường test không có PostGIS.
  */
-@WebMvcTest(controllers = {AuthController.class, GeoController.class, StationController.class, IncidentController.class})
+@WebMvcTest(controllers = {AuthController.class, GeoController.class, StationController.class, IncidentController.class,
+        WeatherController.class})
 @Import({SecurityConfig.class, BeanConfiguration.class, JwtAuthenticationFilter.class, JwtTokenProvider.class,
         JwtAuthenticationEntryPoint.class, CustomLogoutHandler.class, CustomUserDetailService.class, AuthenServiceImpl.class})
 @TestPropertySource(properties = "app.jwt.secret-key=q83vEi7pZf2mR1tYw9LkXc4N6bHs0aJdUe5gVo8iTzQyP3rKfW2xCnMbLh7sDjA1")
@@ -67,6 +74,7 @@ class ApiContractTest {
     @MockitoBean GeoService geoService;
     @MockitoBean BandoSyncService bandoSyncService;
     @MockitoBean IncidentService incidentService;
+    @MockitoBean WeatherService weatherService;
 
     // "DB" giả cho refresh token: nếu code lưu trùng thì list sẽ có 2 phần tử
     final List<RefreshToken> refreshTable = Collections.synchronizedList(new ArrayList<>());
@@ -261,6 +269,54 @@ class ApiContractTest {
         when(geoService.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of());
         mvc.perform(get("/api/v1/stations/nearest").param("lat", "21").param("lng", "105").param("agency", "POLICE"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void stationsList_isPublic_andPassesFilters() throws Exception {
+        when(geoService.getStations(any(), any(), any())).thenReturn(List.of(StationResponse.builder()
+                .id(1L).name("Phòng CSGT Công An TP. Cần Thơ").agencyType(AgencyType.CSGT).level(StationLevel.PROVINCE)
+                .facilityType("Trụ sở chính").build()));
+        mvc.perform(get("/api/v1/stations").param("province", "Cần Thơ").param("agency", "CSGT").param("level", "PROVINCE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].agency_type").value("CSGT"))
+                .andExpect(jsonPath("$.data[0].level").value("PROVINCE"))
+                .andExpect(jsonPath("$.data[0].facility_type").value("Trụ sở chính"));
+        verify(geoService).getStations("Cần Thơ", AgencyType.CSGT, StationLevel.PROVINCE);
+    }
+
+    @Test
+    void stationsList_unknownLevel_returns400() throws Exception {
+        mvc.perform(get("/api/v1/stations").param("level", "DISTRICT")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void dataStatus_requiresOfficer() throws Exception {
+        when(geoService.getDataStatus()).thenReturn(List.of(DataStatusResponse.builder()
+                .dataset("rescue_stations").version("2026.10.15").total(3717).build()));
+        mvc.perform(get("/api/v1/geo/data-status")).andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        mvc.perform(get("/api/v1/geo/data-status").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].dataset").value("rescue_stations"))
+                .andExpect(jsonPath("$.data[0].version").value("2026.10.15"))
+                .andExpect(jsonPath("$.data[0].total").value(3717));
+    }
+
+    @Test
+    void weather_requiresOfficer_andIsSnakeCase() throws Exception {
+        when(weatherService.getCurrentWeather(10.03, 105.78)).thenReturn(WeatherResponse.builder()
+                .temperature(30.5).description("Có mây rải rác").isDay(true).windSpeed(7.2).build());
+        mvc.perform(get("/api/v1/weather/current").param("lat", "10.03").param("lng", "105.78"))
+                .andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        MvcResult result = mvc.perform(get("/api/v1/weather/current").param("lat", "10.03").param("lng", "105.78")
+                        .header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.temperature").value(30.5))
+                .andExpect(jsonPath("$.data.is_day").value(true))
+                .andExpect(jsonPath("$.data.wind_speed").value(7.2))
+                .andReturn();
+        assertThat(json(result).get("data").size()).isEqualTo(4);
     }
 
     @Test
