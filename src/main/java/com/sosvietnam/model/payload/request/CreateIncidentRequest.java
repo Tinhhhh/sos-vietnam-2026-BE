@@ -1,5 +1,6 @@
 package com.sosvietnam.model.payload.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -10,28 +11,38 @@ import lombok.Data;
 
 import java.util.List;
 
+/** Body của POST /api/v1/incidents: người dân gửi tin báo SOS kèm toạ độ GPS. */
 @Data
 public class CreateIncidentRequest {
     @Size(max = 150)
+    @JsonProperty("citizen_name")
     private String citizenName;
     @Size(max = 30)
+    @JsonProperty("phone")
     private String phone;
     @NotNull
+    @JsonProperty("emergency_type")
     private EmergencyType emergencyType;
     @Size(max = 10)
+    @JsonProperty("incident_tags")
     private List<@Size(max = 200) String> incidentTags;
     @Size(max = 2000)
+    @JsonProperty("description")
     private String description;
     @Size(max = 500)
+    @JsonProperty("address")
     private String address;
     @NotNull
     @DecimalMin("-90")
     @DecimalMax("90")
+    @JsonProperty("latitude")
     private Double latitude;
     @NotNull
     @DecimalMin("-180")
     @DecimalMax("180")
+    @JsonProperty("longitude")
     private Double longitude;
     @PositiveOrZero
+    @JsonProperty("accuracy")
     private Integer accuracy;
 }

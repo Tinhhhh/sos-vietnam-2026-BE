@@ -26,7 +26,7 @@ public class RescueStation {
     @Column(name = "agency_type", nullable = false, length = 30)
     private AgencyType agencyType;
 
-    @Column(length = 30)
+    @Column(length = 100)
     private String phone;
 
     @Column(columnDefinition = "TEXT")

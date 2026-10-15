@@ -2,10 +2,8 @@ package com.sosvietnam.security;
 
 import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Account;
-import com.sosvietnam.model.entity.RefreshToken;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.repository.AccountRepository;
-import com.sosvietnam.repository.RefreshTokenRepository;
 import com.sosvietnam.repository.RoleRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
@@ -26,6 +24,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Sinh và đọc JWT (access token + refresh token). Không ghi DB.
+ * Blacklist access token đã thu hồi được giữ trong bộ nhớ (mất khi restart server).
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -33,7 +35,6 @@ public class JwtTokenProvider {
 
     private final AccountRepository accountRepository;
     private final RoleRepository roleRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
 
     // In-memory blacklist for revoked tokens (userId_jwtId -> expiryTimestamp)
     private final Map<String, Long> tokenBlacklist = new ConcurrentHashMap<>();
@@ -118,9 +119,10 @@ public class JwtTokenProvider {
         Account account = accountRepository.findByEmail(username)
                 .orElseThrow(() -> new RuntimeException("Account not found with email: " + username));
 
-        UUID jitId = UUID.randomUUID();
-        String token = Jwts.builder()
-                .id(jitId.toString())
+        // Chỉ sinh token. Việc lưu refresh token vào DB do AuthenServiceImpl.saveRefreshToken() làm
+        // (trước đây lưu ở cả 2 nơi -> 2 dòng trùng token -> findByToken() lỗi 500 khi refresh).
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
                 .issuedAt(currentDate)
                 .expiration(expirationDate)
@@ -128,16 +130,6 @@ public class JwtTokenProvider {
                 .claim("id", account.getId().toString())
                 .signWith(getSigningKey())
                 .compact();
-
-        RefreshToken refreshToken = RefreshToken.builder()
-                .token(token)
-                .jitId(jitId)
-                .expired(false)
-                .revoked(false)
-                .build();
-        refreshTokenRepository.save(refreshToken);
-
-        return token;
     }
 
     public String generateTokenFromEmail(String email, String role) {

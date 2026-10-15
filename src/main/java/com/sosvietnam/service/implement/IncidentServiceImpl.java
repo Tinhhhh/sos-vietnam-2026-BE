@@ -8,6 +8,7 @@ import com.sosvietnam.model.payload.request.CreateIncidentRequest;
 import com.sosvietnam.model.payload.request.DispatchRequest;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.model.payload.response.IncidentResponse;
+import com.sosvietnam.model.payload.response.LocationResponse;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.service.GeoService;
 import com.sosvietnam.service.IncidentService;
@@ -39,6 +40,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Nghiệp vụ tin báo SOS: tạo sự cố, phân công trạm, đính kèm / tải ảnh-video hiện trường.
+ * Mỗi thay đổi được broadcast qua STOMP topic /topic/incidents cho cổng trực ban.
+ * Người báo tin không có tài khoản: họ chứng minh quyền với sự cố bằng citizen access token
+ * (chỉ trả về 1 lần khi tạo, DB chỉ lưu SHA-256 của token).
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -88,9 +95,9 @@ public class IncidentServiceImpl implements IncidentService {
         String ward = null;
         String province = null;
         try {
-            Map<String, Object> resolved = geoService.resolveLocation(request.getLatitude(), request.getLongitude());
-            ward = (String) resolved.getOrDefault("ward", null);
-            province = (String) resolved.getOrDefault("province", null);
+            LocationResponse resolved = geoService.resolveLocation(request.getLatitude(), request.getLongitude());
+            ward = resolved.getWard();
+            province = resolved.getProvince();
         } catch (Exception e) {
             // An SOS must never be lost because the boundary lookup failed.
             log.warn("Could not resolve jurisdiction for {}: {}", id, e.getMessage());
