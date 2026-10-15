@@ -3,7 +3,6 @@ package com.sosvietnam.config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.model.entity.Account;
-import com.sosvietnam.model.entity.RescueStation;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.repository.AccountRepository;
@@ -11,19 +10,19 @@ import com.sosvietnam.repository.RescueStationRepository;
 import com.sosvietnam.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.io.InputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 
 @Component
@@ -37,6 +36,16 @@ public class DataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final TransactionTemplate transactionTemplate;
+
+    private static final String STATIONS_FILE = "data/rescue_stations.json";
+    private static final String STATIONS_SEED_NAME = "rescue_stations";
+    private static final String UPSERT_STATION_SQL =
+            "INSERT INTO rescue_stations (code, name, agency_type, phone, address, province, ward, latitude, longitude, location) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)) "
+            + "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, agency_type = EXCLUDED.agency_type, "
+            + "phone = EXCLUDED.phone, address = EXCLUDED.address, province = EXCLUDED.province, ward = EXCLUDED.ward, "
+            + "latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, location = EXCLUDED.location";
 
     // From .env (SEED_ADMIN_PASSWORD). Empty = don't seed the admin account,
     // so a fresh server never comes up with a password written in this public repo.
@@ -98,96 +107,99 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedRescueStations() {
-        // Always refresh rescue stations data on startup
         try {
-            long currentCount = rescueStationRepository.count();
-            if (currentCount > 0) {
-                log.warn("⚠️ [INIT STATIONS] Existing {} stations found. Truncating to reload fresh data.",
-                        currentCount);
-                jdbcTemplate.execute("TRUNCATE TABLE rescue_stations RESTART IDENTITY");
-            }
-
-            ClassPathResource resource = new ClassPathResource("data/rescue_stations.json");
+            ClassPathResource resource = new ClassPathResource(STATIONS_FILE);
             if (!resource.exists()) {
-                log.warn("⚠️ [INIT STATIONS] data/rescue_stations.json not found in classpath");
+                log.warn("⚠️ [INIT STATIONS] {} not found in classpath", STATIONS_FILE);
                 return;
             }
-            JsonNode rootNode = objectMapper.readTree(resource.getInputStream());
-            JsonNode stationsNode = rootNode.get("stations");
+            byte[] content;
+            try (InputStream in = resource.getInputStream()) {
+                content = in.readAllBytes();
+            }
+
+            // 1. File không đổi so với lần nạp trước thì bỏ qua
+            String checksum = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
+            List<String> applied = jdbcTemplate.queryForList(
+                    "SELECT checksum FROM seed_versions WHERE name = ?", String.class, STATIONS_SEED_NAME);
+            if (!applied.isEmpty() && checksum.equals(applied.get(0))) {
+                log.info("🏢 [INIT STATIONS] {} unchanged, skip ({} stations in DB)",
+                        STATIONS_FILE, rescueStationRepository.count());
+                return;
+            }
+
+            JsonNode stationsNode = objectMapper.readTree(content).get("stations");
             if (stationsNode == null || !stationsNode.isArray()) {
+                log.warn("⚠️ [INIT STATIONS] {} has no \"stations\" array", STATIONS_FILE);
                 return;
             }
 
-            String sql = "INSERT INTO rescue_stations (name, agency_type, phone, address, province, ward, latitude, longitude, location) "
-                    +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))";
-
-            List<Object[]> batchArgs = new ArrayList<>(1000);
-            int totalSaved = 0;
-
-            log.info("🏢 [INIT STATIONS] Bắt đầu nạp {} trạm cứu hộ bằng JDBC Batch...", stationsNode.size());
-
+            List<Object[]> batchArgs = new ArrayList<>(stationsNode.size());
+            List<String> codes = new ArrayList<>(stationsNode.size());
             for (JsonNode sn : stationsNode) {
-                String name = sn.path("name").asText(null);
-                if (name == null || name.isBlank())
-                    continue;
-                double lat = sn.path("lat").asDouble(0);
-                double lng = sn.path("lng").asDouble(0);
-                if (lat == 0 || lng == 0)
-                    continue;
-
-                String rawAgency = sn.path("agency").asText("police").trim().toUpperCase();
-                String agencyType;
-                if ("CSGT".equals(rawAgency) || "TRAFFIC_RESCUE".equals(rawAgency)) {
-                    agencyType = AgencyType.TRAFFIC_RESCUE.name();
-                } else if ("FIRE".equals(rawAgency)) {
-                    agencyType = AgencyType.FIRE.name();
-                } else if ("HOSPITAL".equals(rawAgency)) {
-                    agencyType = AgencyType.HOSPITAL.name();
-                } else if ("MILITARY".equals(rawAgency)) {
-                    agencyType = AgencyType.MILITARY.name();
-                } else {
-                    agencyType = AgencyType.POLICE.name();
-                }
-
-                String rawPhone = sn.path("phone").asText(null);
-                String phone = normalizePhoneNumber(rawPhone);
-                String safeName = name.length() > 200 ? name.substring(0, 200) : name;
-                String address = sn.path("address").asText(null);
-                String province = sn.path("province").asText(null);
-                String ward = sn.path("ward").asText(null);
-
-                batchArgs.add(new Object[] {
-                        safeName,
-                        agencyType,
-                        phone,
-                        address,
-                        province,
-                        ward,
-                        lat,
-                        lng,
-                        lng, // ST_MakePoint(lng, lat)
-                        lat
-                });
-
-                if (batchArgs.size() >= 1000) {
-                    jdbcTemplate.batchUpdate(sql, batchArgs);
-                    totalSaved += batchArgs.size();
-                    log.info("🏢 [INIT STATIONS] Đã nạp {} / {} trạm cứu hộ...", totalSaved, stationsNode.size());
-                    batchArgs.clear();
+                Object[] row = toStationRow(sn);
+                if (row != null) {
+                    batchArgs.add(row);
+                    codes.add((String) row[0]);
                 }
             }
 
-            if (!batchArgs.isEmpty()) {
-                jdbcTemplate.batchUpdate(sql, batchArgs);
-                totalSaved += batchArgs.size();
-                batchArgs.clear();
-            }
-
-            log.info("🏢 [INIT STATIONS] Hoàn tất nạp thành công {} trạm cứu hộ vào cơ sở dữ liệu!", totalSaved);
+            // 2. File đổi: upsert theo code (giữ nguyên id cũ), xoá trạm không còn trong file,
+            //    ghi checksum mới. Tất cả trong 1 transaction, lỗi giữa chừng thì DB giữ dữ liệu cũ.
+            transactionTemplate.executeWithoutResult(status -> {
+                jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_rescue_stations_code ON rescue_stations (code)");
+                jdbcTemplate.batchUpdate(UPSERT_STATION_SQL, batchArgs);
+                int removed = jdbcTemplate.update(
+                        "DELETE FROM rescue_stations WHERE code IS NULL OR code <> ALL (?)",
+                        ps -> ps.setArray(1, ps.getConnection().createArrayOf("varchar", codes.toArray())));
+                jdbcTemplate.update("INSERT INTO seed_versions (name, checksum, applied_at) VALUES (?, ?, now()) "
+                        + "ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = now()",
+                        STATIONS_SEED_NAME, checksum);
+                log.info("🏢 [INIT STATIONS] Synced {} stations from {} ({} removed)",
+                        batchArgs.size(), STATIONS_FILE, removed);
+            });
         } catch (Exception e) {
             log.error("❌ [INIT STATIONS] Failed to seed rescue stations: {}", e.getMessage(), e);
         }
+    }
+
+    /** Một trạm trong JSON thành tham số cho UPSERT_STATION_SQL; thiếu id/tên/toạ độ thì bỏ qua (null). */
+    private Object[] toStationRow(JsonNode sn) {
+        String code = sn.path("id").asText(null);
+        String name = sn.path("name").asText(null);
+        double lat = sn.path("lat").asDouble(0);
+        double lng = sn.path("lng").asDouble(0);
+        if (!StringUtils.hasText(code) || !StringUtils.hasText(name) || lat == 0 || lng == 0) {
+            return null;
+        }
+
+        String rawAgency = sn.path("agency").asText("police").trim().toUpperCase();
+        String agencyType;
+        if ("CSGT".equals(rawAgency) || "TRAFFIC_RESCUE".equals(rawAgency)) {
+            agencyType = AgencyType.TRAFFIC_RESCUE.name();
+        } else if ("FIRE".equals(rawAgency)) {
+            agencyType = AgencyType.FIRE.name();
+        } else if ("HOSPITAL".equals(rawAgency)) {
+            agencyType = AgencyType.HOSPITAL.name();
+        } else if ("MILITARY".equals(rawAgency)) {
+            agencyType = AgencyType.MILITARY.name();
+        } else {
+            agencyType = AgencyType.POLICE.name();
+        }
+
+        return new Object[] {
+                code,
+                name.length() > 200 ? name.substring(0, 200) : name,
+                agencyType,
+                normalizePhoneNumber(sn.path("phone").asText(null)),
+                sn.path("address").asText(null),
+                sn.path("province").asText(null),
+                sn.path("ward").asText(null),
+                lat,
+                lng,
+                lng, // ST_MakePoint(lng, lat)
+                lat
+        };
     }
 
     private String normalizePhoneNumber(String rawPhone) {

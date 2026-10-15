@@ -7,7 +7,8 @@ import lombok.*;
 import org.locationtech.jts.geom.Point;
 
 @Entity
-@Table(name = "rescue_stations")
+@Table(name = "rescue_stations",
+        indexes = @Index(name = "ux_rescue_stations_code", columnList = "code", unique = true))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,6 +19,11 @@ public class RescueStation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Mã ổn định lấy từ field "id" trong data/rescue_stations.json (vd: st-catpdanang).
+    // DataSeeder upsert theo cột này nên id ở trên không đổi khi nạp lại file.
+    @Column(length = 100)
+    private String code;
 
     @Column(nullable = false, length = 200)
     private String name;
