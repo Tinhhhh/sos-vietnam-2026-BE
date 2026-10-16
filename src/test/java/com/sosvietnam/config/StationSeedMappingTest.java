@@ -10,18 +10,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StationSeedMappingTest {
 
     @Test
-    void csgtAndTrafficRescue_areStoredAsPolice() {
-        assertThat(DataSeeder.toAgencyType("csgt")).isEqualTo(AgencyType.POLICE);
-        assertThat(DataSeeder.toAgencyType("traffic-rescue")).isEqualTo(AgencyType.POLICE);
+    void csgtAndTrafficRescue_areStoredAsCsgt() {
+        assertThat(DataSeeder.toAgencyType("csgt")).isEqualTo(AgencyType.CSGT);
+        assertThat(DataSeeder.toAgencyType("traffic-rescue")).isEqualTo(AgencyType.CSGT);
         assertThat(DataSeeder.toAgencyType("police")).isEqualTo(AgencyType.POLICE);
         assertThat(DataSeeder.toAgencyType("xyz")).isEqualTo(AgencyType.POLICE);
     }
 
     @Test
-    void fireHospitalAndMobilePolice_keepTheirAgency() {
+    void fireAndHospital_keepTheirAgency() {
         assertThat(DataSeeder.toAgencyType("fire")).isEqualTo(AgencyType.FIRE);
         assertThat(DataSeeder.toAgencyType("hospital")).isEqualTo(AgencyType.HOSPITAL);
-        assertThat(DataSeeder.toAgencyType("mobile-police")).isEqualTo(AgencyType.MOBILE_POLICE);
     }
 
     @Test

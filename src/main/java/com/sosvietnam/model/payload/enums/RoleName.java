@@ -12,7 +12,7 @@ import java.util.Optional;
 @Getter
 public enum RoleName {
     ADMIN("ADMIN", "Quản trị hệ thống / Trung tâm chỉ huy"),
-    OFFICER("OFFICER", "Cán bộ trực ban"),
+    OFFICER("OFFICER", "Cán bộ"),
     CITIZEN("CITIZEN", "Người dân");
 
     private final String role;

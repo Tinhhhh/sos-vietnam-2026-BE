@@ -1,48 +1,75 @@
 package com.sosvietnam.service.implement;
 
+import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
+import com.sosvietnam.model.entity.IncidentClaim;
 import com.sosvietnam.model.entity.IncidentMediaItem;
+import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.CancelReason;
+import com.sosvietnam.model.payload.enums.ClaimEndReason;
+import com.sosvietnam.model.payload.enums.IncidentEvent;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.model.payload.exception.SosException;
+import com.sosvietnam.model.payload.request.CancelIncidentRequest;
 import com.sosvietnam.model.payload.request.CreateIncidentRequest;
 import com.sosvietnam.model.payload.request.DispatchRequest;
+import com.sosvietnam.model.payload.request.ReleaseIncidentRequest;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
+import com.sosvietnam.model.payload.response.HandoverCandidateResponse;
+import com.sosvietnam.model.payload.response.IncidentQueueResponse;
+import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.model.payload.response.IncidentResponse;
+import com.sosvietnam.model.payload.response.IncidentTrackingResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
+import com.sosvietnam.repository.AccountRepository;
+import com.sosvietnam.repository.IncidentClaimRepository;
 import com.sosvietnam.repository.IncidentRepository;
+import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.service.GeoService;
+import com.sosvietnam.service.IncidentEscalationService;
+import com.sosvietnam.service.IncidentNotifier;
 import com.sosvietnam.service.IncidentService;
 import com.sosvietnam.service.MediaAccess;
 import com.sosvietnam.service.MediaStorageService;
+import com.sosvietnam.util.CitizenTokens;
+import com.sosvietnam.util.IncidentAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HexFormat;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
- * Nghiệp vụ tin báo SOS: tạo sự cố, phân công trạm, đính kèm / tải ảnh-video hiện trường.
- * Mỗi thay đổi được broadcast qua STOMP topic /topic/incidents cho cổng trực ban.
+ * Nghiệp vụ tin báo SOS: tạo + phân luồng sự cố, hàng đợi theo đơn vị, nhận / nhả / giao ca,
+ * phân công trạm, đính kèm / tải ảnh-video hiện trường.
+ * Mỗi thay đổi được gửi realtime (IncidentNotifier) tới đúng các trực ban có quyền xem.
  * Người báo tin không có tài khoản: họ chứng minh quyền với sự cố bằng citizen access token
  * (chỉ trả về 1 lần khi tạo, DB chỉ lưu SHA-256 của token).
  */
@@ -51,8 +78,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IncidentServiceImpl implements IncidentService {
 
-    private static final String INCIDENT_TOPIC = "/topic/incidents";
     private static final int MAX_MEDIA_PER_INCIDENT = 10;
+    private static final int MAX_QUEUE_PAGE_SIZE = 100;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
     private static final long MAX_AUDIO_BYTES = 10L * 1024 * 1024;
     private static final long MAX_VIDEO_BYTES = 15L * 1024 * 1024;
@@ -77,9 +104,19 @@ public class IncidentServiceImpl implements IncidentService {
     );
 
     private final IncidentRepository incidentRepository;
+    private final IncidentClaimRepository incidentClaimRepository;
+    private final AccountRepository accountRepository;
     private final GeoService geoService;
     private final MediaStorageService mediaStorageService;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final IncidentNotifier notifier;
+    private final IncidentEscalationService escalationService;
+
+    // Ca Công an cấp xã quá số phút này chưa ai nhận thì lên cấp tỉnh
+    @Value("${app.incident.escalation-minutes:15}")
+    private long escalationMinutes;
+    // Ca chờ quá số phút này mà chưa ai nhận thì hệ thống tự huỷ (lý do NO_RESPONDER)
+    @Value("${app.incident.auto-cancel-minutes:60}")
+    private long autoCancelMinutes;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -87,6 +124,12 @@ public class IncidentServiceImpl implements IncidentService {
     // transaction rollback-only and take the SOS down with it. save() has its own.
     @Override
     public CreateIncidentResponse createIncident(CreateIncidentRequest request) {
+        AgencyType agency = request.getEmergencyType().getAgency();
+        if (!agency.receivesIncidents()) {
+            throw new SosException(HttpStatus.BAD_REQUEST,
+                    "Cấp cứu y tế không gửi qua SOS: vui lòng gọi 115 hoặc bệnh viện gần nhất trong danh bạ");
+        }
+
         String id = "SOS-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
         Point point = geometryFactory.createPoint(new Coordinate(request.getLongitude(), request.getLatitude()));
@@ -96,12 +139,20 @@ public class IncidentServiceImpl implements IncidentService {
         String province = null;
         try {
             LocationResponse resolved = geoService.resolveLocation(request.getLatitude(), request.getLongitude());
-            ward = resolved.getWard();
-            province = resolved.getProvince();
+            if (resolved.getProvinceCode() != null) {
+                province = resolved.getProvince();
+                ward = GeoService.UNKNOWN_WARD.equals(resolved.getWard()) ? null : resolved.getWard();
+            }
         } catch (Exception e) {
             // An SOS must never be lost because the boundary lookup failed.
             log.warn("Could not resolve jurisdiction for {}: {}", id, e.getMessage());
         }
+
+        // Phân luồng: chọn cấp nhận ca theo lực lượng và địa bàn
+        LocalDateTime now = LocalDateTime.now();
+        UnitLevel level = routeLevel(agency, province, ward);
+        LocalDateTime escalateAt = level == UnitLevel.WARD && agency.isEscalates()
+                ? now.plusMinutes(escalationMinutes) : null;
 
         String citizenAccessToken = newAccessToken();
 
@@ -120,16 +171,40 @@ public class IncidentServiceImpl implements IncidentService {
                 .longitude(request.getLongitude())
                 .accuracy(request.getAccuracy())
                 .location(point)
-                .citizenTokenHash(sha256(citizenAccessToken))
-                .createdAt(LocalDateTime.now())
+                .routedAgency(agency)
+                .routedLevel(level)
+                .escalateAt(escalateAt)
+                .citizenTokenHash(CitizenTokens.sha256(citizenAccessToken))
+                .createdAt(now)
                 .build();
 
         Incident saved = incidentRepository.save(incident);
-        log.info("🚨 [SOS ALERT] New Incident Registered: ID={}, Type={}, Location={}, {}", id, request.getEmergencyType(), ward, province);
+        log.info("🚨 [SOS ALERT] New Incident Registered: ID={}, Type={}, Location={}, {} -> {} {}",
+                id, request.getEmergencyType(), ward, province, agency, level);
 
-        IncidentResponse response = IncidentResponse.from(saved);
-        broadcast(response);
-        return new CreateIncidentResponse(response, citizenAccessToken);
+        escalationService.schedule(saved);
+        notifier.notify(saved.getId(), IncidentEvent.INCIDENT_NEW);
+        return new CreateIncidentResponse(IncidentResponse.from(saved), citizenAccessToken);
+    }
+
+    /**
+     * Cấp nhận ca: không biết tỉnh -> NATIONAL (chỉ trung tâm chỉ huy thấy); lực lượng trực ở xã (Công an)
+     * mà xác định được xã và xã có trực ban -> WARD; còn lại vào thẳng cấp tỉnh/phòng.
+     */
+    private UnitLevel routeLevel(AgencyType agency, String province, String ward) {
+        if (province == null) {
+            return UnitLevel.NATIONAL;
+        }
+        if (agency.getIntakeLevel() == UnitLevel.WARD && ward != null && hasWardOfficer(agency, province, ward)) {
+            return UnitLevel.WARD;
+        }
+        return UnitLevel.PROVINCE;
+    }
+
+    private boolean hasWardOfficer(AgencyType agency, String province, String ward) {
+        return accountRepository.findActiveOfficers(agency, UnitLevel.WARD).stream()
+                .anyMatch(a -> IncidentAccess.sameProvince(a.getProvince(), province)
+                        && IncidentAccess.sameWard(a.getWard(), ward));
     }
 
     @Transactional
@@ -145,16 +220,223 @@ public class IncidentServiceImpl implements IncidentService {
         Incident updated = incidentRepository.save(incident);
         log.info("🚒 [DISPATCHED] Incident {} assigned to station {} by {}", id, request.getStationId(), request.getDispatcherName());
 
-        IncidentResponse response = IncidentResponse.from(updated);
-        broadcast(response);
-        return response;
+        notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
+        return IncidentResponse.from(updated);
+    }
+
+    // ------------------------------------------------------------------ hàng đợi + nhận ca
+
+    @Override
+    public ListResponse getQueue(int pageNo, int pageSize) {
+        if (pageNo < 0 || pageSize < 1 || pageSize > MAX_QUEUE_PAGE_SIZE) {
+            throw new SosException("pageNo phải >= 0, pageSize từ 1 đến " + MAX_QUEUE_PAGE_SIZE);
+        }
+        OfficerPrincipal me = currentOfficer();
+        // Ca do BE bản cũ tạo (chưa phân luồng) thì phân luồng ngay để không bị lọt khỏi hàng đợi
+        routeUnroutedIncidents();
+
+        List<AgencyType> agencies = me.isAdmin() ? List.of(AgencyType.values()) : List.of(me.agency());
+        // Quyền xem cần so tên tỉnh/xã đã chuẩn hoá nên lọc ở Java; số ca đang mở luôn nhỏ
+        List<Incident> visible = incidentRepository
+                .findByStatusInAndRoutedAgencyInOrderByCreatedAtDesc(IncidentStatus.ACTIVE, agencies).stream()
+                .filter(i -> IncidentAccess.canView(me, i))
+                .toList();
+        int from = Math.min(pageNo * pageSize, visible.size());
+        int to = Math.min(from + pageSize, visible.size());
+        int totalPages = (visible.size() + pageSize - 1) / pageSize;
+
+        ListResponse page = new ListResponse();
+        page.setContent(notifier.toQueueViews(visible.subList(from, to), me));
+        page.setPageNo(pageNo);
+        page.setPageSize(pageSize);
+        page.setTotalElements(visible.size());
+        page.setTotalPages(totalPages);
+        page.setLast(pageNo >= totalPages - 1);
+        return page;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void routeUnroutedOnStartup() {
+        try {
+            int n = routeUnroutedIncidents();
+            if (n > 0) log.info("🧭 [ROUTING] Routed {} incident(s) created before routing existed", n);
+        } catch (Exception e) {
+            log.error("❌ [ROUTING] Could not route old incidents: {}", e.getMessage(), e);
+        }
     }
 
     @Override
-    public List<IncidentResponse> getRecentIncidents() {
-        return incidentRepository.findTop50ByOrderByCreatedAtDesc().stream()
-                .map(IncidentResponse::from)
+    public synchronized int routeUnroutedIncidents() {
+        List<Incident> unrouted = incidentRepository.findByStatusInAndRoutedAgencyIsNull(IncidentStatus.ACTIVE);
+        for (Incident incident : unrouted) {
+            AgencyType agency = incident.getEmergencyType() == null
+                    ? AgencyType.POLICE : incident.getEmergencyType().getAgency();
+            String province = isPlaceholder(incident.getProvince()) ? null : incident.getProvince();
+            String ward = isPlaceholder(incident.getWard()) ? null : incident.getWard();
+            UnitLevel level = agency.receivesIncidents() ? routeLevel(agency, province, ward) : UnitLevel.NATIONAL;
+            incident.setProvince(province);
+            incident.setWard(ward);
+            incident.setRoutedAgency(agency);
+            incident.setRoutedLevel(level);
+            // Hạn leo thang tính từ lúc tạo ca như ca mới; đã quá hạn thì lịch hẹn leo thang ngay
+            if (level == UnitLevel.WARD && agency.isEscalates() && incident.getEscalateAt() == null) {
+                LocalDateTime created = incident.getCreatedAt() == null ? LocalDateTime.now() : incident.getCreatedAt();
+                incident.setEscalateAt(created.plusMinutes(escalationMinutes));
+            }
+            Incident saved = incidentRepository.save(incident);
+            log.info("🧭 [ROUTING] Old incident {} -> {} {}", saved.getId(), agency, level);
+            escalationService.schedule(saved);
+            notifier.notify(saved.getId(), IncidentEvent.INCIDENT_NEW);
+        }
+        return unrouted.size();
+    }
+
+    private static boolean isPlaceholder(String area) {
+        return area == null || area.isBlank() || GeoService.UNKNOWN_WARD.equals(area)
+                || GeoService.OUTSIDE_BOUNDARIES.equals(area) || "Việt Nam".equals(area);
+    }
+
+    @Transactional
+    @Override
+    public IncidentQueueResponse claimIncident(String id) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(id);
+        if (!IncidentAccess.canHandle(me, incident)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Ca này không thuộc cấp đơn vị của bạn (chỉ được theo dõi)");
+        }
+        if (incident.getHandlerId() != null || incident.getStatus() != IncidentStatus.PENDING) {
+            throw new SosException(HttpStatus.CONFLICT, "Ca đã có cán bộ khác tiếp nhận");
+        }
+        if (incidentRepository.existsByHandlerIdAndStatusIn(me.accountId(), IncidentStatus.ACTIVE)) {
+            throw new SosException(HttpStatus.CONFLICT, "Bạn đang giữ một ca khác: hoàn tất hoặc nhả ca đó trước");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int claimed;
+        try {
+            claimed = incidentRepository.claim(id, me.accountId(), incident.getRoutedLevel(), now);
+        } catch (DataIntegrityViolationException e) {
+            // ux_incidents_active_handler: cùng người bấm nhận 2 ca gần như đồng thời
+            throw new SosException(HttpStatus.CONFLICT, "Bạn đang giữ một ca khác: hoàn tất hoặc nhả ca đó trước");
+        }
+        if (claimed == 0) {
+            throw new SosException(HttpStatus.CONFLICT, "Ca vừa được cán bộ khác tiếp nhận");
+        }
+        incidentClaimRepository.save(IncidentClaim.builder()
+                .incident(incidentRepository.getReferenceById(id))
+                .account(accountRepository.getReferenceById(me.accountId()))
+                .claimedAt(now)
+                .build());
+        log.info("🙋 [CLAIM] Incident {} claimed by {}", id, me.email());
+
+        notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
+        return queueView(id, me);
+    }
+
+    @Transactional
+    @Override
+    public IncidentQueueResponse releaseIncident(String id, ReleaseIncidentRequest request) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(id);
+        if (!me.accountId().equals(incident.getHandlerId())) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String note = request == null ? null : request.getNote();
+        UUID toId = request == null ? null : request.getToAccountId();
+        IncidentClaim myClaim = incidentClaimRepository
+                .findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, me.accountId())
+                .orElse(null);
+
+        if (toId != null) {
+            Account target = accountRepository.findById(toId)
+                    .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy cán bộ được giao"));
+            OfficerPrincipal to = OfficerPrincipal.of(target);
+            if (toId.equals(me.accountId()) || !to.isStaff() || !target.isActive() || !IncidentAccess.sameUnit(me, to)) {
+                throw new SosException(HttpStatus.BAD_REQUEST, "Chỉ giao được cho cán bộ khác cùng đơn vị");
+            }
+            if (incidentRepository.existsByHandlerIdAndStatusIn(toId, IncidentStatus.ACTIVE)) {
+                throw new SosException(HttpStatus.CONFLICT, target.fullName() + " đang giữ một ca khác");
+            }
+            if (incidentRepository.handOver(id, me.accountId(), toId, now) == 0) {
+                throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
+            }
+            closeClaim(myClaim, now, ClaimEndReason.HANDED_OVER, target, note);
+            incidentClaimRepository.save(IncidentClaim.builder()
+                    .incident(incidentRepository.getReferenceById(id))
+                    .account(target)
+                    .claimedAt(now)
+                    .note(note)
+                    .build());
+            log.info("🤝 [HANDOVER] Incident {} handed from {} to {}", id, me.email(), target.getEmail());
+        } else {
+            if (incidentRepository.release(id, me.accountId(), now) == 0) {
+                throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
+            }
+            closeClaim(myClaim, now, ClaimEndReason.RELEASED, null, note);
+            log.info("↩️ [RELEASE] Incident {} released by {}", id, me.email());
+            // Đồng hồ leo thang tính tiếp từ lúc tạo ca: quá hạn rồi thì leo thang ngay
+            Incident released = findIncident(id);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    escalationService.schedule(released);
+                }
+            });
+        }
+
+        notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
+        return queueView(id, me);
+    }
+
+    @Override
+    public List<HandoverCandidateResponse> getHandoverCandidates(String id) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(id);
+        if (!me.accountId().equals(incident.getHandlerId())) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
+        }
+        List<Account> colleagues = accountRepository.findActiveOfficers(me.agency(), me.level()).stream()
+                .filter(a -> !a.getId().equals(me.accountId()))
+                .filter(a -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(a)))
                 .toList();
+        Set<UUID> busy = incidentRepository
+                .findByHandlerIdInAndStatusIn(colleagues.stream().map(Account::getId).toList(), IncidentStatus.ACTIVE)
+                .stream().map(Incident::getHandlerId).collect(Collectors.toSet());
+        Set<String> online = notifier.onlineEmails();
+        return colleagues.stream()
+                .map(a -> new HandoverCandidateResponse(a.getId(), a.fullName(), online.contains(a.getEmail()), busy.contains(a.getId())))
+                .sorted(Comparator.comparing(HandoverCandidateResponse::isBusy)
+                        .thenComparing(c -> !c.isOnline())
+                        .thenComparing(HandoverCandidateResponse::getFullName, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    private void closeClaim(IncidentClaim claim, LocalDateTime now, ClaimEndReason reason, Account handedTo, String note) {
+        if (claim == null) return;
+        claim.setReleasedAt(now);
+        claim.setEndReason(reason);
+        claim.setHandedTo(handedTo);
+        if (note != null && !note.isBlank()) claim.setNote(note.trim());
+        incidentClaimRepository.save(claim);
+    }
+
+    private IncidentQueueResponse queueView(String id, OfficerPrincipal me) {
+        return notifier.toQueueViews(List.of(findIncident(id)), me).get(0);
+    }
+
+    private OfficerPrincipal currentOfficer() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new SosException(HttpStatus.UNAUTHORIZED, "Chưa đăng nhập");
+        }
+        Account account = accountRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
+        OfficerPrincipal officer = OfficerPrincipal.of(account);
+        if (!officer.isStaff()) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ mới xem được hàng đợi sự cố");
+        }
+        return officer;
     }
 
     @Transactional
@@ -203,7 +485,7 @@ public class IncidentServiceImpl implements IncidentService {
         Incident saved = incidentRepository.save(incident);
         log.info("📎 [MEDIA] {} file(s) attached to incident {}", added.size(), id);
 
-        broadcast(IncidentResponse.from(saved));
+        notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
         return added.stream().map(item -> IncidentResponse.toMediaResponse(id, item)).toList();
     }
 
@@ -218,6 +500,80 @@ public class IncidentServiceImpl implements IncidentService {
         return mediaStorageService.load(mediaFolder(id), fileName);
     }
 
+    @Override
+    public IncidentTrackingResponse getTracking(String id, String citizenAccessToken) {
+        Incident incident = findIncident(id);
+        verifyCitizenToken(incident, citizenAccessToken);
+        return tracking(incident);
+    }
+
+    @Transactional
+    @Override
+    public IncidentTrackingResponse cancelByCitizen(String id, String citizenAccessToken, CancelIncidentRequest request) {
+        Incident incident = findIncident(id);
+        verifyCitizenToken(incident, citizenAccessToken);
+        CancelReason reason = request == null ? null : request.getReason();
+        if (reason != null && !reason.isCitizenChoice()) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Lý do huỷ không hợp lệ");
+        }
+        if (!cancel(id, reason, IncidentStatus.ACTIVE)) {
+            throw new SosException(HttpStatus.CONFLICT, "Tin báo đã kết thúc hoặc đã được huỷ trước đó");
+        }
+        log.info("🛑 [CANCEL] Incident {} cancelled by citizen ({})", id, reason);
+        return tracking(findIncident(id));
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void cancelStaleOnStartup() {
+        try {
+            int n = cancelStaleIncidents();
+            if (n > 0) {
+                log.info("🛑 [AUTO-CANCEL] Cancelled {} incident(s) waiting over {} min with no responder", n, autoCancelMinutes);
+            }
+        } catch (Exception e) {
+            log.error("❌ [AUTO-CANCEL] Could not cancel stale incidents: {}", e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public int cancelStaleIncidents() {
+        LocalDateTime before = LocalDateTime.now().minusMinutes(autoCancelMinutes);
+        int cancelled = 0;
+        for (Incident incident : incidentRepository
+                .findByStatusAndHandlerIdIsNullAndCreatedAtBefore(IncidentStatus.PENDING, before)) {
+            // Chỉ ca vẫn đang chờ: ai vừa kịp nhận thì UPDATE có điều kiện bỏ qua ca đó
+            if (cancel(incident.getId(), CancelReason.NO_RESPONDER, Set.of(IncidentStatus.PENDING))) {
+                cancelled++;
+                log.info("🛑 [AUTO-CANCEL] Incident {} (created {}) had no responder", incident.getId(), incident.getCreatedAt());
+            }
+        }
+        return cancelled;
+    }
+
+    /**
+     * Huỷ ca nếu status còn trong `fromStatuses`; đóng lượt giữ ca đang mở (nếu có) và báo hàng đợi gỡ ca.
+     * @return false khi ca đã đóng / đổi trạng thái trước đó
+     */
+    private boolean cancel(String id, CancelReason reason, Set<IncidentStatus> fromStatuses) {
+        LocalDateTime now = LocalDateTime.now();
+        if (incidentRepository.cancel(id, reason, fromStatuses, now) == 0) return false;
+        Incident cancelled = findIncident(id);
+        if (cancelled.getHandlerId() != null) {
+            String note = "Ca bị huỷ" + (reason == null ? "" : ": " + reason.getLabel());
+            incidentClaimRepository
+                    .findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, cancelled.getHandlerId())
+                    .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, note));
+        }
+        notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
+        return true;
+    }
+
+    private IncidentTrackingResponse tracking(Incident incident) {
+        String handlerName = incident.getHandlerId() == null ? null
+                : accountRepository.findById(incident.getHandlerId()).map(Account::fullName).orElse(null);
+        return IncidentTrackingResponse.from(incident, handlerName);
+    }
+
     private Incident findIncident(String id) {
         return incidentRepository.findById(id)
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy vụ việc ID: " + id));
@@ -227,19 +583,8 @@ public class IncidentServiceImpl implements IncidentService {
         if (token == null || token.isBlank()) {
             throw new SosException(HttpStatus.UNAUTHORIZED, "Thiếu mã truy cập của người báo tin");
         }
-        String expected = incident.getCitizenTokenHash();
-        boolean valid = expected != null && MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.US_ASCII), sha256(token).getBytes(StandardCharsets.US_ASCII));
-        if (!valid) {
+        if (!CitizenTokens.matches(incident, token)) {
             throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
-        }
-    }
-
-    private void broadcast(IncidentResponse incident) {
-        try {
-            messagingTemplate.convertAndSend(INCIDENT_TOPIC, incident);
-        } catch (Exception e) {
-            log.warn("Could not broadcast incident via websocket: {}", e.getMessage());
         }
     }
 
@@ -261,14 +606,5 @@ public class IncidentServiceImpl implements IncidentService {
         byte[] bytes = new byte[32];
         secureRandom.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private static String sha256(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
     }
 }

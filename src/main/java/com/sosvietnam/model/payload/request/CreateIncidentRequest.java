@@ -5,6 +5,7 @@ import com.sosvietnam.model.payload.enums.EmergencyType;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -17,7 +18,8 @@ public class CreateIncidentRequest {
     @Size(max = 150)
     @JsonProperty("citizen_name")
     private String citizenName;
-    @Size(max = 30)
+    // Cùng quy tắc với Incident.phone (cột 10 ký tự): số sai trả 400 ở đây thay vì lỗi 500 lúc lưu DB
+    @Pattern(regexp = "^0[0-9]{9}$", message = "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0 (ví dụ 0912345678)")
     @JsonProperty("phone")
     private String phone;
     @NotNull

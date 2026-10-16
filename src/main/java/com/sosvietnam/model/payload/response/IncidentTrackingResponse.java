@@ -1,0 +1,106 @@
+package com.sosvietnam.model.payload.response;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.sosvietnam.model.entity.Incident;
+import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.CancelReason;
+import com.sosvietnam.model.payload.enums.EmergencyType;
+import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.enums.UnitLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+
+/**
+ * Những gì người báo tin thấy về ca của mình trên màn chờ (GET /incidents/{id}/tracking,
+ * POST /incidents/{id}/cancel). Không có thông tin của người khác ngoài tên cán bộ đang giữ ca.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class IncidentTrackingResponse {
+
+    @JsonProperty("id")
+    private String id;
+
+    @JsonProperty("emergency_type")
+    private EmergencyType emergencyType;
+
+    @JsonProperty("status")
+    private IncidentStatus status;
+
+    @JsonProperty("routed_agency")
+    private AgencyType routedAgency;
+
+    @JsonProperty("routed_level")
+    private UnitLevel routedLevel;
+
+    @JsonProperty("province")
+    private String province;
+
+    @JsonProperty("ward")
+    private String ward;
+
+    @JsonProperty("created_at")
+    private OffsetDateTime createdAt;
+
+    @JsonProperty("escalate_at")
+    private OffsetDateTime escalateAt;
+
+    @JsonProperty("escalated_at")
+    private OffsetDateTime escalatedAt;
+
+    @JsonProperty("accepted_at")
+    private OffsetDateTime acceptedAt;
+
+    @JsonProperty("cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @JsonProperty("cancel_reason")
+    private CancelReason cancelReason;
+
+    @JsonProperty("cancel_reason_label")
+    private String cancelReasonLabel;
+
+    @JsonProperty("handler")
+    private Handler handler;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class Handler {
+        @JsonProperty("full_name")
+        private String fullName;
+    }
+
+    /** @param handlerName tên cán bộ đang giữ ca, null = chưa ai nhận */
+    public static IncidentTrackingResponse from(Incident i, String handlerName) {
+        return IncidentTrackingResponse.builder()
+                .id(i.getId())
+                .emergencyType(i.getEmergencyType())
+                .status(i.getStatus())
+                .routedAgency(i.getRoutedAgency())
+                .routedLevel(i.getRoutedLevel())
+                .province(i.getProvince())
+                .ward(i.getWard())
+                .createdAt(withZone(i.getCreatedAt()))
+                .escalateAt(withZone(i.getEscalateAt()))
+                .escalatedAt(withZone(i.getEscalatedAt()))
+                .acceptedAt(withZone(i.getAcceptedAt()))
+                .cancelledAt(withZone(i.getCancelledAt()))
+                .cancelReason(i.getCancelReason())
+                .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())
+                .handler(handlerName == null ? null : new Handler(handlerName))
+                .build();
+    }
+
+    private static OffsetDateTime withZone(LocalDateTime time) {
+        return time == null ? null : time.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+    }
+}

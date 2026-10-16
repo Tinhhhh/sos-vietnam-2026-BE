@@ -98,13 +98,13 @@ public class GeoServiceImpl implements GeoService {
             Province prov = provOpt.get();
             result.setProvince(prov.getName());
             result.setProvinceCode(prov.getCode());
-            result.setWard("Chưa xác định xã/phường");
+            result.setWard(UNKNOWN_WARD);
             return result;
         }
 
         // 3. Ngoài ranh giới dữ liệu: province_code = null để FE biết là chưa xác định
         result.setProvince("Việt Nam");
-        result.setWard("Vùng ngoài ranh giới");
+        result.setWard(OUTSIDE_BOUNDARIES);
         return result;
     }
 
