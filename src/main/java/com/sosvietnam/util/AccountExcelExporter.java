@@ -82,14 +82,10 @@ public class AccountExcelExporter {
         }
     }
 
-    /** Tên cấp theo lực lượng: PCCC gọi là cấp Đội / cấp Phòng, còn lại theo UnitLevel. */
+    /** Tên cấp theo lực lượng: CSGT, PCCC gọi là cấp Đội / cấp Phòng, còn lại theo UnitLevel. */
     static String levelLabel(AgencyType agency, UnitLevel level) {
         if (level == null) return "";
-        if (agency == AgencyType.FIRE) {
-            if (level == UnitLevel.WARD) return "Cấp Đội";
-            if (level == UnitLevel.PROVINCE) return "Cấp Phòng";
-        }
-        return level.getLabel();
+        return agency != null ? agency.levelLabel(level) : level.getLabel();
     }
 
     private static String passwordOrUnknown(String plain) {

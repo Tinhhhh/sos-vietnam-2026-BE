@@ -61,8 +61,12 @@ class AccountExcelExporterTest {
     @Test
     void agencyLevels_matchTheUnitStructure() {
         assertThat(AgencyType.POLICE.supports(UnitLevel.WARD)).isTrue();
-        assertThat(AgencyType.MOBILE_POLICE.supports(UnitLevel.WARD)).isFalse();
-        assertThat(AgencyType.MOBILE_POLICE.supports(UnitLevel.PROVINCE)).isTrue();
+        assertThat(AgencyType.CSGT.supports(UnitLevel.WARD)).isTrue();
+        assertThat(AgencyType.CSGT.levelLabel(UnitLevel.WARD)).isEqualTo("Cấp Đội");
+        assertThat(AgencyType.POLICE.getIntakeLevel()).isEqualTo(UnitLevel.WARD);
+        assertThat(AgencyType.CSGT.getIntakeLevel()).isEqualTo(UnitLevel.PROVINCE);
+        assertThat(AgencyType.FIRE.isEscalates()).isFalse();
+        assertThat(AgencyType.HOSPITAL.receivesIncidents()).isFalse();
         assertThat(AgencyType.FIRE.supports(UnitLevel.WARD)).isTrue();
         assertThat(AgencyType.HOSPITAL.getLevels()).containsExactly(UnitLevel.PROVINCE);
     }

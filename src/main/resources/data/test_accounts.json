@@ -1,9 +1,9 @@
 {
-  "description": "Tài khoản trực ban để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An). Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
+  "description": "Tài khoản cán bộ để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An). Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
   "accounts": [
     {
       "email": "congan.cantho@sos.vn",
-      "last_name": "Trực Ban",
+      "last_name": "Cán Bộ",
       "first_name": "Công An TP. Cần Thơ",
       "agency_type": "POLICE",
       "unit_level": "PROVINCE",
@@ -13,7 +13,7 @@
     },
     {
       "email": "congan.tanan@sos.vn",
-      "last_name": "Trực Ban",
+      "last_name": "Cán Bộ",
       "first_name": "Công An Phường Tân An",
       "agency_type": "POLICE",
       "unit_level": "WARD",
@@ -22,10 +22,10 @@
       "address": "02 Nguyễn Tri Phương, Kv.10, phường Tân An, thành phố Cần Thơ"
     },
     {
-      "email": "cscd.cantho@sos.vn",
-      "last_name": "Trực Ban",
-      "first_name": "Phòng CSCĐ Công An TP. Cần Thơ",
-      "agency_type": "MOBILE_POLICE",
+      "email": "csgt.cantho@sos.vn",
+      "last_name": "Cán Bộ",
+      "first_name": "Phòng CSGT Công An TP. Cần Thơ",
+      "agency_type": "CSGT",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
       "ward": null,
@@ -33,7 +33,7 @@
     },
     {
       "email": "pccc.cantho@sos.vn",
-      "last_name": "Trực Ban",
+      "last_name": "Cán Bộ",
       "first_name": "Phòng PC07 Công An TP. Cần Thơ",
       "agency_type": "FIRE",
       "unit_level": "PROVINCE",
@@ -43,7 +43,7 @@
     },
     {
       "email": "pccc.tanan@sos.vn",
-      "last_name": "Trực Ban",
+      "last_name": "Cán Bộ",
       "first_name": "Đội PCCC & CNCH Khu Vực Tân An",
       "agency_type": "FIRE",
       "unit_level": "WARD",
@@ -53,7 +53,7 @@
     },
     {
       "email": "yte115.cantho@sos.vn",
-      "last_name": "Trực Ban",
+      "last_name": "Cán Bộ",
       "first_name": "Trung Tâm Cấp Cứu 115 TP. Cần Thơ",
       "agency_type": "HOSPITAL",
       "unit_level": "PROVINCE",

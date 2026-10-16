@@ -1,8 +1,11 @@
 package com.sosvietnam.model.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.CancelReason;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.enums.UnitLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
@@ -13,6 +16,7 @@ import org.locationtech.jts.geom.Point;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "incidents")
@@ -87,6 +91,46 @@ public class Incident {
     @JsonIgnore
     @Column(name = "citizen_token_hash", length = 64)
     private String citizenTokenHash;
+
+    // ---- Phân luồng (module 5) ----
+    // Lực lượng đang giữ ca (từ loại sự cố: TRAFFIC -> CSGT...)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "routed_agency", length = 30)
+    private AgencyType routedAgency;
+
+    // Cấp đang giữ ca: WARD (Công an xã), PROVINCE (cấp tỉnh/phòng), NATIONAL (không xác định được tỉnh)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "routed_level", length = 20)
+    private UnitLevel routedLevel;
+
+    // Hạn chót leo thang (tạo ca + 15 phút); null = ca không leo thang
+    @Column(name = "escalate_at")
+    private LocalDateTime escalateAt;
+
+    // Lúc ca thực sự bị chuyển lên tỉnh; null = chưa leo thang
+    @Column(name = "escalated_at")
+    private LocalDateTime escalatedAt;
+
+    // ---- Nhận ca / khoá ca ----
+    // Trực ban đang giữ ca; null = chưa ai nhận. Lịch sử từng lượt giữ ở bảng incident_claims.
+    @Column(name = "handler_id")
+    private UUID handlerId;
+
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
+    // Lần nhận ca đầu tiên (thời gian nhận ca trên dashboard), không đổi khi nhả / giao lại
+    @Column(name = "accepted_at")
+    private LocalDateTime acceptedAt;
+
+    // ---- Huỷ ca ----
+    // Người dân tự huỷ, hoặc hệ thống huỷ ca chờ quá lâu (status = CANCELLED)
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 30)
+    private CancelReason cancelReason;
 
     @Column(name = "assigned_station_id")
     private Long assignedStationId;

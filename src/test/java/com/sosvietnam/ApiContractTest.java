@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.config.BeanConfiguration;
 import com.sosvietnam.config.SecurityConfig;
 import com.sosvietnam.controller.AuthController;
+import com.sosvietnam.controller.DashboardController;
 import com.sosvietnam.controller.GeoController;
 import com.sosvietnam.controller.IncidentController;
 import com.sosvietnam.controller.StationController;
@@ -19,6 +20,7 @@ import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.model.payload.response.DataStatusResponse;
 import com.sosvietnam.model.payload.response.ListResponse;
+import com.sosvietnam.model.payload.response.IncidentQueueResponse;
 import com.sosvietnam.model.payload.response.IncidentResponse;
 import com.sosvietnam.model.payload.response.LocationResponse;
 import com.sosvietnam.model.payload.response.StationResponse;
@@ -28,6 +30,7 @@ import com.sosvietnam.repository.RefreshTokenRepository;
 import com.sosvietnam.repository.RoleRepository;
 import com.sosvietnam.security.*;
 import com.sosvietnam.service.BandoSyncService;
+import com.sosvietnam.service.DashboardService;
 import com.sosvietnam.service.GeoService;
 import com.sosvietnam.service.IncidentService;
 import com.sosvietnam.service.WeatherService;
@@ -59,7 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Chỉ giả lập (mock) tầng repository/DB vì môi trường test không có PostGIS.
  */
 @WebMvcTest(controllers = {AuthController.class, GeoController.class, StationController.class, IncidentController.class,
-        WeatherController.class})
+        WeatherController.class, DashboardController.class})
 @Import({SecurityConfig.class, BeanConfiguration.class, JwtAuthenticationFilter.class, JwtTokenProvider.class,
         JwtAuthenticationEntryPoint.class, CustomLogoutHandler.class, CustomUserDetailService.class, AuthenServiceImpl.class})
 @TestPropertySource(properties = "app.jwt.secret-key=q83vEi7pZf2mR1tYw9LkXc4N6bHs0aJdUe5gVo8iTzQyP3rKfW2xCnMbLh7sDjA1")
@@ -76,6 +79,7 @@ class ApiContractTest {
     @MockitoBean BandoSyncService bandoSyncService;
     @MockitoBean IncidentService incidentService;
     @MockitoBean WeatherService weatherService;
+    @MockitoBean DashboardService dashboardService;
 
     // "DB" giả cho refresh token: nếu code lưu trùng thì list sẽ có 2 phần tử
     final List<RefreshToken> refreshTable = Collections.synchronizedList(new ArrayList<>());
@@ -304,7 +308,7 @@ class ApiContractTest {
     @Test
     void stationsList_removedEnumValues_return400() throws Exception {
         mvc.perform(get("/api/v1/stations").param("level", "DISTRICT")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/stations").param("agency", "CSGT")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").param("agency", "MOBILE_POLICE")).andExpect(status().isBadRequest());
     }
 
     @Test
@@ -375,11 +379,89 @@ class ApiContractTest {
     }
 
     @Test
-    void recentIncidents_requiresOfficer() throws Exception {
-        when(incidentService.getRecentIncidents()).thenReturn(List.of());
-        mvc.perform(get("/api/v1/incidents/recent")).andExpect(status().isUnauthorized());
+    void citizenCancelAndTracking_arePublic_andRejectUnknownReason() throws Exception {
+        when(incidentService.cancelByCitizen(eq("SOS-1"), eq("tok"), any())).thenReturn(
+                com.sosvietnam.model.payload.response.IncidentTrackingResponse.builder()
+                        .id("SOS-1").status(com.sosvietnam.model.payload.enums.IncidentStatus.CANCELLED).build());
+        mvc.perform(post("/api/v1/incidents/SOS-1/cancel").header("X-SOS-Access-Token", "tok")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"MISTAKE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+        mvc.perform(post("/api/v1/incidents/SOS-1/cancel").header("X-SOS-Access-Token", "tok"))
+                .andExpect(status().isOk()); // body is optional
+        mvc.perform(post("/api/v1/incidents/SOS-1/cancel").header("X-SOS-Access-Token", "tok")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"BORED\"}"))
+                .andExpect(status().isBadRequest());
+
+        when(incidentService.getTracking("SOS-1", "tok")).thenReturn(
+                com.sosvietnam.model.payload.response.IncidentTrackingResponse.builder().id("SOS-1").build());
+        mvc.perform(get("/api/v1/incidents/SOS-1/tracking").header("X-SOS-Access-Token", "tok"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("SOS-1"));
+    }
+
+    @Test
+    void createIncident_badPhone_returns400WithClearMessage() throws Exception {
+        for (String phone : new String[]{"+84912345678", "091234", "09123456789", "09a2345678"}) {
+            mvc.perform(post("/api/v1/incidents").contentType(MediaType.APPLICATION_JSON).content("""
+                    {"emergency_type":"POLICE","latitude":10.03,"longitude":105.78,"phone":"%s"}
+                    """.formatted(phone)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("10 chữ số")))
+                    .andExpect(jsonPath("$.data.phone").exists());
+        }
+        verify(incidentService, never()).createIncident(any());
+    }
+
+    @Test
+    void incidentQueue_requiresOfficer_andRecentIsGone() throws Exception {
+        when(incidentService.getQueue(anyInt(), anyInt())).thenReturn(new ListResponse(List.of(), 0, 50, 0, 0, true));
+        mvc.perform(get("/api/v1/incidents/queue")).andExpect(status().isUnauthorized());
         String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
-        mvc.perform(get("/api/v1/incidents/recent").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/incidents/queue").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.page_size").value(50));
+        verify(incidentService).getQueue(0, 50);
+        mvc.perform(get("/api/v1/incidents/recent").header("Authorization", "Bearer " + access))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void dashboard_requiresOfficer_andParsesDates() throws Exception {
+        mvc.perform(get("/api/v1/dashboard/summary")).andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        when(dashboardService.getSummary(any(), any(), any(), any())).thenReturn(
+                com.sosvietnam.model.payload.response.DashboardSummaryResponse.builder()
+                        .byHour(java.util.Collections.nCopies(24, 0L)).build());
+        mvc.perform(get("/api/v1/dashboard/summary").param("from", "2026-10-09").param("to", "2026-10-15")
+                        .header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.by_hour.length()").value(24));
+        verify(dashboardService).getSummary(java.time.LocalDate.of(2026, 10, 9), java.time.LocalDate.of(2026, 10, 15), null, null);
+        mvc.perform(get("/api/v1/dashboard/summary").param("from", "15/10/2026").header("Authorization", "Bearer " + access))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void claimAndRelease_requireOfficer_andPassBody() throws Exception {
+        mvc.perform(post("/api/v1/incidents/SOS-1/claim")).andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        when(incidentService.claimIncident("SOS-1")).thenReturn(IncidentQueueResponse.builder().id("SOS-1").heldByMe(true).build());
+        mvc.perform(post("/api/v1/incidents/SOS-1/claim").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.held_by_me").value(true));
+
+        UUID to = UUID.randomUUID();
+        when(incidentService.releaseIncident(eq("SOS-1"), any())).thenReturn(IncidentQueueResponse.builder().id("SOS-1").build());
+        mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"to_account_id\":\"" + to + "\",\"note\":\"Hết ca\"}"))
+                .andExpect(status().isOk());
+        verify(incidentService).releaseIncident(eq("SOS-1"), argThat(r -> to.equals(r.getToAccountId()) && "Hết ca".equals(r.getNote())));
+
+        // Nhả về hàng đợi chung: không cần body
+        mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk());
     }
 
     @Test

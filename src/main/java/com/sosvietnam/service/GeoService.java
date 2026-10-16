@@ -13,6 +13,11 @@ import java.util.List;
 
 /** Tra cứu địa giới hành chính (tỉnh, xã/phường) và trạm cứu hộ. */
 public interface GeoService {
+    /** resolveLocation(): điểm nằm trong tỉnh nhưng không khớp xã/phường nào. */
+    String UNKNOWN_WARD = "Chưa xác định xã/phường";
+    /** resolveLocation(): điểm ngoài ranh giới dữ liệu (province_code = null). */
+    String OUTSIDE_BOUNDARIES = "Vùng ngoài ranh giới";
+
     List<ProvinceResponse> getAllProvinces();
 
     List<WardResponse> getWardsByProvince(String provinceCode);

@@ -1,6 +1,8 @@
 package com.sosvietnam.model.payload.exception;
 
 import com.sosvietnam.util.DateUtil;
+import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -24,11 +26,14 @@ import java.util.Map;
  * Gom mọi lỗi về 1 format chung (ExceptionResponse), giống HIV-TMSS.
  * FE đọc field "message" (hoặc "data" với lỗi validate) để hiển thị.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ExceptionResponse> handleException(Exception exception) {
+        // Lỗi không lường trước: ghi đủ stack trace để còn tìm nguyên nhân
+        log.error("Unhandled exception", exception);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(
@@ -141,6 +146,25 @@ public class GlobalExceptionHandler {
                         ExceptionResponse.builder()
                                 .httpStatus(HttpStatus.BAD_REQUEST.value())
                                 .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                // Gộp các lỗi thành 1 câu để FE hiện thẳng; "data" vẫn giữ lỗi theo từng field
+                                .message(String.join("; ", errors.values()))
+                                .data(errors)
+                                .build()
+                );
+    }
+
+    /** Lỗi validate ở entity lúc lưu DB (vd Incident.phone): dữ liệu sai là lỗi 400 của người gửi, không phải 500. */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ExceptionResponse> handleConstraintViolationException(ConstraintViolationException exception) {
+        Map<String, String> errors = new HashMap<>();
+        exception.getConstraintViolations().forEach(v -> errors.put(v.getPropertyPath().toString(), v.getMessage()));
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(
+                        ExceptionResponse.builder()
+                                .httpStatus(HttpStatus.BAD_REQUEST.value())
+                                .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
+                                .message(String.join("; ", errors.values()))
                                 .data(errors)
                                 .build()
                 );

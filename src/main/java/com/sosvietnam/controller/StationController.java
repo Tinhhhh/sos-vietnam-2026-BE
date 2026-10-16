@@ -17,14 +17,14 @@ import static com.sosvietnam.util.AppConstants.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/stations")
-@Tag(name = "Station", description = "Rescue stations (police, mobile police, fire, hospital)")
+@Tag(name = "Station", description = "Rescue stations (police, traffic police, fire, hospital)")
 public class StationController {
 
     private final GeoService geoService;
 
     @Operation(summary = "Get all stations (paged)",
             description = "pageNo from 0, pageSize 1-1000. province: part of the province name, case-insensitive "
-                    + "(\"c\" matches Cần Thơ, Cà Mau...). agency: POLICE | MOBILE_POLICE | FIRE | HOSPITAL. "
+                    + "(\"c\" matches Cần Thơ, Cà Mau...). agency: POLICE | CSGT | FIRE | HOSPITAL. "
                     + "level: NATIONAL | PROVINCE | WARD | ENTERPRISE. sortBy: id | name | province | ward | agencyType | level, "
                     + "sortDir: asc | desc. Role required: none")
     @GetMapping
@@ -41,7 +41,7 @@ public class StationController {
     }
 
     @Operation(summary = "Find nearest stations",
-            description = "agency: POLICE | MOBILE_POLICE | FIRE | HOSPITAL (optional). radius in meters. Role required: none")
+            description = "agency: POLICE | CSGT | FIRE | HOSPITAL (optional). radius in meters. Role required: none")
     @GetMapping("/nearest")
     public ResponseEntity<Object> getNearestStations(
             @RequestParam("lat") double lat,

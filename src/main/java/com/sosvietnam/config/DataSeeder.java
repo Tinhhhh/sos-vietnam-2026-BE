@@ -48,7 +48,7 @@ public class DataSeeder implements CommandLineRunner {
     private static final String STATIONS_FILE = "data/rescue_stations.json";
     private static final String STATIONS_SEED_NAME = SeedVersion.RESCUE_STATIONS;
     // Tăng số này khi đổi cách đọc file (thêm cột, đổi mapping) để lần khởi động sau nạp lại dù file không đổi
-    private static final String STATIONS_SEED_FORMAT = "4";
+    private static final String STATIONS_SEED_FORMAT = "5";
     private static final String PLACEHOLDER = "Đang cập nhật";
     private static final String UPSERT_STATION_SQL =
             "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province, ward, "
@@ -73,9 +73,24 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         seedRoles();
+        migrateLegacyAgencies();
         seedDefaultAccounts();
         seedTestAccounts();
         seedRescueStations();
+        ensureIncidentIndexes();
+    }
+
+    /**
+     * Mỗi trực ban chỉ giữ 1 ca đang mở: index unique một phần trên incidents.handler_id
+     * (bảng do Hibernate tạo nên không đặt trong schema.sql, file đó chạy trước Hibernate).
+     */
+    private void ensureIncidentIndexes() {
+        try {
+            jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_incidents_active_handler ON incidents (handler_id) "
+                    + "WHERE handler_id IS NOT NULL AND status IN ('ACCEPTED', 'VERIFYING', 'DISPATCHED')");
+        } catch (Exception e) {
+            log.error("❌ [INIT INCIDENTS] Could not create handler index: {}", e.getMessage());
+        }
     }
 
     private void seedRoles() {
@@ -87,6 +102,20 @@ public class DataSeeder implements CommandLineRunner {
                         .build());
                 log.info("🛡️ [INIT ROLE] Seeded role: {}", roleName.getRole());
             }
+        }
+    }
+
+    /**
+     * CSGT thay chỗ Cảnh sát cơ động (15/10/2026): tài khoản MOBILE_POLICE cũ chuyển sang CSGT
+     * (enum không còn MOBILE_POLICE, để nguyên thì Hibernate không đọc được dòng đó).
+     * Tài khoản test cscd.cantho đổi email thành csgt.cantho cho khớp data/test_accounts.json.
+     */
+    private void migrateLegacyAgencies() {
+        int moved = jdbcTemplate.update("UPDATE accounts SET agency_type = 'CSGT' WHERE agency_type = 'MOBILE_POLICE'");
+        jdbcTemplate.update("UPDATE accounts SET email = 'csgt.cantho@sos.vn' WHERE email = 'cscd.cantho@sos.vn' "
+                + "AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'csgt.cantho@sos.vn')");
+        if (moved > 0) {
+            log.info("[MIGRATE] {} MOBILE_POLICE account(s) moved to CSGT", moved);
         }
     }
 
@@ -294,13 +323,13 @@ public class DataSeeder implements CommandLineRunner {
 
     /**
      * "agency" trong file: police | csgt | fire | hospital | traffic-rescue.
-     * CSGT thuộc Công an, các trạm cứu hộ giao thông chưa chuẩn hoá: tạm tính là POLICE.
+     * Các trạm cứu hộ giao thông (traffic-rescue) chưa chuẩn hoá: tạm tính là CSGT.
      */
     static AgencyType toAgencyType(String rawAgency) {
         return switch (rawAgency.trim().toUpperCase()) {
+            case "CSGT", "TRAFFIC-RESCUE", "TRAFFIC_RESCUE" -> AgencyType.CSGT;
             case "FIRE" -> AgencyType.FIRE;
             case "HOSPITAL" -> AgencyType.HOSPITAL;
-            case "MOBILE_POLICE", "MOBILE-POLICE" -> AgencyType.MOBILE_POLICE;
             default -> AgencyType.POLICE;
         };
     }
