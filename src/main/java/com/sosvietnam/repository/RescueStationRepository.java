@@ -14,7 +14,7 @@ public interface RescueStationRepository extends JpaRepository<RescueStation, Lo
 
     List<RescueStation> findByAgencyType(AgencyType agencyType);
 
-    List<RescueStation> findByProvince(String province);
+    List<RescueStation> findByProvince_Code(String provinceCode);
 
     @Query(value = """
         SELECT * FROM rescue_stations s

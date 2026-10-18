@@ -22,11 +22,12 @@ public class WardResponse {
     @JsonProperty("name")
     private String name;
 
-    @JsonProperty("province_code")
-    private String provinceCode;
+    /** provinces.code */
+    @JsonProperty("province_id")
+    private String provinceId;
 
-    @JsonProperty("province_name")
-    private String provinceName;
+    @JsonProperty("province")
+    private String province;
 
     // Danh sách xã/phường cũ đã sáp nhập vào xã/phường này
     @JsonProperty("sap_nhap_tu")
@@ -37,4 +38,17 @@ public class WardResponse {
 
     @JsonProperty("center_lng")
     private Double centerLng;
+
+    public static WardResponse from(com.sosvietnam.model.entity.Ward w) {
+        return WardResponse.builder()
+                .id(w.getId())
+                .malk(w.getMalk())
+                .name(w.getName())
+                .provinceId(w.getProvince() == null ? null : w.getProvince().getCode())
+                .province(w.getProvince() == null ? null : w.getProvince().getName())
+                .sapNhapTu(w.getSapNhapTu())
+                .centerLat(w.getCenterLat())
+                .centerLng(w.getCenterLng())
+                .build();
+    }
 }

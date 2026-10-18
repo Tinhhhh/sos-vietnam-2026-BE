@@ -47,10 +47,11 @@ class IncidentRoutingTest {
     final IncidentRepository incidentRepo = mock(IncidentRepository.class);
     final IncidentClaimRepository claimRepo = mock(IncidentClaimRepository.class);
     final AccountRepository accountRepo = mock(AccountRepository.class);
+    final com.sosvietnam.repository.IncidentDispatchRepository dispatchRepo = mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
     final GeoService geo = mock(GeoService.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, accountRepo, geo,
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, geo,
             mock(MediaStorageService.class), notifier, escalation);
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
@@ -59,16 +60,16 @@ class IncidentRoutingTest {
 
     Account officerAccount(String email, AgencyType agency, UnitLevel level, String ward) {
         return Account.builder().id(UUID.randomUUID()).email(email).firstName("Trực").lastName("Ban").role(officerRole)
-                .agencyType(agency).unitLevel(level).province("Cần Thơ").ward(ward).isActive(true).build();
+                .agencyType(agency).unitLevel(level).province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward(ward)).isActive(true).build();
     }
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(service, "escalationMinutes", 15L);
         when(incidentRepo.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(geo.resolveLocation(anyDouble(), anyDouble())).thenReturn(LocationResponse.builder()
-                .province("Cần Thơ").provinceCode("92").ward("Phường Tân An").build());
-        when(accountRepo.findActiveOfficers(AgencyType.POLICE, UnitLevel.WARD)).thenReturn(List.of(caTanAn));
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.TAN_AN));
+        when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType.POLICE, UnitLevel.WARD,
+                TestGeo.TAN_AN.getId())).thenReturn(true);
     }
 
     @AfterEach
@@ -99,7 +100,7 @@ class IncidentRoutingTest {
 
     @Test
     void police_wardWithoutOfficer_goesStraightToProvince() {
-        when(accountRepo.findActiveOfficers(AgencyType.POLICE, UnitLevel.WARD)).thenReturn(List.of());
+        when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(any(), any(), any())).thenReturn(false);
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.PROVINCE);
         assertThat(inc.getEscalateAt()).isNull();
@@ -122,8 +123,7 @@ class IncidentRoutingTest {
 
     @Test
     void outsideBoundaries_goesToNationalLevel_withNullArea() {
-        when(geo.resolveLocation(anyDouble(), anyDouble())).thenReturn(LocationResponse.builder()
-                .province("Việt Nam").ward(GeoService.OUTSIDE_BOUNDARIES).build());
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(GeoService.Area.NONE);
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.NATIONAL);
         assertThat(inc.getProvince()).isNull();
@@ -146,7 +146,7 @@ class IncidentRoutingTest {
 
     Incident pendingWardIncident() {
         return Incident.builder().id("SOS-1").routedAgency(AgencyType.POLICE).routedLevel(UnitLevel.WARD)
-                .status(IncidentStatus.PENDING).province("Cần Thơ").ward("Phường Tân An")
+                .status(IncidentStatus.PENDING).province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An"))
                 .createdAt(LocalDateTime.now()).escalateAt(LocalDateTime.now().plusMinutes(15)).build();
     }
 
@@ -195,7 +195,7 @@ class IncidentRoutingTest {
     void release_toQueue_closesClaim_andReschedulesEscalation() {
         loginAs(caTanAn);
         Incident held = pendingWardIncident();
-        held.setStatus(IncidentStatus.ACCEPTED);
+        held.setStatus(IncidentStatus.VERIFYING);
         held.setHandlerId(caTanAn.getId());
         when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(held));
         when(incidentRepo.release(eq("SOS-1"), eq(caTanAn.getId()), any())).thenReturn(1);
@@ -222,7 +222,7 @@ class IncidentRoutingTest {
     void handOver_onlyToIdleColleagueOfSameUnit() {
         loginAs(caTanAn);
         Incident held = pendingWardIncident();
-        held.setStatus(IncidentStatus.ACCEPTED);
+        held.setStatus(IncidentStatus.VERIFYING);
         held.setHandlerId(caTanAn.getId());
         when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(held));
         when(notifier.toQueueViews(any(), any())).thenReturn(List.of(new com.sosvietnam.model.payload.response.IncidentQueueResponse()));
@@ -231,11 +231,19 @@ class IncidentRoutingTest {
         when(accountRepo.findById(fire.getId())).thenReturn(Optional.of(fire));
         ReleaseIncidentRequest toFire = new ReleaseIncidentRequest();
         toFire.setToAccountId(fire.getId());
+        toFire.setNote("Hết ca trực, giao lại");
         assertThatThrownBy(() -> service.releaseIncident("SOS-1", toFire)).extracting("httpStatus").isEqualTo(HttpStatus.BAD_REQUEST);
 
+        // Giao ca bắt buộc lý do
         when(accountRepo.findById(caTanAn2.getId())).thenReturn(Optional.of(caTanAn2));
+        ReleaseIncidentRequest noReason = new ReleaseIncidentRequest();
+        noReason.setToAccountId(caTanAn2.getId());
+        assertThatThrownBy(() -> service.releaseIncident("SOS-1", noReason))
+                .isInstanceOf(SosException.class).hasMessageContaining("lý do giao ca");
+
         ReleaseIncidentRequest toColleague = new ReleaseIncidentRequest();
         toColleague.setToAccountId(caTanAn2.getId());
+        toColleague.setNote("Cần đi hiện trường khác");
         when(incidentRepo.existsByHandlerIdAndStatusIn(eq(caTanAn2.getId()), any())).thenReturn(true);
         assertThatThrownBy(() -> service.releaseIncident("SOS-1", toColleague)).extracting("httpStatus").isEqualTo(HttpStatus.CONFLICT);
 
@@ -252,9 +260,9 @@ class IncidentRoutingTest {
     @Test
     void unroutedOldIncidents_getRoutedAndScheduled() {
         Incident old = Incident.builder().id("SOS-OLD").emergencyType(EmergencyType.POLICE).status(IncidentStatus.PENDING)
-                .province("Cần Thơ").ward("Phường Tân An").createdAt(LocalDateTime.now().minusMinutes(20)).build();
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).createdAt(LocalDateTime.now().minusMinutes(20)).build();
         Incident oldTraffic = Incident.builder().id("SOS-OLD2").emergencyType(EmergencyType.TRAFFIC).status(IncidentStatus.PENDING)
-                .province("Cần Thơ").ward(GeoService.UNKNOWN_WARD).createdAt(LocalDateTime.now()).build();
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward(GeoService.UNKNOWN_WARD)).createdAt(LocalDateTime.now()).build();
         when(incidentRepo.findByStatusInAndRoutedAgencyIsNull(any())).thenReturn(List.of(old, oldTraffic));
 
         assertThat(service.routeUnroutedIncidents()).isEqualTo(2);
@@ -283,15 +291,72 @@ class IncidentRoutingTest {
         when(notifier.toQueueViews(any(), any())).thenAnswer(i -> ((java.util.Collection<?>) i.getArgument(0)).stream()
                 .map(x -> new com.sosvietnam.model.payload.response.IncidentQueueResponse()).toList());
 
-        var page1 = service.getQueue(1, 2);
+        var page1 = service.getQueue(1, 2, null);
         assertThat(page1.getTotalElements()).isEqualTo(5);
         assertThat(page1.getTotalPages()).isEqualTo(3);
         assertThat((List<?>) page1.getContent()).hasSize(2);
         assertThat(page1.isLast()).isFalse();
-        var last = service.getQueue(2, 2);
+        var last = service.getQueue(2, 2, null);
         assertThat((List<?>) last.getContent()).hasSize(1);
         assertThat(last.isLast()).isTrue();
-        assertThatThrownBy(() -> service.getQueue(0, 0)).isInstanceOf(SosException.class);
-        assertThatThrownBy(() -> service.getQueue(0, 101)).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getQueue(0, 0, null)).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getQueue(0, 101, null)).isInstanceOf(SosException.class);
+    }
+
+    @Test
+    void queue_daysFilter_usesTheSinceQuery_andRejectsBadRange() {
+        loginAs(caTanAn);
+        when(incidentRepo.findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any(), any()))
+                .thenReturn(List.of(pendingWardIncident()));
+        when(notifier.toQueueViews(any(), any())).thenReturn(List.of());
+
+        var page = service.getQueue(0, 4, 7);
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        verify(incidentRepo).findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                eq(IncidentStatus.ACTIVE), eq(List.of(AgencyType.POLICE)),
+                argThat(since -> since.isBefore(LocalDateTime.now().minusDays(7).plusMinutes(1))
+                        && since.isAfter(LocalDateTime.now().minusDays(7).minusMinutes(1))));
+        assertThatThrownBy(() -> service.getQueue(0, 4, 0)).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.getQueue(0, 4, 91)).isInstanceOf(SosException.class);
+    }
+
+    @Test
+    void history_closedIncidentsInMyArea_pagedWithHandlerAndDispatchCount() {
+        loginAs(caTanAn);
+        Incident resolved = pendingWardIncident();
+        resolved.setId("SOS-R");
+        resolved.setStatus(IncidentStatus.RESOLVED);
+        resolved.setCitizenName("Nguyễn Văn Báo");
+        Incident cancelled = pendingWardIncident();
+        cancelled.setId("SOS-C");
+        cancelled.setStatus(IncidentStatus.CANCELLED);
+        cancelled.setCancelReason(com.sosvietnam.model.payload.enums.CancelReason.MISTAKE);
+        cancelled.setCancelledAt(LocalDateTime.now().minusMinutes(5));
+        Incident otherWard = pendingWardIncident();
+        otherWard.setId("SOS-X");
+        otherWard.setStatus(IncidentStatus.CANCELLED);
+        otherWard.setWard(TestGeo.ward("Phường Cái Khế"));
+        when(incidentRepo.findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                eq(IncidentStatus.CLOSED), any(), any())).thenReturn(List.of(resolved, cancelled, otherWard));
+        when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc("SOS-R"))
+                .thenReturn(Optional.of(IncidentClaim.builder().account(caTanAn).claimedAt(LocalDateTime.now()).build()));
+        when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc("SOS-C")).thenReturn(Optional.empty());
+        when(dispatchRepo.countByIncident_Id("SOS-R")).thenReturn(2L);
+
+        var page = service.getHistory(null, null, null, 0, 4);
+        assertThat(page.getTotalElements()).isEqualTo(2); // other ward is not visible to a ward officer
+        @SuppressWarnings("unchecked")
+        var items = (List<com.sosvietnam.model.payload.response.IncidentHistoryResponse>) page.getContent();
+        assertThat(items).extracting("id").containsExactly("SOS-R", "SOS-C");
+        assertThat(items.get(0).getHandlerName()).isEqualTo(caTanAn.fullName());
+        assertThat(items.get(0).getDispatchCount()).isEqualTo(2);
+        assertThat(items.get(1).getCancelReasonLabel()).isNotBlank();
+        assertThat(items.get(1).getClosedAt()).isNotNull();
+
+        // search ignores accents and case
+        var found = service.getHistory(7, "nguyen van bao", null, 0, 4);
+        assertThat(found.getTotalElements()).isEqualTo(1);
+        assertThat(service.getHistory(7, "sos-c", null, 0, 4).getTotalElements()).isEqualTo(1);
+        assertThatThrownBy(() -> service.getHistory(31 * 3, null, null, 0, 4)).isInstanceOf(SosException.class);
     }
 }

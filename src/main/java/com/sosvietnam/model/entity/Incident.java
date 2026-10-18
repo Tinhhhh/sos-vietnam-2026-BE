@@ -56,19 +56,17 @@ public class Incident {
     @Column(name = "incident_tags", columnDefinition = "jsonb")
     private List<String> incidentTags = new ArrayList<>();
 
-    @Builder.Default
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "media", columnDefinition = "jsonb")
-    private List<IncidentMediaItem> media = new ArrayList<>();
-
     @Column(columnDefinition = "TEXT")
     private String address;
 
-    @Column(length = 150)
-    private String ward;
+    // Địa bàn theo toạ độ lúc báo tin (null = ngoài ranh giới dữ liệu / chưa xác định được xã)
+    @ManyToOne
+    @JoinColumn(name = "province_id")
+    private Province province;
 
-    @Column(length = 150)
-    private String province;
+    @ManyToOne
+    @JoinColumn(name = "ward_id")
+    private Ward ward;
 
     @Column(name = "latitude")
     private Double latitude;
@@ -80,10 +78,9 @@ public class Incident {
     @Column(name = "accuracy")
     private Integer accuracy;
 
-    // Jackson cannot serialize JTS geometry; API responses use IncidentResponse
-    // instead.
+    // DB tự sinh từ latitude/longitude (generated column), dùng cho truy vấn không gian. Chỉ đọc.
     @JsonIgnore
-    @Column(columnDefinition = "geometry(Point, 4326)")
+    @Column(columnDefinition = "geometry(Point, 4326)", insertable = false, updatable = false)
     private Point location;
 
     // SHA-256 of the access token returned once to the citizen who reported the
@@ -91,6 +88,11 @@ public class Incident {
     @JsonIgnore
     @Column(name = "citizen_token_hash", length = 64)
     private String citizenTokenHash;
+
+    // Mã tra cứu công khai (8 ký tự, util/LookupCodes): cấp lúc tạo ca, chỉ đưa cho dân khi ca hoàn tất
+    @JsonIgnore
+    @Column(name = "lookup_code", length = 8, nullable = false, unique = true)
+    private String lookupCode;
 
     // ---- Phân luồng (module 5) ----
     // Lực lượng đang giữ ca (từ loại sự cố: TRAFFIC -> CSGT...)
@@ -132,18 +134,6 @@ public class Incident {
     @Column(name = "cancel_reason", length = 30)
     private CancelReason cancelReason;
 
-    @Column(name = "assigned_station_id")
-    private Long assignedStationId;
-
-    @Column(name = "assigned_dispatcher", length = 100)
-    private String assignedDispatcher;
-
-    @Column(name = "audio_url", columnDefinition = "TEXT")
-    private String audioUrl;
-
-    @Column(name = "transcript", columnDefinition = "TEXT")
-    private String transcript;
-
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -161,5 +151,22 @@ public class Incident {
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    // ---- Tên / mã địa bàn (null-safe, dùng cho DTO và luật quyền xem) ----
+    public String provinceId() {
+        return province == null ? null : province.getCode();
+    }
+
+    public String provinceName() {
+        return province == null ? null : province.getName();
+    }
+
+    public Long wardId() {
+        return ward == null ? null : ward.getId();
+    }
+
+    public String wardName() {
+        return ward == null ? null : ward.getName();
     }
 }

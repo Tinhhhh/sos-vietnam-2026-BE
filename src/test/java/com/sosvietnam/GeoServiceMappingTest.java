@@ -43,7 +43,8 @@ class GeoServiceMappingTest {
     final WardRepository wardRepo = mock(WardRepository.class);
     final RescueStationRepository stationRepo = mock(RescueStationRepository.class);
     final SeedVersionRepository seedRepo = mock(SeedVersionRepository.class);
-    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper());
+    final com.sosvietnam.util.AreaNameCache areaNames = mock(com.sosvietnam.util.AreaNameCache.class);
+    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper(), areaNames);
     final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     final GeometryFactory gf = new GeometryFactory();
@@ -52,11 +53,14 @@ class GeoServiceMappingTest {
     void stations_mapAllFields_andNoGeometryInJson() throws Exception {
         when(stationRepo.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of(
                 RescueStation.builder().id(7L).name("CA Phường Ba Đình").agencyType(AgencyType.POLICE).phone("0243")
-                        .address("80 Quán Thánh").province("TP. Hà Nội").ward("Phường Ba Đình")
+                        .address("80 Quán Thánh").province(TestGeo.province("TP. Hà Nội")).ward(TestGeo.ward("Phường Ba Đình"))
                         .latitude(21.04).longitude(105.84).location(gf.createPoint(new Coordinate(105.84, 21.04))).build()));
+        when(areaNames.provinceName(TestGeo.HA_NOI.getCode())).thenReturn("Hà Nội");
+        when(areaNames.wardName(TestGeo.BA_DINH.getId())).thenReturn("Phường Ba Đình");
         var list = service.findNearestStations(21, 105, AgencyType.POLICE, 1000, 5);
         String out = json.writeValueAsString(list);
-        assertThat(out).contains("\"agency_type\":\"POLICE\"", "\"name\":\"CA Phường Ba Đình\"", "\"latitude\":21.04", "\"id\":7")
+        assertThat(out).contains("\"agency_type\":\"POLICE\"", "\"name\":\"CA Phường Ba Đình\"", "\"latitude\":21.04", "\"id\":7",
+                        "\"province\":\"Hà Nội\"", "\"ward\":\"Phường Ba Đình\"", "\"ward_id\":102")
                 .doesNotContain("location", "geometry");
     }
 
@@ -64,18 +68,27 @@ class GeoServiceMappingTest {
     void provincesAndWards_snakeCase() throws Exception {
         when(provinceRepo.findAllByOrderByNameAsc()).thenReturn(List.of(
                 Province.builder().code("01").name("Hà Nội").nameEn("Ha Noi").centerLat(21.0).centerLng(105.8).build()));
-        when(wardRepo.findByProvinceCode("01")).thenReturn(List.of(
-                Ward.builder().id(1L).name("Phường Hoàn Kiếm").provinceCode("01").provinceName("Hà Nội").sapNhapTu("A, B").build()));
+        when(provinceRepo.existsById("01")).thenReturn(true);
+        when(wardRepo.findByProvince_CodeOrderByNameAsc("01")).thenReturn(List.of(
+                Ward.builder().id(1L).name("Phường Hoàn Kiếm").province(TestGeo.HA_NOI).sapNhapTu("A, B").build()));
         assertThat(json.writeValueAsString(service.getAllProvinces())).contains("\"name_en\":\"Ha Noi\"", "\"center_lat\":21.0");
-        assertThat(json.writeValueAsString(service.getWardsByProvince("01"))).contains("\"province_code\":\"01\"", "\"sap_nhap_tu\":\"A, B\"");
+        assertThat(json.writeValueAsString(service.getWardsByProvince("01"))).contains("\"province_id\":\"01\"", "\"province\":\"Hà Nội\"", "\"sap_nhap_tu\":\"A, B\"");
     }
 
     @Test
-    void resolve_outsideBoundaries_hasNullProvinceCode() {
+    void wardsOfUnknownProvince_isNotFound() {
+        when(provinceRepo.existsById("99")).thenReturn(false);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getWardsByProvince("99"))
+                .isInstanceOf(com.sosvietnam.model.payload.exception.SosException.class)
+                .extracting("httpStatus").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void resolve_outsideBoundaries_hasNullProvinceId() {
         when(wardRepo.findWardContainingPoint(any())).thenReturn(Optional.empty());
         when(provinceRepo.findProvinceContainingPoint(any())).thenReturn(Optional.empty());
         var r = service.resolveLocation(10, 10);
-        assertThat(r.getProvinceCode()).isNull();
+        assertThat(r.getProvinceId()).isNull();
         assertThat(r.getWard()).isEqualTo("Vùng ngoài ranh giới");
     }
 

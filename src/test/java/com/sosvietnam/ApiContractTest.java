@@ -75,6 +75,8 @@ class ApiContractTest {
     @MockitoBean AccountRepository accountRepository;
     @MockitoBean RoleRepository roleRepository;
     @MockitoBean RefreshTokenRepository refreshTokenRepository;
+    @MockitoBean com.sosvietnam.repository.ProvinceRepository provinceRepository;
+    @MockitoBean com.sosvietnam.repository.WardRepository wardRepository;
     @MockitoBean GeoService geoService;
     @MockitoBean BandoSyncService bandoSyncService;
     @MockitoBean IncidentService incidentService;
@@ -94,7 +96,7 @@ class ApiContractTest {
         }
         accounts.put("officer@sos.vn", Account.builder().id(UUID.randomUUID()).firstName("An").lastName("Nguyễn")
                 .email("officer@sos.vn").password(passwordEncoder.encode("Officer@123")).role(roles.get("OFFICER"))
-                .agencyType(AgencyType.POLICE).province("TP. Hà Nội").isActive(true).build());
+                .agencyType(AgencyType.POLICE).province(TestGeo.province("TP. Hà Nội")).isActive(true).build());
 
         when(roleRepository.findByRoleName(anyString())).thenAnswer(i -> Optional.ofNullable(roles.get((String) i.getArgument(0))));
         when(accountRepository.findByEmail(anyString())).thenAnswer(i -> Optional.ofNullable(accounts.get((String) i.getArgument(0))));
@@ -247,10 +249,10 @@ class ApiContractTest {
     @Test
     void geoResolve_isPublic_andSnakeCase() throws Exception {
         when(geoService.resolveLocation(21.03, 105.85)).thenReturn(LocationResponse.builder()
-                .latitude(21.03).longitude(105.85).ward("Phường Hoàn Kiếm").province("TP. Hà Nội").provinceCode("01").build());
+                .latitude(21.03).longitude(105.85).ward("Phường Hoàn Kiếm").province("TP. Hà Nội").provinceId("01").build());
         mvc.perform(get("/api/v1/geo/resolve").param("lat", "21.03").param("lng", "105.85"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.province_code").value("01"))
+                .andExpect(jsonPath("$.data.province_id").value("01"))
                 .andExpect(jsonPath("$.data.ward").value("Phường Hoàn Kiếm"));
     }
 
@@ -415,14 +417,14 @@ class ApiContractTest {
 
     @Test
     void incidentQueue_requiresOfficer_andRecentIsGone() throws Exception {
-        when(incidentService.getQueue(anyInt(), anyInt())).thenReturn(new ListResponse(List.of(), 0, 50, 0, 0, true));
+        when(incidentService.getQueue(anyInt(), anyInt(), any())).thenReturn(new ListResponse(List.of(), 0, 50, 0, 0, true));
         mvc.perform(get("/api/v1/incidents/queue")).andExpect(status().isUnauthorized());
         String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
         mvc.perform(get("/api/v1/incidents/queue").header("Authorization", "Bearer " + access))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.page_size").value(50));
-        verify(incidentService).getQueue(0, 50);
+        verify(incidentService).getQueue(0, 50, null);
         mvc.perform(get("/api/v1/incidents/recent").header("Authorization", "Bearer " + access))
                 .andExpect(status().is4xxClientError());
     }
@@ -466,7 +468,8 @@ class ApiContractTest {
 
     @Test
     void mediaUrl_usesV1Path() {
-        var item = com.sosvietnam.model.entity.IncidentMediaItem.builder().type("IMAGE").fileName("a.jpg").build();
+        var item = com.sosvietnam.model.entity.IncidentMedia.builder()
+                .kind(com.sosvietnam.model.payload.enums.MediaKind.IMAGE).fileName("a.jpg").build();
         assertThat(IncidentResponse.toMediaResponse("SOS-1", item).getUrl()).isEqualTo("/api/v1/incidents/SOS-1/media/a.jpg");
     }
 }

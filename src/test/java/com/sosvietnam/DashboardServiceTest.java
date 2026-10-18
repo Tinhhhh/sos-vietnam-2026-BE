@@ -35,7 +35,8 @@ class DashboardServiceTest {
 
     final DashboardRepository repo = mock(DashboardRepository.class);
     final AccountRepository accounts = mock(AccountRepository.class);
-    final DashboardServiceImpl service = new DashboardServiceImpl(repo, accounts);
+    final com.sosvietnam.repository.ProvinceRepository provinces = mock(com.sosvietnam.repository.ProvinceRepository.class);
+    final DashboardServiceImpl service = new DashboardServiceImpl(repo, accounts, provinces);
 
     @BeforeEach
     void setUp() {
@@ -48,6 +49,9 @@ class DashboardServiceTest {
         empty.put("median_accept", null);
         empty.put("within_sla", 0L);
         when(repo.kpis(any())).thenReturn(empty);
+        when(provinces.findById(anyString())).thenAnswer(i -> TestGeo.provinces().stream()
+                .filter(p -> p.getCode().equals(i.getArgument(0))).findFirst());
+        when(provinces.findAll()).thenReturn(TestGeo.provinces());
     }
 
     @AfterEach
@@ -58,7 +62,7 @@ class DashboardServiceTest {
     void loginAs(String role, AgencyType agency, UnitLevel level, String province, String ward) {
         Account a = Account.builder().id(UUID.randomUUID()).email("x@sos.vn").firstName("A").lastName("B")
                 .role(Role.builder().roleName(role).build()).agencyType(agency).unitLevel(level)
-                .province(province).ward(ward).isActive(true).build();
+                .province(TestGeo.province(province)).ward(TestGeo.ward(ward)).isActive(true).build();
         when(accounts.findByEmail("x@sos.vn")).thenReturn(Optional.of(a));
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("x@sos.vn", null, role));
     }
@@ -77,8 +81,8 @@ class DashboardServiceTest {
         assertThat(r.getScope().getLevel()).isEqualTo(UnitLevel.WARD);
         DashboardRepository.Filter f = currentFilter();
         assertThat(f.agency()).isEqualTo(AgencyType.POLICE);
-        assertThat(f.provinceKey()).isEqualTo("can tho");
-        assertThat(f.wardKey()).isEqualTo("phuong tan an");
+        assertThat(f.provinceId()).isEqualTo("92");
+        assertThat(f.wardId()).isEqualTo(TestGeo.TAN_AN.getId());
         assertThat(f.wardOriginOnly()).isTrue();
         assertThat(r.getByArea()).isEmpty();
         assertThat(r.getByAgency()).isEmpty();
@@ -92,14 +96,14 @@ class DashboardServiceTest {
         service.getSummary(null, null, null, null);
         DashboardRepository.Filter f = currentFilter();
         assertThat(f.agency()).isEqualTo(AgencyType.CSGT);
-        assertThat(f.provinceKey()).isEqualTo("can tho");
-        assertThat(f.wardKey()).isNull();
+        assertThat(f.provinceId()).isEqualTo("92");
+        assertThat(f.wardId()).isNull();
         verify(repo).byArea(any(), eq("ward"));
         // Biểu đồ tròn theo lực lượng: mọi lực lượng trong tỉnh, không chỉ CSGT
         ArgumentCaptor<DashboardRepository.Filter> agencyFilter = ArgumentCaptor.forClass(DashboardRepository.Filter.class);
         verify(repo).byAgency(agencyFilter.capture());
         assertThat(agencyFilter.getValue().agency()).isNull();
-        assertThat(agencyFilter.getValue().provinceKey()).isEqualTo("can tho");
+        assertThat(agencyFilter.getValue().provinceId()).isEqualTo("92");
     }
 
     @Test
@@ -107,7 +111,7 @@ class DashboardServiceTest {
         loginAs("ADMIN", null, UnitLevel.NATIONAL, "TP. Hà Nội", null);
         DashboardSummaryResponse national = service.getSummary(null, null, null, null);
         assertThat(national.getScope().getLevel()).isEqualTo(UnitLevel.NATIONAL);
-        assertThat(currentFilter().provinceKey()).isNull();
+        assertThat(currentFilter().provinceId()).isNull();
         verify(repo).byArea(any(), eq("province"));
         verify(repo).byAgency(any());
 

@@ -8,6 +8,7 @@ import com.sosvietnam.model.payload.response.IncidentQueueResponse;
 import com.sosvietnam.model.payload.response.IncidentTrackingResponse;
 import com.sosvietnam.security.CitizenPrincipal;
 import com.sosvietnam.repository.AccountRepository;
+import com.sosvietnam.repository.IncidentMediaRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.service.IncidentNotifier;
@@ -41,6 +42,7 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     private final SimpUserRegistry userRegistry;
     private final IncidentRepository incidentRepository;
     private final AccountRepository accountRepository;
+    private final IncidentMediaRepository incidentMediaRepository;
 
     @Override
     public void notify(String incidentId, IncidentEvent event) {
@@ -61,10 +63,11 @@ public class IncidentNotifierImpl implements IncidentNotifier {
             Incident incident = incidentRepository.findById(incidentId).orElse(null);
             if (incident == null) return;
             String handlerName = handlerNames(List.of(incident)).get(incident.getHandlerId());
+            int mediaCount = (int) incidentMediaRepository.countByIncident_Id(incident.getId());
             for (SimpUser user : userRegistry.getUsers()) {
                 if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
                 if (!IncidentAccess.canView(viewer, incident)) continue;
-                IncidentQueueResponse view = toView(incident, viewer, handlerName);
+                IncidentQueueResponse view = toView(incident, viewer, handlerName, mediaCount);
                 messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
                         new IncidentEventMessage(event, view));
             }
@@ -85,16 +88,29 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     @Override
     public List<IncidentQueueResponse> toQueueViews(Collection<Incident> incidents, OfficerPrincipal viewer) {
         Map<UUID, String> names = handlerNames(incidents);
+        Map<String, Integer> media = mediaCounts(incidents);
         return incidents.stream()
-                .map(i -> toView(i, viewer, names.get(i.getHandlerId())))
+                .map(i -> toView(i, viewer, names.get(i.getHandlerId()), media.getOrDefault(i.getId(), 0)))
                 .toList();
     }
 
-    private static IncidentQueueResponse toView(Incident incident, OfficerPrincipal viewer, String handlerName) {
+    private static IncidentQueueResponse toView(Incident incident, OfficerPrincipal viewer, String handlerName,
+                                                int mediaCount) {
         IncidentQueueResponse.Handler handler = incident.getHandlerId() == null ? null
                 : new IncidentQueueResponse.Handler(incident.getHandlerId(), handlerName);
         boolean heldByMe = incident.getHandlerId() != null && incident.getHandlerId().equals(viewer.accountId());
-        return IncidentQueueResponse.from(incident, handler, heldByMe, IncidentAccess.canHandle(viewer, incident));
+        return IncidentQueueResponse.from(incident, handler, heldByMe, IncidentAccess.canHandle(viewer, incident),
+                mediaCount);
+    }
+
+    /** Số ảnh/video của nhiều ca trong 1 truy vấn (hàng đợi hiển thị "n tệp"). */
+    private Map<String, Integer> mediaCounts(Collection<Incident> incidents) {
+        Map<String, Integer> counts = new HashMap<>();
+        if (incidents.isEmpty()) return counts;
+        for (Object[] row : incidentMediaRepository.countByIncidentIds(incidents.stream().map(Incident::getId).toList())) {
+            counts.put((String) row[0], ((Number) row[1]).intValue());
+        }
+        return counts;
     }
 
     private Map<UUID, String> handlerNames(Collection<Incident> incidents) {

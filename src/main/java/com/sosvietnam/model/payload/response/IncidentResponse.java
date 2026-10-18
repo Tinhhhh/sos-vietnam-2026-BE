@@ -2,7 +2,8 @@ package com.sosvietnam.model.payload.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sosvietnam.model.entity.Incident;
-import com.sosvietnam.model.entity.IncidentMediaItem;
+import com.sosvietnam.model.entity.IncidentDispatch;
+import com.sosvietnam.model.entity.IncidentMedia;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import lombok.Builder;
@@ -33,8 +34,12 @@ public class IncidentResponse {
     private String address;
     @JsonProperty("ward")
     private String ward;
+    @JsonProperty("ward_id")
+    private Long wardId;
     @JsonProperty("province")
     private String province;
+    @JsonProperty("province_id")
+    private String provinceId;
     @JsonProperty("latitude")
     private Double latitude;
     @JsonProperty("longitude")
@@ -43,10 +48,9 @@ public class IncidentResponse {
     private Integer accuracy;
     @JsonProperty("media")
     private List<MediaResponse> media;
-    @JsonProperty("assigned_station_id")
-    private Long assignedStationId;
-    @JsonProperty("assigned_dispatcher")
-    private String assignedDispatcher;
+    /** Trạm / lực lượng đã được điều động tới ca (bảng incident_dispatches). */
+    @JsonProperty("dispatches")
+    private List<DispatchResponse> dispatches;
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
     @JsonProperty("updated_at")
@@ -67,19 +71,43 @@ public class IncidentResponse {
         private long size;
     }
 
-    public static MediaResponse toMediaResponse(String incidentId, IncidentMediaItem item) {
+    @Data
+    @Builder
+    public static class DispatchResponse {
+        @JsonProperty("station_id")
+        private Long stationId;
+        @JsonProperty("station_name")
+        private String stationName;
+        @JsonProperty("unit_level")
+        private String unitLevel;
+        @JsonProperty("note")
+        private String note;
+        @JsonProperty("dispatched_at")
+        private LocalDateTime dispatchedAt;
+    }
+
+    public static MediaResponse toMediaResponse(String incidentId, IncidentMedia item) {
         return MediaResponse.builder()
-                .type(item.getType())
+                .type(item.getKind().name())
                 .url("/api/v1/incidents/" + incidentId + "/media/" + item.getFileName())
                 .originalName(item.getOriginalName())
                 .contentType(item.getContentType())
-                .size(item.getSize())
+                .size(item.getSizeBytes() == null ? 0 : item.getSizeBytes())
                 .build();
     }
 
-    public static IncidentResponse from(Incident incident) {
-        List<MediaResponse> media = incident.getMedia() == null ? List.of()
-                : incident.getMedia().stream().map(m -> toMediaResponse(incident.getId(), m)).toList();
+    public static DispatchResponse toDispatchResponse(IncidentDispatch d) {
+        return DispatchResponse.builder()
+                .stationId(d.getStation().getId())
+                .stationName(d.getStation().getName())
+                .unitLevel(d.getUnitLevel() == null ? null : d.getUnitLevel().name())
+                .note(d.getNote())
+                .dispatchedAt(d.getDispatchedAt())
+                .build();
+    }
+
+    public static IncidentResponse from(Incident incident, List<IncidentMedia> mediaItems, List<IncidentDispatch> dispatchItems) {
+        List<MediaResponse> media = mediaItems.stream().map(m -> toMediaResponse(incident.getId(), m)).toList();
 
         return IncidentResponse.builder()
                 .id(incident.getId())
@@ -90,14 +118,15 @@ public class IncidentResponse {
                 .description(incident.getDescription())
                 .incidentTags(incident.getIncidentTags() == null ? List.of() : incident.getIncidentTags())
                 .address(incident.getAddress())
-                .ward(incident.getWard())
-                .province(incident.getProvince())
+                .ward(incident.wardName())
+                .wardId(incident.wardId())
+                .province(incident.provinceName())
+                .provinceId(incident.provinceId())
                 .latitude(incident.getLatitude())
                 .longitude(incident.getLongitude())
                 .accuracy(incident.getAccuracy())
                 .media(media)
-                .assignedStationId(incident.getAssignedStationId())
-                .assignedDispatcher(incident.getAssignedDispatcher())
+                .dispatches(dispatchItems.stream().map(IncidentResponse::toDispatchResponse).toList())
                 .createdAt(incident.getCreatedAt())
                 .updatedAt(incident.getUpdatedAt())
                 .build();

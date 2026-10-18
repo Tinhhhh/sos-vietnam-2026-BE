@@ -1,5 +1,6 @@
 package com.sosvietnam.util;
 
+import jakarta.persistence.criteria.JoinType;
 import com.sosvietnam.model.entity.RescueStation;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.StationLevel;
@@ -20,8 +21,9 @@ public class RescueStationSpecification {
                 return null;
             }
             String likePattern = "%" + escapeLike(province.trim().toLowerCase()) + "%";
+            // province là khoá ngoại tới provinces: so theo tên tỉnh
             return cb.like(
-                    cb.function("unaccent", String.class, cb.lower(root.get("province"))),
+                    cb.function("unaccent", String.class, cb.lower(root.join("province", JoinType.LEFT).get("name"))),
                     cb.function("unaccent", String.class, cb.literal(likePattern)),
                     '\\');
         };

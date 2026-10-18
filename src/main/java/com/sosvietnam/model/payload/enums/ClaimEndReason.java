@@ -7,6 +7,7 @@ import lombok.Getter;
 public enum ClaimEndReason {
     RELEASED("Trả về hàng đợi chung"),
     HANDED_OVER("Giao cho cán bộ khác"),
+    ESCALATED("Chuyển lên cấp tỉnh"),
     CLOSED("Ca đã kết thúc");
 
     private final String label;

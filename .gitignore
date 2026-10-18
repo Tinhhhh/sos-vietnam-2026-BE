@@ -42,3 +42,6 @@ build/
 .vscode/
 
 settings.xml
+
+### Local DB setup (contains the generated dev password) ###
+local-db/

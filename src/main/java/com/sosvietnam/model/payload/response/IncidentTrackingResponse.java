@@ -7,6 +7,7 @@ import com.sosvietnam.model.payload.enums.CancelReason;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.UnitLevel;
+import com.sosvietnam.util.LookupCodes;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -71,6 +72,10 @@ public class IncidentTrackingResponse {
     @JsonProperty("handler")
     private Handler handler;
 
+    /** Mã tra cứu (XXXX-XXXX), chỉ có khi ca đã hoàn tất (RESOLVED) */
+    @JsonProperty("lookup_code")
+    private String lookupCode;
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -87,8 +92,8 @@ public class IncidentTrackingResponse {
                 .status(i.getStatus())
                 .routedAgency(i.getRoutedAgency())
                 .routedLevel(i.getRoutedLevel())
-                .province(i.getProvince())
-                .ward(i.getWard())
+                .province(i.provinceName())
+                .ward(i.wardName())
                 .createdAt(withZone(i.getCreatedAt()))
                 .escalateAt(withZone(i.getEscalateAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))
@@ -97,6 +102,7 @@ public class IncidentTrackingResponse {
                 .cancelReason(i.getCancelReason())
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())
                 .handler(handlerName == null ? null : new Handler(handlerName))
+                .lookupCode(i.getStatus() == IncidentStatus.RESOLVED ? LookupCodes.format(i.getLookupCode()) : null)
                 .build();
     }
 

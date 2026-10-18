@@ -17,10 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IncidentAccessTest {
 
     static OfficerPrincipal officer(AgencyType agency, UnitLevel level, String province, String ward) {
-        return new OfficerPrincipal(UUID.randomUUID(), "x@sos.vn", "X", RoleName.OFFICER, agency, level, province, ward);
+        return TestGeo.officer(UUID.randomUUID(), "x@sos.vn", "X", RoleName.OFFICER, agency, level, province, ward);
     }
 
-    static final OfficerPrincipal ADMIN = new OfficerPrincipal(UUID.randomUUID(), "admin@sos.vn", "Admin",
+    static final OfficerPrincipal ADMIN = TestGeo.officer(UUID.randomUUID(), "admin@sos.vn", "Admin",
             RoleName.ADMIN, null, UnitLevel.NATIONAL, "TP. Hà Nội", null);
     static final OfficerPrincipal CA_TAN_AN = officer(AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
     static final OfficerPrincipal CA_CAN_THO = officer(AgencyType.POLICE, UnitLevel.PROVINCE, "Cần Thơ", null);
@@ -29,7 +29,7 @@ class IncidentAccessTest {
 
     static Incident wardPolice() {
         return Incident.builder().id("SOS-1").routedAgency(AgencyType.POLICE).routedLevel(UnitLevel.WARD)
-                .province("Cần Thơ").ward("Phường Tân An").escalateAt(LocalDateTime.now().plusMinutes(15)).build();
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).escalateAt(LocalDateTime.now().plusMinutes(15)).build();
     }
 
     @Test
@@ -58,7 +58,7 @@ class IncidentAccessTest {
         assertThat(IncidentAccess.canView(PCCC_CAN_THO, police)).isFalse();
 
         Incident fire = Incident.builder().id("SOS-2").routedAgency(AgencyType.FIRE).routedLevel(UnitLevel.PROVINCE)
-                .province("TP. Cần Thơ").ward("Phường Tân An").build();
+                .province(TestGeo.province("TP. Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).build();
         assertThat(IncidentAccess.canHandle(PCCC_CAN_THO, fire)).isTrue();
         // Đội PCCC không trực: ca vào thẳng phòng (không có hạn leo thang) nên đội không thấy
         assertThat(IncidentAccess.canView(PCCC_DOI_TAN_AN, fire)).isFalse();
@@ -75,13 +75,20 @@ class IncidentAccessTest {
     }
 
     @Test
-    void namesMatchIgnoringAccentsCaseAndCityPrefix() {
-        assertThat(IncidentAccess.sameProvince("TP. Cần Thơ", "cần thơ")).isTrue();
-        assertThat(IncidentAccess.sameProvince("Thành phố Hồ Chí Minh", "TP. Hồ Chí Minh")).isTrue();
-        assertThat(IncidentAccess.sameProvince("Đà Nẵng", "Da Nang")).isTrue();
-        assertThat(IncidentAccess.sameWard("Phường  Tân An", "phường tân an")).isTrue();
-        assertThat(IncidentAccess.sameWard("Phường Tân An", "Xã Tân An")).isFalse();
-        assertThat(IncidentAccess.sameProvince(null, null)).isFalse();
+    void areaNames_ignoreAccentsCaseAndCityPrefix() {
+        // Luật quyền xem so khoá; AreaNames chỉ dùng cho tên gõ từ ngoài (bộ lọc admin, file seed)
+        assertThat(com.sosvietnam.util.AreaNames.provinceKey("TP. Cần Thơ")).isEqualTo("can tho");
+        assertThat(com.sosvietnam.util.AreaNames.provinceKey("Thành phố Hồ Chí Minh"))
+                .isEqualTo(com.sosvietnam.util.AreaNames.provinceKey("TP. Hồ Chí Minh"));
+        assertThat(com.sosvietnam.util.AreaNames.key("Phường  Tân An")).isEqualTo("phuong tan an");
+        assertThat(com.sosvietnam.util.AreaNames.key(null)).isNull();
+    }
+
+    @Test
+    void unknownArea_neverMatches() {
+        Incident noWard = wardPolice();
+        noWard.setWard(null);
+        assertThat(IncidentAccess.canView(officer(AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", null), noWard)).isFalse();
     }
 
     @Test

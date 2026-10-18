@@ -232,7 +232,7 @@ public class CallServiceImpl implements CallService {
     /** "Công An Phường Tân An", "Cảnh Sát PCCC & CNCH Cần Thơ"... */
     private static String unitName(OfficerPrincipal officer) {
         if (officer.agency() == null) return null;
-        String area = officer.level() == UnitLevel.WARD ? officer.ward() : officer.province();
+        String area = officer.level() == UnitLevel.WARD ? officer.wardName() : officer.provinceName();
         return StringUtils.hasText(area) ? officer.agency().getLabel() + " " + area : officer.agency().getLabel();
     }
 }

@@ -12,7 +12,11 @@ import java.util.Optional;
 @Repository
 public interface WardRepository extends JpaRepository<Ward, Long> {
 
-    List<Ward> findByProvinceCode(String provinceCode);
+    List<Ward> findByProvince_Code(String provinceCode);
+
+    List<Ward> findByProvince_CodeOrderByNameAsc(String provinceCode);
+
+    List<Ward> findByProvince_CodeAndNameIgnoreCase(String provinceCode, String name);
 
     Optional<Ward> findByMalk(String malk);
 

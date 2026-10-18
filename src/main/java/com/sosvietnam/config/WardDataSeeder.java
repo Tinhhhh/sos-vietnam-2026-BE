@@ -3,6 +3,7 @@ package com.sosvietnam.config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.model.entity.Ward;
+import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.WardRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
 public class WardDataSeeder implements CommandLineRunner {
 
     private final WardRepository wardRepository;
+    private final ProvinceRepository provinceRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final Pattern CODE_PATTERN = Pattern.compile("^ward-([0-9A-Za-z]+)-");
@@ -54,6 +56,10 @@ public class WardDataSeeder implements CommandLineRunner {
         LocalDateTime now = LocalDateTime.now();
         List<Ward> batch = new ArrayList<>(500);
         int totalSaved = 0;
+        int skipped = 0;
+        // wards.province_id là khoá ngoại: xã không xác định được tỉnh thì bỏ qua thay vì làm hỏng cả lượt nạp
+        java.util.Set<String> provinceCodes = new java.util.HashSet<>();
+        provinceRepository.findAll().forEach(p -> provinceCodes.add(p.getCode()));
 
         try (InputStream is = wardsResource.getInputStream()) {
             JsonNode rootNode = objectMapper.readTree(is);
@@ -74,6 +80,12 @@ public class WardDataSeeder implements CommandLineRunner {
                     }
                 }
 
+                if (provinceCode == null || !provinceCodes.contains(provinceCode)) {
+                    skipped++;
+                    log.warn("⚠️ [INIT WARDS] Bỏ qua {} ({}): không xác định được tỉnh", wardName, malk);
+                    continue;
+                }
+
                 Double centerLat = props.has("lat") && !props.path("lat").isNull() ? props.path("lat").asDouble() : null;
                 Double centerLng = props.has("lng") && !props.path("lng").isNull() ? props.path("lng").asDouble() : null;
 
@@ -92,8 +104,7 @@ public class WardDataSeeder implements CommandLineRunner {
                 Ward ward = Ward.builder()
                         .name(wardName)
                         .malk(malk)
-                        .provinceCode(provinceCode)
-                        .provinceName(provinceName)
+                        .province(provinceRepository.getReferenceById(provinceCode))
                         .centerLat(centerLat)
                         .centerLng(centerLng)
                         .geometry(geom)
@@ -117,7 +128,7 @@ public class WardDataSeeder implements CommandLineRunner {
             }
         }
 
-        log.info("✅ [INIT WARDS] Đã nạp thành công toàn bộ {} xã/phường vào cơ sở dữ liệu!", totalSaved);
+        log.info("✅ [INIT WARDS] Đã nạp {} xã/phường vào cơ sở dữ liệu ({} bỏ qua)", totalSaved, skipped);
     }
 
     private Geometry parseGeoJsonGeometry(JsonNode geomNode) {

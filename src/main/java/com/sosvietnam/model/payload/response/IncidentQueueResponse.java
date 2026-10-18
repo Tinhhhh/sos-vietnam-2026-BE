@@ -103,15 +103,16 @@ public class IncidentQueueResponse {
         private String fullName;
     }
 
-    public static IncidentQueueResponse from(Incident i, Handler handler, boolean heldByMe, boolean canHandle) {
+    public static IncidentQueueResponse from(Incident i, Handler handler, boolean heldByMe, boolean canHandle,
+                                             int mediaCount) {
         return IncidentQueueResponse.builder()
                 .id(i.getId())
                 .emergencyType(i.getEmergencyType())
                 .status(i.getStatus())
                 .routedAgency(i.getRoutedAgency())
                 .routedLevel(i.getRoutedLevel())
-                .province(i.getProvince())
-                .ward(i.getWard())
+                .province(i.provinceName())
+                .ward(i.wardName())
                 .address(i.getAddress())
                 .latitude(i.getLatitude())
                 .longitude(i.getLongitude())
@@ -119,7 +120,7 @@ public class IncidentQueueResponse {
                 .description(i.getDescription())
                 .citizenName(i.getCitizenName())
                 .phone(i.getPhone())
-                .mediaCount(i.getMedia() == null ? 0 : i.getMedia().size())
+                .mediaCount(mediaCount)
                 .createdAt(withZone(i.getCreatedAt()))
                 .escalateAt(withZone(i.getEscalateAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))

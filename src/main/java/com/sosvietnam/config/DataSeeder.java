@@ -3,19 +3,25 @@ package com.sosvietnam.config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sosvietnam.model.entity.Account;
+import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.entity.SeedVersion;
+import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.repository.AccountRepository;
+import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
 import com.sosvietnam.repository.RoleRepository;
+import com.sosvietnam.repository.WardRepository;
+import com.sosvietnam.util.AreaNames;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,7 +37,13 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 
+/**
+ * Dữ liệu khởi tạo, chạy mỗi lần BE khởi động, sau khi Flyway đã dựng schema và sau
+ * ProvinceDataSeeder (1) / WardDataSeeder (2) vì tài khoản và trạm cần tỉnh/xã có sẵn.
+ * Chỉ ghi dữ liệu: đổi bảng / cột / index / sửa dữ liệu cũ một lần thì viết file Flyway mới.
+ */
 @Component
+@Order(3)
 @Slf4j
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
@@ -39,26 +51,42 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final AccountRepository accountRepository;
     private final RescueStationRepository rescueStationRepository;
+    private final ProvinceRepository provinceRepository;
+    private final WardRepository wardRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
     private static final String TEST_ACCOUNTS_FILE = "data/test_accounts.json";
+    private static final String ADMIN_EMAIL = "admin@sos.vn";
+    private static final String ADMIN_PROVINCE = "Hà Nội";
+    private static final String ADMIN_WARD = "Phường Hoàn Kiếm";
     private static final String STATIONS_FILE = "data/rescue_stations.json";
     private static final String STATIONS_SEED_NAME = SeedVersion.RESCUE_STATIONS;
     // Tăng số này khi đổi cách đọc file (thêm cột, đổi mapping) để lần khởi động sau nạp lại dù file không đổi
     private static final String STATIONS_SEED_FORMAT = "5";
     private static final String PLACEHOLDER = "Đang cập nhật";
+    // Xã / tỉnh của trạm theo toạ độ (điểm nằm trong xã nào); không khớp xã thì tỉnh theo tên trong file.
+    // location do DB tự sinh từ latitude/longitude (generated column) nên không ghi.
+    // Tên tỉnh -> khoá so sánh (bỏ dấu, chữ thường, bỏ "TP." / "Tỉnh"), giống AreaNames.provinceKey
+    private static final String PROVINCE_KEY_SQL =
+            "regexp_replace(trim(regexp_replace(unaccent(lower(%s)), '\\s+', ' ', 'g')), '^(tp\\.?|thanh pho|tinh) ', '')";
+    private static final String POINT_SQL = "ST_SetSRID(ST_MakePoint(?, ?), 4326)";
     private static final String UPSERT_STATION_SQL =
-            "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province, ward, "
-            + "officer, email, services, facility_type, latitude, longitude, location) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)) "
+            "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province_id, ward_id, "
+            + "officer, email, services, facility_type, latitude, longitude) "
+            + "VALUES (?, ?, ?, ?, ?, ?, "
+            + "COALESCE((SELECT w.province_id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1), "
+            + "(SELECT p.code FROM provinces p WHERE " + PROVINCE_KEY_SQL.formatted("p.name") + " = "
+            + PROVINCE_KEY_SQL.formatted("?") + " LIMIT 1)), "
+            + "(SELECT w.id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1), "
+            + "?, ?, ?, ?, ?, ?) "
             + "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, agency_type = EXCLUDED.agency_type, "
             + "level = EXCLUDED.level, phone = EXCLUDED.phone, address = EXCLUDED.address, "
-            + "province = EXCLUDED.province, ward = EXCLUDED.ward, officer = EXCLUDED.officer, email = EXCLUDED.email, "
-            + "services = EXCLUDED.services, facility_type = EXCLUDED.facility_type, "
-            + "latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, location = EXCLUDED.location";
+            + "province_id = EXCLUDED.province_id, ward_id = EXCLUDED.ward_id, officer = EXCLUDED.officer, "
+            + "email = EXCLUDED.email, services = EXCLUDED.services, facility_type = EXCLUDED.facility_type, "
+            + "latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude";
 
     // From .env (SEED_ADMIN_PASSWORD). Empty = don't seed the admin account,
     // so a fresh server never comes up with a password written in this public repo.
@@ -73,24 +101,9 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         seedRoles();
-        migrateLegacyAgencies();
         seedDefaultAccounts();
         seedTestAccounts();
         seedRescueStations();
-        ensureIncidentIndexes();
-    }
-
-    /**
-     * Mỗi trực ban chỉ giữ 1 ca đang mở: index unique một phần trên incidents.handler_id
-     * (bảng do Hibernate tạo nên không đặt trong schema.sql, file đó chạy trước Hibernate).
-     */
-    private void ensureIncidentIndexes() {
-        try {
-            jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_incidents_active_handler ON incidents (handler_id) "
-                    + "WHERE handler_id IS NOT NULL AND status IN ('ACCEPTED', 'VERIFYING', 'DISPATCHED')");
-        } catch (Exception e) {
-            log.error("❌ [INIT INCIDENTS] Could not create handler index: {}", e.getMessage());
-        }
     }
 
     private void seedRoles() {
@@ -106,62 +119,68 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     /**
-     * CSGT thay chỗ Cảnh sát cơ động (15/10/2026): tài khoản MOBILE_POLICE cũ chuyển sang CSGT
-     * (enum không còn MOBILE_POLICE, để nguyên thì Hibernate không đọc được dòng đó).
-     * Tài khoản test cscd.cantho đổi email thành csgt.cantho cho khớp data/test_accounts.json.
+     * admin@sos.vn = Trung tâm chỉ huy: cấp Bộ, không thuộc lực lượng nào, trụ sở Phường Hoàn Kiếm (Hà Nội).
+     * Có rồi thì đồng bộ mật khẩu với .env và sửa lại cấp / lực lượng / địa bàn nếu lệch.
      */
-    private void migrateLegacyAgencies() {
-        int moved = jdbcTemplate.update("UPDATE accounts SET agency_type = 'CSGT' WHERE agency_type = 'MOBILE_POLICE'");
-        jdbcTemplate.update("UPDATE accounts SET email = 'csgt.cantho@sos.vn' WHERE email = 'cscd.cantho@sos.vn' "
-                + "AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'csgt.cantho@sos.vn')");
-        if (moved > 0) {
-            log.info("[MIGRATE] {} MOBILE_POLICE account(s) moved to CSGT", moved);
-        }
-    }
-
     private void seedDefaultAccounts() {
         if (!StringUtils.hasText(adminPassword)) {
             log.warn("⚠️ [INIT ACCOUNT] admin@sos.vn not seeded: set SEED_ADMIN_PASSWORD in .env");
             return;
         }
-        Account admin = accountRepository.findByEmail("admin@sos.vn").orElse(null);
+        Province hanoi = findProvince(ADMIN_PROVINCE);
+        Ward headquarters = findWard(hanoi, ADMIN_WARD);
+        Account admin = accountRepository.findByEmail(ADMIN_EMAIL).orElse(null);
         if (admin == null) {
-            Role adminRole = roleRepository.findByRoleName(RoleName.ADMIN.getRole()).orElse(null);
+            Role adminRole = roleRepository.findByRoleName(RoleName.ADMIN.getRole())
+                    .orElseThrow(() -> new IllegalStateException("Role " + RoleName.ADMIN.getRole() + " chưa được khởi tạo"));
             admin = Account.builder()
                     .firstName("Quản Trị")
                     .lastName("Hệ Thống")
-                    .email("admin@sos.vn")
+                    .email(ADMIN_EMAIL)
                     .password(passwordEncoder.encode(adminPassword))
                     .phone("0988888888")
                     .address("Bộ Chỉ Huy SOS Việt Nam")
                     .role(adminRole)
                     .unitLevel(UnitLevel.NATIONAL)
-                    .province("TP. Hà Nội")
-                    .ward("Phường Hàng Trống")
+                    .province(hanoi)
+                    .ward(headquarters)
                     .isActive(true)
+                    .isLocked(false)
                     .build();
             accountRepository.save(admin);
-            log.info("👑 [INIT ACCOUNT] Seeded Admin Account: admin@sos.vn");
-        } else {
-            boolean changed = false;
-            if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
-                admin.setPassword(passwordEncoder.encode(adminPassword));
-                changed = true;
-                log.info("👑 [INIT ACCOUNT] Synchronized Admin Account password for: admin@sos.vn");
-            }
-            if (admin.getUnitLevel() != UnitLevel.NATIONAL) {
-                admin.setUnitLevel(UnitLevel.NATIONAL);
-                changed = true;
-            }
-            if (changed) {
-                accountRepository.save(admin);
-            }
+            log.info("👑 [INIT ACCOUNT] Seeded Admin Account: {}", ADMIN_EMAIL);
+            return;
+        }
+
+        boolean changed = false;
+        if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
+            admin.setPassword(passwordEncoder.encode(adminPassword));
+            changed = true;
+            log.info("👑 [INIT ACCOUNT] Synchronized Admin Account password for: {}", ADMIN_EMAIL);
+        }
+        if (admin.getUnitLevel() != UnitLevel.NATIONAL || admin.getAgencyType() != null) {
+            admin.setUnitLevel(UnitLevel.NATIONAL);
+            admin.setAgencyType(null);
+            changed = true;
+        }
+        if (admin.getProvince() == null && hanoi != null) {
+            admin.setProvince(hanoi);
+            changed = true;
+        }
+        if (admin.getWard() == null && headquarters != null) {
+            admin.setWard(headquarters);
+            changed = true;
+        }
+        if (changed) {
+            accountRepository.save(admin);
+            log.info("👑 [INIT ACCOUNT] Updated {} (level / agency / area)", ADMIN_EMAIL);
         }
     }
 
     /**
      * Nạp tài khoản trực ban test từ data/test_accounts.json (theo email): chưa có thì tạo,
      * có rồi thì cập nhật lực lượng / cấp / địa bàn và đồng bộ mật khẩu với .env.
+     * "ward" bắt buộc (cấp tỉnh = xã đặt trụ sở), "address" chỉ là số nhà / đường.
      */
     private void seedTestAccounts() {
         if (!StringUtils.hasText(testAccountPassword)) {
@@ -192,17 +211,25 @@ public class DataSeeder implements CommandLineRunner {
                     continue;
                 }
 
+                Province province = findProvince(textOrNull(node, "province"));
+                Ward ward = findWard(province, textOrNull(node, "ward"));
+                if (province == null || ward == null) {
+                    log.warn("⚠️ [INIT TEST ACCOUNTS] Skipped {}: province/ward not found ({} / {})", email,
+                            textOrNull(node, "province"), textOrNull(node, "ward"));
+                    continue;
+                }
+
                 Account account = accountRepository.findByEmail(email).orElse(null);
                 boolean isNew = account == null;
                 if (isNew) {
-                    account = Account.builder().email(email).role(officerRole).isActive(true).build();
+                    account = Account.builder().email(email).role(officerRole).isActive(true).isLocked(false).build();
                 }
                 account.setLastName(textOrNull(node, "last_name"));
                 account.setFirstName(textOrNull(node, "first_name"));
                 account.setAgencyType(agency);
                 account.setUnitLevel(level);
-                account.setProvince(textOrNull(node, "province"));
-                account.setWard(textOrNull(node, "ward"));
+                account.setProvince(province);
+                account.setWard(ward);
                 account.setAddress(textOrNull(node, "address"));
                 if (isNew || !passwordEncoder.matches(testAccountPassword, account.getPassword())) {
                     account.setPassword(passwordEncoder.encode(testAccountPassword));
@@ -215,6 +242,24 @@ public class DataSeeder implements CommandLineRunner {
         } catch (Exception e) {
             log.error("❌ [INIT TEST ACCOUNTS] Failed to import test accounts: {}", e.getMessage(), e);
         }
+    }
+
+    /** Tỉnh theo tên ("Cần Thơ", "TP. Cần Thơ"...). */
+    private Province findProvince(String name) {
+        String key = AreaNames.provinceKey(name);
+        if (key == null) return null;
+        return provinceRepository.findAll().stream()
+                .filter(p -> key.equals(AreaNames.provinceKey(p.getName())))
+                .findFirst().orElse(null);
+    }
+
+    /** Xã theo tên trong tỉnh ("Phường Tân An", "phuong tan an"...). */
+    private Ward findWard(Province province, String name) {
+        String key = AreaNames.key(name);
+        if (province == null || key == null) return null;
+        return wardRepository.findByProvince_Code(province.getCode()).stream()
+                .filter(w -> key.equals(AreaNames.key(w.getName())))
+                .findFirst().orElse(null);
     }
 
     private static String textOrNull(JsonNode node, String field) {
@@ -273,7 +318,6 @@ public class DataSeeder implements CommandLineRunner {
             // 2. File đổi: upsert theo code (giữ nguyên id cũ), xoá trạm không còn trong file,
             //    ghi checksum mới. Tất cả trong 1 transaction, lỗi giữa chừng thì DB giữ dữ liệu cũ.
             transactionTemplate.executeWithoutResult(status -> {
-                jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_rescue_stations_code ON rescue_stations (code)");
                 jdbcTemplate.batchUpdate(UPSERT_STATION_SQL, batchArgs);
                 int removed = jdbcTemplate.update(
                         "DELETE FROM rescue_stations WHERE code IS NULL OR code <> ALL (?)",
@@ -308,16 +352,15 @@ public class DataSeeder implements CommandLineRunner {
                 level == null ? null : level.name(),
                 normalizePhoneNumber(sn.path("phone").asText(null)),
                 sn.path("address").asText(null),
-                sn.path("province").asText(null),
-                sn.path("ward").asText(null),
+                lng, lat,                               // province: ward containing the point (ST_MakePoint(lng, lat))
+                sn.path("province").asText(null),       // ... else province by name
+                lng, lat,                               // ward containing the point
                 truncate(cleanText(sn, "officer"), 200),
                 truncate(cleanText(sn, "email"), 150),
                 cleanText(sn, "services"),
                 truncate(cleanText(sn, "facility_type"), 100),
                 lat,
-                lng,
-                lng, // ST_MakePoint(lng, lat)
-                lat
+                lng
         };
     }
 
