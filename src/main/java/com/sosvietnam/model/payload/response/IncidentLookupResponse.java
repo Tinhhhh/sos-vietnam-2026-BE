@@ -103,7 +103,7 @@ public class IncidentLookupResponse {
                 .emergencyTypeLabel(i.getEmergencyType() == null ? null : i.getEmergencyType().getLabel())
                 .status(i.getStatus())
                 .statusLabel(i.getStatus() == null ? null : i.getStatus().getLabel())
-                .incidentTags(i.getIncidentTags() == null ? List.of() : List.copyOf(i.getIncidentTags()))
+                .incidentTags(i.tags())
                 .address(i.getAddress())
                 .ward(i.wardName())
                 .province(i.provinceName())

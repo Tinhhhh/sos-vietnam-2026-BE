@@ -98,7 +98,7 @@ public class IncidentHistoryResponse {
                 .province(i.provinceName())
                 .ward(i.wardName())
                 .address(i.getAddress())
-                .incidentTags(i.getIncidentTags() == null ? List.of() : List.copyOf(i.getIncidentTags()))
+                .incidentTags(i.tags())
                 .citizenName(i.getCitizenName())
                 .phone(i.getPhone())
                 .createdAt(withZone(i.getCreatedAt()))

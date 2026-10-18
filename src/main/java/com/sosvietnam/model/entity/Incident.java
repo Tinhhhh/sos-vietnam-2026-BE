@@ -9,12 +9,9 @@ import com.sosvietnam.model.payload.enums.UnitLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,10 +48,9 @@ public class Incident {
 
     // Quick-pick labels chosen in the citizen form, e.g. "🔥 Cháy nhà dân / Chung
     // cư / Nhà xưởng"
-    @Builder.Default
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "incident_tags", columnDefinition = "jsonb")
-    private List<String> incidentTags = new ArrayList<>();
+    // Gợi ý sự cố người dân chọn (1 nhãn, text thường); null = không chọn
+    @Column(name = "incident_tag", length = 200)
+    private String incidentTag;
 
     @Column(columnDefinition = "TEXT")
     private String address;
@@ -168,5 +164,10 @@ public class Incident {
 
     public String wardName() {
         return ward == null ? null : ward.getName();
+    }
+
+    /** Nhãn dạng danh sách cho API (incident_tags: [] hoặc ["..."]). */
+    public List<String> tags() {
+        return incidentTag == null || incidentTag.isBlank() ? List.of() : List.of(incidentTag);
     }
 }

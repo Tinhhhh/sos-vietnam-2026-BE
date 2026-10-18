@@ -116,7 +116,7 @@ public class IncidentQueueResponse {
                 .address(i.getAddress())
                 .latitude(i.getLatitude())
                 .longitude(i.getLongitude())
-                .incidentTags(i.getIncidentTags())
+                .incidentTags(i.tags())
                 .description(i.getDescription())
                 .citizenName(i.getCitizenName())
                 .phone(i.getPhone())

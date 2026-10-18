@@ -67,7 +67,7 @@ public class SecurityConfig {
                         // Cán bộ (JWT) hoặc người báo tin (citizen token): CallServiceImpl tự kiểm
                         .requestMatchers(HttpMethod.GET, "/api/v1/calls/ice-servers").permitAll()
                         // xem danh sách + phân công là việc của trực ban
-                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/queue", "/api/v1/incidents/history", "/api/v1/incidents/*/handover-candidates")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/queue", "/api/v1/incidents/history", "/api/v1/incidents/*", "/api/v1/incidents/*/handover-candidates")
                                 .hasAnyAuthority(STAFF)
                         // thống kê của cán bộ (phạm vi lấy từ tài khoản)
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/**").hasAnyAuthority(STAFF)

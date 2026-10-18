@@ -80,6 +80,15 @@ public class IncidentController {
                 incidentService.getHistory(days, q, agency, pageNo, pageSize));
     }
 
+    @Operation(summary = "Get the detail of one incident",
+            description = "Incident info, media (url = GET /incidents/{id}/media/{file}), dispatched units and the claim "
+                    + "history (who took / released / handed over). Same scope as the queue: 403 outside the caller's "
+                    + "agency / area. Role required: OFFICER, ADMIN")
+    @GetMapping("/{id}")
+    public ResponseEntity<Object> getDetail(@PathVariable("id") String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved incident", incidentService.getDetail(id));
+    }
+
     @Operation(summary = "Claim (accept) an incident",
             description = "Locks the incident for the caller. 409 when someone else got it first or the caller already "
                     + "holds another incident (one incident per officer). Role required: OFFICER, ADMIN")

@@ -359,4 +359,29 @@ class IncidentRoutingTest {
         assertThat(service.getHistory(7, "sos-c", null, 0, 4).getTotalElements()).isEqualTo(1);
         assertThatThrownBy(() -> service.getHistory(31 * 3, null, null, 0, 4)).isInstanceOf(SosException.class);
     }
+
+    @Test
+    void detail_inMyWard_hasClaims_otherWard_isForbidden() {
+        loginAs(caTanAn);
+        Incident mine = pendingWardIncident();
+        mine.setIncidentTag("Trộm cắp");
+        when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(mine));
+        when(claimRepo.findByIncident_IdOrderByClaimedAtAsc("SOS-1")).thenReturn(List.of(
+                IncidentClaim.builder().account(caTanAn).claimedAt(LocalDateTime.now().minusMinutes(3))
+                        .releasedAt(LocalDateTime.now()).endReason(com.sosvietnam.model.payload.enums.ClaimEndReason.RELEASED).build()));
+
+        var detail = service.getDetail("SOS-1");
+        assertThat(detail.getIncidentTags()).containsExactly("Trộm cắp");
+        assertThat(detail.getClaims()).hasSize(1);
+        assertThat(detail.getClaims().get(0).getOfficerName()).isEqualTo(caTanAn.fullName());
+        assertThat(detail.getClaims().get(0).getEndReasonLabel()).isNotBlank();
+        assertThat(detail.getMedia()).isEmpty();
+
+        Incident other = pendingWardIncident();
+        other.setId("SOS-2");
+        other.setWard(TestGeo.ward("Phường Cái Khế"));
+        when(incidentRepo.findById("SOS-2")).thenReturn(Optional.of(other));
+        assertThatThrownBy(() -> service.getDetail("SOS-2"))
+                .isInstanceOf(SosException.class).extracting("httpStatus").isEqualTo(org.springframework.http.HttpStatus.FORBIDDEN);
+    }
 }
