@@ -6,7 +6,10 @@ import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.response.DashboardSummaryResponse;
 import com.sosvietnam.model.payload.response.DashboardSummaryResponse.*;
+import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.repository.AccountRepository;
+import com.sosvietnam.repository.ProvinceRepository;
+import com.sosvietnam.util.AreaNames;
 import com.sosvietnam.repository.DashboardRepository;
 import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.service.DashboardService;
@@ -43,6 +46,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final DashboardRepository dashboardRepository;
     private final AccountRepository accountRepository;
+    private final ProvinceRepository provinceRepository;
 
     @Value("${app.incident.escalation-minutes:15}")
     private long slaMinutes;
@@ -62,11 +66,12 @@ public class DashboardServiceImpl implements DashboardService {
             throw new SosException("Khoảng thời gian tối đa " + MAX_RANGE_DAYS + " ngày");
         }
 
-        Scope scope = scopeOf(me, province, agency);
-        DashboardRepository.Filter current = filter(scope, start, end);
+        ScopeArea area = scopeOf(me, province, agency);
+        Scope scope = area.scope();
+        DashboardRepository.Filter current = filter(area, start, end);
         LocalDate prevEnd = start.minusDays(1);
         LocalDate prevStart = start.minusDays(days);
-        DashboardRepository.Filter previous = filter(scope, prevStart, prevEnd);
+        DashboardRepository.Filter previous = filter(area, prevStart, prevEnd);
 
         return DashboardSummaryResponse.builder()
                 .scope(scope)
@@ -81,29 +86,45 @@ public class DashboardServiceImpl implements DashboardService {
                 .build();
     }
 
-    /** Cán bộ: theo tài khoản (bỏ qua tham số lọc). ADMIN: toàn quốc, hoặc một tỉnh nếu truyền province. */
-    static Scope scopeOf(OfficerPrincipal me, String province, AgencyType agency) {
-        if (me.isAdmin()) {
-            boolean oneProvince = StringUtils.hasText(province);
-            return new Scope(agency, oneProvince ? UnitLevel.PROVINCE : UnitLevel.NATIONAL,
-                    oneProvince ? province.trim() : null, null);
-        }
-        UnitLevel level = me.level() == null ? UnitLevel.PROVINCE : me.level();
-        return new Scope(me.agency(), level,
-                level == UnitLevel.NATIONAL ? null : me.province(),
-                level == UnitLevel.WARD ? me.ward() : null);
+    /** Phạm vi trả về FE (tên để hiển thị) + khoá địa bàn để lọc (mã tỉnh, id xã). */
+    record ScopeArea(Scope scope, String provinceId, Long wardId) {
     }
 
-    private DashboardRepository.Filter filter(Scope scope, LocalDate from, LocalDate to) {
+    /** Cán bộ: theo tài khoản (bỏ qua tham số lọc). ADMIN: toàn quốc, hoặc một tỉnh nếu truyền province (mã hoặc tên). */
+    ScopeArea scopeOf(OfficerPrincipal me, String province, AgencyType agency) {
+        if (me.isAdmin()) {
+            Province p = StringUtils.hasText(province) ? findProvince(province.trim()) : null;
+            return new ScopeArea(new Scope(agency, p != null ? UnitLevel.PROVINCE : UnitLevel.NATIONAL,
+                    p != null ? p.getName() : null, null), p != null ? p.getCode() : null, null);
+        }
+        UnitLevel level = me.level() == null ? UnitLevel.PROVINCE : me.level();
+        boolean national = level == UnitLevel.NATIONAL;
+        boolean ward = level == UnitLevel.WARD;
+        return new ScopeArea(new Scope(me.agency(), level, national ? null : me.provinceName(), ward ? me.wardName() : null),
+                national ? null : me.provinceId(), ward ? me.wardId() : null);
+    }
+
+    private Province findProvince(String codeOrName) {
+        return provinceRepository.findById(codeOrName).orElseGet(() -> {
+            String key = AreaNames.provinceKey(codeOrName);
+            return provinceRepository.findAll().stream()
+                    .filter(p -> key != null && key.equals(AreaNames.provinceKey(p.getName())))
+                    .findFirst()
+                    .orElseThrow(() -> new SosException("Không tìm thấy tỉnh/thành phố: " + codeOrName));
+        });
+    }
+
+    private DashboardRepository.Filter filter(ScopeArea area, LocalDate from, LocalDate to) {
         ZoneId server = ZoneId.systemDefault();
         // Ngày Việt Nam -> mốc giờ của server (cột created_at lưu giờ server)
         LocalDateTime startAt = from.atStartOfDay(VN).withZoneSameInstant(server).toLocalDateTime();
         LocalDateTime endAt = to.plusDays(1).atStartOfDay(VN).withZoneSameInstant(server).toLocalDateTime();
+        UnitLevel level = area.scope().getLevel();
         return new DashboardRepository.Filter(
-                scope.getAgency(),
-                scope.getLevel() == UnitLevel.NATIONAL ? null : IncidentAccess.provinceKey(scope.getProvince()),
-                scope.getLevel() == UnitLevel.WARD ? IncidentAccess.key(scope.getWard()) : null,
-                scope.getLevel() == UnitLevel.WARD,
+                area.scope().getAgency(),
+                level == UnitLevel.NATIONAL ? null : area.provinceId(),
+                level == UnitLevel.WARD ? area.wardId() : null,
+                level == UnitLevel.WARD,
                 startAt, endAt, server.getId(), slaMinutes);
     }
 
@@ -186,7 +207,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     /** Cùng địa bàn và khoảng ngày nhưng mọi lực lượng (chỉ dùng để đếm theo lực lượng). */
     static DashboardRepository.Filter allForces(DashboardRepository.Filter f) {
-        return new DashboardRepository.Filter(null, f.provinceKey(), f.wardKey(), f.wardOriginOnly(),
+        return new DashboardRepository.Filter(null, f.provinceId(), f.wardId(), f.wardOriginOnly(),
                 f.start(), f.end(), f.serverZone(), f.slaMinutes());
     }
 

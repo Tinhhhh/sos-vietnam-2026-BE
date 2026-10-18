@@ -30,15 +30,16 @@ public class GeoController {
                 geoService.getAllProvinces());
     }
 
-    @Operation(summary = "Get wards of a province", description = "provinceCode: province code from /provinces. Role required: none")
-    @GetMapping("/wards")
-    public ResponseEntity<Object> getWards(@RequestParam("provinceCode") String provinceCode) {
+    @Operation(summary = "Get wards of a province",
+            description = "provinceId = provinces.code from /provinces. Sorted by name, 404 for an unknown province. Role required: none")
+    @GetMapping("/provinces/{provinceId}/wards")
+    public ResponseEntity<Object> getWards(@PathVariable("provinceId") String provinceId) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved wards",
-                geoService.getWardsByProvince(provinceCode));
+                geoService.getWardsByProvince(provinceId));
     }
 
     @Operation(summary = "Resolve ward and province from lat/lng",
-            description = "province_code is null when the point is outside known boundaries. Role required: none")
+            description = "province_id is null when the point is outside known boundaries. Role required: none")
     @GetMapping("/resolve")
     public ResponseEntity<Object> resolveLocation(@RequestParam("lat") double lat, @RequestParam("lng") double lng) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully resolved location",

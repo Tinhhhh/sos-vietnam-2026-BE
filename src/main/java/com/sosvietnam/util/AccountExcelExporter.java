@@ -54,11 +54,11 @@ public class AccountExcelExporter {
                 Row row = sheet.createRow(rowIndex);
                 String[] values = {
                         String.valueOf(rowIndex),
-                        orEmpty(account.getProvince()),
+                        orEmpty(account.provinceName()),
                         account.getAgencyType() != null ? account.getAgencyType().getLabel() : "",
                         levelLabel(account.getAgencyType(), account.getUnitLevel()),
                         account.fullName(),
-                        orEmpty(account.getWard()),
+                        orEmpty(account.wardName()),
                         account.getEmail(),
                         passwordOrUnknown(passwordOf.apply(account)),
                         account.getRole() != null ? account.getRole().getRoleName() : "",

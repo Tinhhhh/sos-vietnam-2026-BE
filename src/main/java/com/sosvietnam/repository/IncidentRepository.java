@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -26,6 +27,10 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     List<Incident> findByStatusInAndRoutedAgencyInOrderByCreatedAtDesc(
             Collection<IncidentStatus> statuses, Collection<AgencyType> agencies);
+
+    /** Như trên nhưng chỉ ca báo từ `since` trở đi (bộ lọc 1 / 7 / 30 ngày). */
+    List<Incident> findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+            Collection<IncidentStatus> statuses, Collection<AgencyType> agencies, LocalDateTime since);
 
     /** Ca còn mở chưa được phân luồng (tạo bởi BE bản cũ, chưa có routed_agency). */
     List<Incident> findByStatusInAndRoutedAgencyIsNull(Collection<IncidentStatus> statuses);
@@ -47,7 +52,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query("""
         UPDATE Incident i SET i.handlerId = :handlerId, i.claimedAt = :now,
                i.acceptedAt = COALESCE(i.acceptedAt, :now),
-               i.status = com.sosvietnam.model.payload.enums.IncidentStatus.ACCEPTED, i.updatedAt = :now
+               i.status = com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING, i.updatedAt = :now
         WHERE i.id = :id AND i.handlerId IS NULL
           AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.PENDING
           AND i.routedLevel = :level
@@ -60,7 +65,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
         UPDATE Incident i SET i.handlerId = NULL, i.claimedAt = NULL,
                i.status = com.sosvietnam.model.payload.enums.IncidentStatus.PENDING, i.updatedAt = :now
         WHERE i.id = :id AND i.handlerId = :handlerId
-          AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.ACCEPTED
+          AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING
         """)
     int release(@Param("id") String id, @Param("handlerId") UUID handlerId, @Param("now") LocalDateTime now);
 
@@ -68,10 +73,35 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Query("""
         UPDATE Incident i SET i.handlerId = :toId, i.claimedAt = :now, i.updatedAt = :now
         WHERE i.id = :id AND i.handlerId = :fromId
-          AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.ACCEPTED
+          AND i.status IN (com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING,
+                           com.sosvietnam.model.payload.enums.IncidentStatus.RESOLVING)
         """)
     int handOver(@Param("id") String id, @Param("fromId") UUID fromId, @Param("toId") UUID toId,
                  @Param("now") LocalDateTime now);
+
+    /** Cán bộ giữ ca xác minh xong, yêu cầu điều động lực lượng: VERIFYING -> RESOLVING. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Incident i SET i.status = com.sosvietnam.model.payload.enums.IncidentStatus.RESOLVING, i.updatedAt = :now
+        WHERE i.id = :id AND i.handlerId = :handlerId
+          AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING
+        """)
+    int startResolving(@Param("id") String id, @Param("handlerId") UUID handlerId, @Param("now") LocalDateTime now);
+
+    /**
+     * Chuyển ngay ca cấp xã đang có người giữ lên cấp tỉnh (cán bộ tự chuyển, hoặc người dân yêu cầu khi
+     * cán bộ nhận mà quá 15 phút vẫn chưa điều động): ca về PENDING ở cấp tỉnh, bỏ người giữ.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Incident i SET i.routedLevel = com.sosvietnam.model.payload.enums.UnitLevel.PROVINCE,
+               i.escalatedAt = :now, i.handlerId = NULL, i.claimedAt = NULL,
+               i.status = com.sosvietnam.model.payload.enums.IncidentStatus.PENDING, i.updatedAt = :now
+        WHERE i.id = :id AND i.handlerId = :handlerId AND i.status IN :statuses
+          AND i.routedLevel = com.sosvietnam.model.payload.enums.UnitLevel.WARD AND i.escalatedAt IS NULL
+        """)
+    int escalateHeld(@Param("id") String id, @Param("handlerId") UUID handlerId,
+                     @Param("statuses") Collection<IncidentStatus> statuses, @Param("now") LocalDateTime now);
 
     /** Huỷ khi ca còn mở; 0 dòng = ca đã đóng / đã huỷ trước đó. Tự mở transaction nếu chưa có (job lúc khởi động). */
     @Transactional
@@ -98,4 +128,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
           AND i.escalatedAt IS NULL AND i.escalateAt <= :now
         """)
     int escalate(@Param("id") String id, @Param("now") LocalDateTime now);
+
+    Optional<Incident> findByLookupCode(String lookupCode);
+
+    boolean existsByLookupCode(String lookupCode);
 }

@@ -48,7 +48,7 @@ class IncidentCancelTest {
     final IncidentClaimRepository claimRepo = mock(IncidentClaimRepository.class);
     final AccountRepository accountRepo = mock(AccountRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, accountRepo,
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo,
             mock(GeoService.class), mock(MediaStorageService.class), notifier, mock(IncidentEscalationService.class));
 
     Incident incident;

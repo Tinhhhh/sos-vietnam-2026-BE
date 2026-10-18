@@ -23,16 +23,12 @@ import java.util.Map;
 public class DashboardRepository {
 
     /** Phạm vi + khoảng thời gian [start, end) theo giờ server. Trường null = không lọc theo trường đó. */
-    public record Filter(AgencyType agency, String provinceKey, String wardKey, boolean wardOriginOnly,
+    public record Filter(AgencyType agency, String provinceId, Long wardId, boolean wardOriginOnly,
                          LocalDateTime start, LocalDateTime end, String serverZone, long slaMinutes) {
     }
 
     private static final String VN_TIME =
             "((i.created_at AT TIME ZONE :serverZone) AT TIME ZONE 'Asia/Ho_Chi_Minh')";
-    private static final String PROVINCE_KEY =
-            "regexp_replace(trim(regexp_replace(unaccent(lower(i.province)), '\\s+', ' ', 'g')), '^(tp\\.?|thanh pho|tinh) ', '')";
-    private static final String WARD_KEY =
-            "trim(regexp_replace(unaccent(lower(i.ward)), '\\s+', ' ', 'g'))";
     private static final String ACCEPT_SECONDS = "EXTRACT(EPOCH FROM (i.accepted_at - i.created_at))";
     private static final String WITHIN_SLA =
             "i.accepted_at IS NOT NULL AND i.accepted_at - i.created_at <= make_interval(mins => :slaMinutes)";
@@ -96,18 +92,23 @@ public class DashboardRepository {
         return jdbc.queryForList(sql, params(f));
     }
 
-    /** Thống kê theo cột địa bàn ("ward" hoặc "province"). */
+    /** Thống kê theo địa bàn: "ward" (các xã của 1 tỉnh) hoặc "province" (các tỉnh). Tên lấy qua khoá ngoại. */
     public List<Map<String, Object>> byArea(Filter f, String areaColumn) {
-        if (!"ward".equals(areaColumn) && !"province".equals(areaColumn)) {
+        String join;
+        if ("ward".equals(areaColumn)) {
+            join = "LEFT JOIN wards a ON a.id = i.ward_id ";
+        } else if ("province".equals(areaColumn)) {
+            join = "LEFT JOIN provinces a ON a.code = i.province_id ";
+        } else {
             throw new IllegalArgumentException("areaColumn");
         }
-        String sql = "SELECT i." + areaColumn + " AS name, count(*) AS total, "
+        String sql = "SELECT a.name AS name, count(*) AS total, "
                 + "count(*) FILTER (WHERE i.status = :pending) AS pending, "
                 + "count(*) FILTER (WHERE i.escalated_at IS NOT NULL) AS escalated, "
                 + "count(*) FILTER (WHERE i.accepted_at IS NOT NULL) AS accepted, "
                 + "avg(" + ACCEPT_SECONDS + ") FILTER (WHERE i.accepted_at IS NOT NULL) AS avg_accept, "
                 + "count(*) FILTER (WHERE " + WITHIN_SLA + ") AS within_sla "
-                + "FROM incidents i WHERE " + where(f, true) + " GROUP BY 1 ORDER BY escalated DESC, total DESC";
+                + "FROM incidents i " + join + "WHERE " + where(f, true) + " GROUP BY 1 ORDER BY escalated DESC, total DESC";
         return jdbc.queryForList(sql, params(f).addValue("pending", IncidentStatus.PENDING.name()));
     }
 
@@ -121,8 +122,8 @@ public class DashboardRepository {
         StringBuilder sb = new StringBuilder("1 = 1");
         if (withDates) sb.append(" AND i.created_at >= :start AND i.created_at < :end");
         if (f.agency() != null) sb.append(" AND i.routed_agency = :agency");
-        if (f.provinceKey() != null) sb.append(" AND ").append(PROVINCE_KEY).append(" = :provinceKey");
-        if (f.wardKey() != null) sb.append(" AND ").append(WARD_KEY).append(" = :wardKey");
+        if (f.provinceId() != null) sb.append(" AND i.province_id = :provinceId");
+        if (f.wardId() != null) sb.append(" AND i.ward_id = :wardId");
         // Cấp xã chỉ tính ca xuất phát ở xã (có hạn leo thang), giống quyền xem ở hàng đợi
         if (f.wardOriginOnly()) sb.append(" AND i.escalate_at IS NOT NULL");
         return sb.toString();
@@ -133,8 +134,8 @@ public class DashboardRepository {
                 .addValue("start", Timestamp.valueOf(f.start()))
                 .addValue("end", Timestamp.valueOf(f.end()))
                 .addValue("agency", f.agency() == null ? null : f.agency().name())
-                .addValue("provinceKey", f.provinceKey())
-                .addValue("wardKey", f.wardKey())
+                .addValue("provinceId", f.provinceId())
+                .addValue("wardId", f.wardId())
                 .addValue("serverZone", f.serverZone())
                 .addValue("slaMinutes", (int) f.slaMinutes()); // make_interval(mins => int)
     }

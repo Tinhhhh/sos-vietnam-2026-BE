@@ -11,6 +11,8 @@ import com.sosvietnam.model.payload.request.RegistrationRequest;
 import com.sosvietnam.model.payload.response.AccountInfoResponse;
 import com.sosvietnam.model.payload.response.AuthenticationResponse;
 import com.sosvietnam.repository.AccountRepository;
+import com.sosvietnam.repository.ProvinceRepository;
+import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.repository.RefreshTokenRepository;
 import com.sosvietnam.repository.RoleRepository;
 import com.sosvietnam.security.JwtTokenProvider;
@@ -49,6 +51,8 @@ public class AuthenServiceImpl implements AuthenService {
 
     private final AuthenticationManager authenticationManager;
     private final AccountRepository accountRepository;
+    private final ProvinceRepository provinceRepository;
+    private final WardRepository wardRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -152,8 +156,13 @@ public class AuthenServiceImpl implements AuthenService {
                 .phone(request.getPhone())
                 .address(request.getAddress())
                 .role(role)
-                .province(request.getProvince())
-                .ward(request.getWard())
+                .province(request.getProvinceId() == null ? null
+                        : provinceRepository.findById(request.getProvinceId())
+                        .orElseThrow(() -> new SosException(HttpStatus.BAD_REQUEST, "Mã tỉnh/thành phố không hợp lệ")))
+                .ward(request.getWardId() == null ? null
+                        : wardRepository.findById(request.getWardId())
+                        .filter(w -> w.getProvince().getCode().equals(request.getProvinceId()))
+                        .orElseThrow(() -> new SosException(HttpStatus.BAD_REQUEST, "Xã/phường không thuộc tỉnh đã chọn")))
                 .isActive(true)
                 .isLocked(false)
                 .build();
@@ -172,23 +181,7 @@ public class AuthenServiceImpl implements AuthenService {
         Account account = accountRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Account not found"));
 
-        return AccountInfoResponse.builder()
-                .accountId(account.getId())
-                .lastName(account.getLastName())
-                .firstName(account.getFirstName())
-                .fullName(account.fullName())
-                .email(account.getEmail())
-                .phone(account.getPhone())
-                .address(account.getAddress())
-                .agencyType(account.getAgencyType() != null ? account.getAgencyType().name() : null)
-                .unitLevel(account.getUnitLevel() != null ? account.getUnitLevel().name() : null)
-                .province(account.getProvince())
-                .ward(account.getWard())
-                .locked(account.isLocked())
-                .createdDate(account.getCreatedDate())
-                .roleId(account.getRole() != null ? account.getRole().getId() : null)
-                .roleName(account.getRole() != null ? account.getRole().getRoleName() : null)
-                .build();
+        return AccountInfoResponse.from(account);
     }
 
     /** Lưu refresh token, gắn với jwtId của access token đi cùng (dùng khi logout). */

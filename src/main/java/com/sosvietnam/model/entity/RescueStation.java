@@ -57,11 +57,16 @@ public class RescueStation {
     @Column(columnDefinition = "TEXT")
     private String address;
 
-    @Column(length = 150)
-    private String province;
+    // Gán theo toạ độ của trạm (điểm nằm trong xã nào), thiếu thì theo tên tỉnh trong file seed
+    // LAZY: danh sách trạm rất lớn, nạp Province/Ward (có geometry) cho từng trạm làm API chậm hàng chục giây.
+    // Chỉ lấy khoá (getCode/getId không nạp proxy); tên lấy qua util/AreaNameCache.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "province_id")
+    private Province province;
 
-    @Column(length = 150)
-    private String ward;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ward_id")
+    private Ward ward;
 
     @Column(name = "latitude")
     private Double latitude;
@@ -69,7 +74,18 @@ public class RescueStation {
     @Column(name = "longitude")
     private Double longitude;
 
+    // DB tự sinh từ latitude/longitude (generated column), có index GiST cho tìm trạm gần nhất. Chỉ đọc.
     @JsonIgnore
-    @Column(columnDefinition = "geometry(Point, 4326)")
+    @Column(columnDefinition = "geometry(Point, 4326)", insertable = false, updatable = false)
     private Point location;
+
+    // ---- Tên / mã địa bàn (null-safe, dùng cho DTO và luật quyền xem) ----
+    public String provinceId() {
+        return province == null ? null : province.getCode();
+    }
+
+    public Long wardId() {
+        return ward == null ? null : ward.getId();
+    }
+
 }

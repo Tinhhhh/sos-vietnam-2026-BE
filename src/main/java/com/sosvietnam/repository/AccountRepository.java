@@ -20,4 +20,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /** Trực ban còn hoạt động của một lực lượng ở một cấp (lọc địa bàn ở Java vì tên tỉnh/xã cần chuẩn hoá). */
     @Query("SELECT a FROM Account a WHERE a.agencyType = :agency AND a.unitLevel = :level AND a.isActive = true")
     List<Account> findActiveOfficers(@Param("agency") AgencyType agency, @Param("level") UnitLevel level);
+
+    /** Xã có ít nhất 1 cán bộ của lực lượng này ở cấp xã đang hoạt động (để phân luồng ca vào xã). */
+    boolean existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType agency, UnitLevel level, Long wardId);
 }

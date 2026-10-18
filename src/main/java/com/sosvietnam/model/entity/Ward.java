@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "wards", indexes = {
-    @Index(name = "idx_ward_province", columnList = "province_code"),
+    @Index(name = "idx_wards_province", columnList = "province_id"),
     @Index(name = "idx_ward_malk", columnList = "malk")
 })
 @Getter
@@ -28,11 +28,10 @@ public class Ward {
     @Column(nullable = false, length = 150)
     private String name;
 
-    @Column(name = "province_code", length = 20)
-    private String provinceCode;
-
-    @Column(name = "province_name", length = 150)
-    private String provinceName;
+    // 1 xã thuộc đúng 1 tỉnh; 1 tỉnh có nhiều xã
+    @ManyToOne
+    @JoinColumn(name = "province_id", nullable = false)
+    private Province province;
 
     @Column(name = "sap_nhap_tu", columnDefinition = "TEXT")
     private String sapNhapTu;

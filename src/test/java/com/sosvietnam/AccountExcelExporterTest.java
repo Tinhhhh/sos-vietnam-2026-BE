@@ -34,12 +34,12 @@ class AccountExcelExporterTest {
                 .email("pccc.tanan@sos.vn").password("$2a$10$hash-must-not-leak")
                 .lastName("Trực Ban").firstName("Đội PCCC & CNCH Khu Vực Tân An")
                 .agencyType(AgencyType.FIRE).unitLevel(UnitLevel.WARD)
-                .province("Cần Thơ").ward("Phường Tân An").role(officer).build();
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).role(officer).build();
         Account caXa = Account.builder()
                 .email("congan.tanan@sos.vn").password("$2a$10$other")
                 .lastName("Trực Ban").firstName("Công An Phường Tân An")
                 .agencyType(AgencyType.POLICE).unitLevel(UnitLevel.WARD)
-                .province("Cần Thơ").ward("Phường Tân An").role(officer).build();
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).role(officer).build();
 
         // Only the seed password of doiPccc is known; caXa changed theirs
         byte[] xlsx = exporter.export(List.of(doiPccc, caXa), a -> a == doiPccc ? "Seed@123" : null);

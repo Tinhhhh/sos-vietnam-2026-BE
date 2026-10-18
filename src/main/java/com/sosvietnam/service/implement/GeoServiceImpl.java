@@ -20,6 +20,8 @@ import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.GeoService;
 import com.sosvietnam.util.AppConstants;
 import com.sosvietnam.util.RescueStationSpecification;
+import org.springframework.http.HttpStatus;
+import com.sosvietnam.util.AreaNameCache;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -51,6 +53,7 @@ public class GeoServiceImpl implements GeoService {
     private final RescueStationRepository rescueStationRepository;
     private final SeedVersionRepository seedVersionRepository;
     private final ModelMapper modelMapper;
+    private final AreaNameCache areaNameCache;
     // Field của RescueStation được phép sort (tên field Java, không phải tên cột)
     private static final List<String> STATION_SORT_FIELDS = List.of("id", "name", "province", "ward", "agencyType", "level");
 
@@ -64,10 +67,24 @@ public class GeoServiceImpl implements GeoService {
     }
 
     @Override
-    public List<WardResponse> getWardsByProvince(String provinceCode) {
-        return wardRepository.findByProvinceCode(provinceCode).stream()
-                .map(ward -> modelMapper.map(ward, WardResponse.class))
+    public List<WardResponse> getWardsByProvince(String provinceId) {
+        if (!provinceRepository.existsById(provinceId)) {
+            throw new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy tỉnh/thành phố mã " + provinceId);
+        }
+        return wardRepository.findByProvince_CodeOrderByNameAsc(provinceId).stream()
+                .map(WardResponse::from)
                 .toList();
+    }
+
+    @Override
+    public Area resolveArea(double lat, double lng) {
+        Point point = geometryFactory.createPoint(new Coordinate(lng, lat));
+        point.setSRID(4326);
+        Optional<Ward> ward = wardRepository.findWardContainingPoint(point);
+        if (ward.isPresent()) return new Area(ward.get().getProvince(), ward.get());
+        return provinceRepository.findProvinceContainingPoint(point)
+                .map(p -> new Area(p, null))
+                .orElse(Area.NONE);
     }
 
     @Override
@@ -86,8 +103,9 @@ public class GeoServiceImpl implements GeoService {
         if (wardOpt.isPresent()) {
             Ward ward = wardOpt.get();
             result.setWard(ward.getName());
-            result.setProvince(ward.getProvinceName());
-            result.setProvinceCode(ward.getProvinceCode());
+            result.setWardId(ward.getId());
+            result.setProvince(ward.getProvince().getName());
+            result.setProvinceId(ward.getProvince().getCode());
             result.setSapNhapTu(ward.getSapNhapTu());
             return result;
         }
@@ -97,7 +115,7 @@ public class GeoServiceImpl implements GeoService {
         if (provOpt.isPresent()) {
             Province prov = provOpt.get();
             result.setProvince(prov.getName());
-            result.setProvinceCode(prov.getCode());
+            result.setProvinceId(prov.getCode());
             result.setWard(UNKNOWN_WARD);
             return result;
         }
@@ -112,7 +130,7 @@ public class GeoServiceImpl implements GeoService {
     public List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit) {
         String agencyStr = agencyType != null ? agencyType.name() : null;
         return rescueStationRepository.findNearestStations(lat, lng, agencyStr, radiusMeters, limit).stream()
-                .map(station -> modelMapper.map(station, StationResponse.class))
+                .map(st -> StationResponse.from(st, areaNameCache))
                 .toList();
     }
 
@@ -128,7 +146,13 @@ public class GeoServiceImpl implements GeoService {
         if (!"asc".equalsIgnoreCase(sortDir) && !"desc".equalsIgnoreCase(sortDir)) {
             throw new SosException("sortDir chỉ nhận asc hoặc desc");
         }
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
+        // province / ward là khoá ngoại: sort theo tên qua quan hệ
+        String sortPath = switch (sortBy) {
+            case "province" -> "province.name";
+            case "ward" -> "ward.name";
+            default -> sortBy;
+        };
+        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortPath);
         Pageable pageable = PageRequest.of(pageNo, pageSize, sort);
 
         Specification<RescueStation> spec = Specification.where(RescueStationSpecification.provinceContains(province))
@@ -138,7 +162,7 @@ public class GeoServiceImpl implements GeoService {
 
         ListResponse listResponse = new ListResponse();
         listResponse.setContent(stations.getContent().stream()
-                .map(station -> modelMapper.map(station, StationResponse.class))
+                .map(st -> StationResponse.from(st, areaNameCache))
                 .toList());
         listResponse.setPageNo(pageNo);
         listResponse.setPageSize(pageSize);

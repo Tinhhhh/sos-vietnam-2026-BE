@@ -56,10 +56,6 @@ public class Account {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
-    @Builder.Default
-    @Column(name = "is_dispatcher", nullable = false, columnDefinition = "boolean default false")
-    private boolean isDispatcher = false;
-
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -73,11 +69,15 @@ public class Account {
     @Column(name = "unit_level", length = 20)
     private UnitLevel unitLevel;
 
-    @Column(name = "province", length = 150)
-    private String province;
+    // Địa bàn đơn vị: 1 tài khoản thuộc 1 tỉnh, 1 xã (cấp tỉnh: xã nơi đặt trụ sở).
+    // Cấp nhận ca phân biệt bằng unit_level, không dựa vào việc có ward hay không. Admin toàn quốc: có thể null.
+    @ManyToOne
+    @JoinColumn(name = "province_id")
+    private Province province;
 
-    @Column(name = "ward", length = 150)
-    private String ward;
+    @ManyToOne
+    @JoinColumn(name = "ward_id")
+    private Ward ward;
 
     @Column(name = "created_date", updatable = false)
     private LocalDateTime createdDate;
@@ -97,5 +97,30 @@ public class Account {
 
     public String getFullName() {
         return fullName();
+    }
+
+    // ---- Tên / mã địa bàn (null-safe) ----
+    public String provinceId() {
+        return province == null ? null : province.getCode();
+    }
+
+    public String provinceName() {
+        return province == null ? null : province.getName();
+    }
+
+    public Long wardId() {
+        return ward == null ? null : ward.getId();
+    }
+
+    public String wardName() {
+        return ward == null ? null : ward.getName();
+    }
+
+    /** Địa chỉ đầy đủ = địa chỉ chi tiết + xã + tỉnh (address chỉ giữ phần chi tiết). */
+    public String fullAddress() {
+        return java.util.stream.Stream.of(address, wardName(), provinceName())
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 }

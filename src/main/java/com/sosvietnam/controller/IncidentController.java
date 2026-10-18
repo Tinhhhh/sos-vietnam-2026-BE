@@ -1,9 +1,11 @@
 package com.sosvietnam.controller;
 
+import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.CancelIncidentRequest;
 import com.sosvietnam.model.payload.request.CreateIncidentRequest;
 import com.sosvietnam.model.payload.request.DispatchRequest;
+import com.sosvietnam.model.payload.request.IncidentLookupRequest;
 import com.sosvietnam.model.payload.request.ReleaseIncidentRequest;
 import com.sosvietnam.model.payload.response.IncidentResponse;
 import com.sosvietnam.service.IncidentService;
@@ -52,14 +54,30 @@ public class IncidentController {
     @Operation(summary = "Get the incident queue of my unit",
             description = "Active incidents (not resolved/cancelled) of the caller's agency and area, newest first, "
                     + "paged (ListResponse; pageNo from 0, pageSize 1-100, default 50). can_handle = caller may "
-                    + "claim/act, held_by_me = caller holds it. Live updates: STOMP /user/queue/incidents. "
-                    + "Role required: OFFICER, ADMIN")
+                    + "claim/act, held_by_me = caller holds it. days (1-90, optional) = only incidents reported in "
+                    + "the last N days. Live updates: STOMP /user/queue/incidents. Role required: OFFICER, ADMIN")
     @GetMapping("/queue")
     public ResponseEntity<Object> getQueue(
             @RequestParam(value = "pageNo", defaultValue = DEFAULT_PAGE_NUMBER) int pageNo,
-            @RequestParam(value = "pageSize", defaultValue = "50") int pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "50") int pageSize,
+            @RequestParam(value = "days", required = false) Integer days) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved incident queue",
-                incidentService.getQueue(pageNo, pageSize));
+                incidentService.getQueue(pageNo, pageSize, days));
+    }
+
+    @Operation(summary = "Get the incident history of my unit",
+            description = "Closed incidents (RESOLVED / CANCELLED) the caller may see (same scope as the queue), newest "
+                    + "first, paged (ListResponse). days 1-90 (default 7), q = search id / citizen / phone / address / "
+                    + "ward (accents ignored), agency = POLICE | CSGT | FIRE (ADMIN only). Role required: OFFICER, ADMIN")
+    @GetMapping("/history")
+    public ResponseEntity<Object> getHistory(
+            @RequestParam(value = "pageNo", defaultValue = DEFAULT_PAGE_NUMBER) int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize,
+            @RequestParam(value = "days", required = false) Integer days,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "agency", required = false) AgencyType agency) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved incident history",
+                incidentService.getHistory(days, q, agency, pageNo, pageSize));
     }
 
     @Operation(summary = "Claim (accept) an incident",
@@ -107,6 +125,34 @@ public class IncidentController {
         List<IncidentResponse.MediaResponse> media = incidentService.addMedia(id, citizenAccessToken, files);
         return ResponseBuilder.returnData(HttpStatus.OK,
                 "Đã đính kèm " + media.size() + " ảnh/video hiện trường", media);
+    }
+
+    @Operation(summary = "Officer: verification done, request dispatch of forces (VERIFYING -> RESOLVING)",
+            description = "Only the officer holding the incident. 409 if it is no longer VERIFYING. Role required: OFFICER, ADMIN")
+    @PostMapping("/{id}/request-dispatch")
+    public ResponseEntity<Object> requestDispatch(@PathVariable("id") String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Đã gửi yêu cầu điều động lực lượng",
+                incidentService.requestDispatch(id));
+    }
+
+    @Operation(summary = "Move a ward incident up to the province right now",
+            description = "Officer holding it (JWT; VERIFYING or RESOLVING), or the citizen (header X-SOS-Access-Token) "
+                    + "once the incident is VERIFYING past its 15-minute deadline. The incident goes back to PENDING at "
+                    + "province level without a handler. Role required: OFFICER, ADMIN or citizen token")
+    @PostMapping("/{id}/escalate")
+    public ResponseEntity<Object> escalateNow(
+            @PathVariable("id") String id,
+            @RequestHeader(value = CITIZEN_TOKEN_HEADER, required = false) String citizenAccessToken) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Đã chuyển ca lên cấp tỉnh/thành phố",
+                incidentService.escalateNow(id, citizenAccessToken));
+    }
+
+    @Operation(summary = "Citizen: look up a past incident by lookup code + last 4 phone digits",
+            description = "body { lookup_code: 'K7M2-QX9P', phone_last4: '5678' }. 404 when code or phone does not match. "
+                    + "Role required: none")
+    @PostMapping("/lookup")
+    public ResponseEntity<Object> lookupIncident(@Valid @RequestBody IncidentLookupRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved incident", incidentService.lookup(request));
     }
 
     @Operation(summary = "Citizen: status of their own incident (waiting screen)",

@@ -45,13 +45,13 @@ class CallServiceTest {
     final CallServiceImpl service = new CallServiceImpl(incidents, accounts, messaging, new ObjectMapper());
 
     final UUID handlerId = UUID.randomUUID();
-    final OfficerPrincipal handler = new OfficerPrincipal(handlerId, "congan.tanan@sos.vn", "Cán Bộ A",
+    final OfficerPrincipal handler = TestGeo.officer(handlerId, "congan.tanan@sos.vn", "Cán Bộ A",
             RoleName.OFFICER, AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
     Incident incident;
 
     @BeforeEach
     void setUp() {
-        incident = Incident.builder().id("SOS-1").status(IncidentStatus.ACCEPTED).handlerId(handlerId)
+        incident = Incident.builder().id("SOS-1").status(IncidentStatus.VERIFYING).handlerId(handlerId)
                 .citizenName("Nguyễn Văn B").citizenTokenHash(CitizenTokens.sha256("tok")).build();
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
         when(accounts.findById(handlerId)).thenReturn(Optional.of(Account.builder().id(handlerId)
@@ -95,7 +95,7 @@ class CallServiceTest {
 
     @Test
     void otherOfficer_isRejected_notForwarded() {
-        OfficerPrincipal other = new OfficerPrincipal(UUID.randomUUID(), "other@sos.vn", "Khác", RoleName.OFFICER,
+        OfficerPrincipal other = TestGeo.officer(UUID.randomUUID(), "other@sos.vn", "Khác", RoleName.OFFICER,
                 AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
         service.relay(other, signal("ring"));
 

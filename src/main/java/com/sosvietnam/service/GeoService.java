@@ -1,5 +1,7 @@
 package com.sosvietnam.service;
 
+import com.sosvietnam.model.entity.Province;
+import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.response.DataStatusResponse;
@@ -20,9 +22,20 @@ public interface GeoService {
 
     List<ProvinceResponse> getAllProvinces();
 
-    List<WardResponse> getWardsByProvince(String provinceCode);
+    List<WardResponse> getWardsByProvince(String provinceId);
 
     LocationResponse resolveLocation(double lat, double lng);
+
+    /** Địa bàn của một điểm dưới dạng entity (khoá ngoại cho incidents / accounts). */
+    Area resolveArea(double lat, double lng);
+
+    /**
+     * @param province tỉnh chứa điểm, null = ngoài ranh giới dữ liệu
+     * @param ward     xã chứa điểm, null = trong tỉnh nhưng không khớp xã nào
+     */
+    record Area(Province province, Ward ward) {
+        public static final Area NONE = new Area(null, null);
+    }
 
     List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit);
 

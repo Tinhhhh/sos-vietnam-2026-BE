@@ -1,5 +1,5 @@
 {
-  "description": "Tài khoản cán bộ để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An). Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
+  "description": "Tài khoản cán bộ để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An). province / ward là tên trong bảng provinces / wards (seeder đổi sang province_id / ward_id); cấp tỉnh ghi xã nơi đặt trụ sở. Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
   "accounts": [
     {
       "email": "congan.cantho@sos.vn",
@@ -8,8 +8,8 @@
       "agency_type": "POLICE",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
-      "ward": null,
-      "address": "Số 9A Trần Phú, Phường Cái Khế, Thành phố Cần Thơ"
+      "ward": "Phường Cái Khế",
+      "address": "Số 9A Trần Phú"
     },
     {
       "email": "congan.tanan@sos.vn",
@@ -19,7 +19,7 @@
       "unit_level": "WARD",
       "province": "Cần Thơ",
       "ward": "Phường Tân An",
-      "address": "02 Nguyễn Tri Phương, Kv.10, phường Tân An, thành phố Cần Thơ"
+      "address": "02 Nguyễn Tri Phương, Kv.10"
     },
     {
       "email": "csgt.cantho@sos.vn",
@@ -28,8 +28,8 @@
       "agency_type": "CSGT",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
-      "ward": null,
-      "address": null
+      "ward": "Phường Cái Khế",
+      "address": "Số 71 Đường Trần Phú"
     },
     {
       "email": "pccc.cantho@sos.vn",
@@ -38,8 +38,8 @@
       "agency_type": "FIRE",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
-      "ward": null,
-      "address": "Số 14 Đường Nguyễn Trãi, Phường Ninh Kiều, TP. Cần Thơ"
+      "ward": "Phường Ninh Kiều",
+      "address": "Số 14 Đường Nguyễn Trãi"
     },
     {
       "email": "pccc.tanan@sos.vn",
@@ -58,8 +58,8 @@
       "agency_type": "HOSPITAL",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
-      "ward": null,
-      "address": "Số 4 Đường Châu Văn Liêm, Phường Ninh Kiều, TP. Cần Thơ"
+      "ward": "Phường Ninh Kiều",
+      "address": "Số 4 Đường Châu Văn Liêm"
     }
   ]
 }

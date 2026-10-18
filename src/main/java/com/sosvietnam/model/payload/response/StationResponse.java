@@ -1,5 +1,6 @@
 package com.sosvietnam.model.payload.response;
 
+import com.sosvietnam.model.entity.RescueStation;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.StationLevel;
@@ -39,6 +40,12 @@ public class StationResponse {
     @JsonProperty("ward")
     private String ward;
 
+    @JsonProperty("province_id")
+    private String provinceId;
+
+    @JsonProperty("ward_id")
+    private Long wardId;
+
     @JsonProperty("latitude")
     private Double latitude;
 
@@ -56,4 +63,27 @@ public class StationResponse {
 
     @JsonProperty("facility_type")
     private String facilityType;
+
+    /** Map tay (không dùng ModelMapper): province / ward của entity là khoá ngoại, DTO cần tên. */
+    /** Tên tỉnh / xã lấy từ AreaNameCache (không nạp entity Province / Ward của trạm). */
+    public static StationResponse from(RescueStation s, com.sosvietnam.util.AreaNameCache areaNames) {
+        return StationResponse.builder()
+                .id(s.getId())
+                .name(s.getName())
+                .agencyType(s.getAgencyType())
+                .level(s.getLevel())
+                .phone(s.getPhone())
+                .address(s.getAddress())
+                .province(areaNames.provinceName(s.provinceId()))
+                .ward(areaNames.wardName(s.wardId()))
+                .provinceId(s.provinceId())
+                .wardId(s.wardId())
+                .latitude(s.getLatitude())
+                .longitude(s.getLongitude())
+                .officer(s.getOfficer())
+                .email(s.getEmail())
+                .services(s.getServices())
+                .facilityType(s.getFacilityType())
+                .build();
+    }
 }

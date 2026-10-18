@@ -38,7 +38,7 @@ class StompAuthChannelInterceptorTest {
     final StompAuthChannelInterceptor interceptor =
             new StompAuthChannelInterceptor(jwt, mock(AccountRepository.class), incidents);
     final MessageChannel channel = mock(MessageChannel.class);
-    final OfficerPrincipal officer = new OfficerPrincipal(UUID.randomUUID(), "o@sos.vn", "O", RoleName.OFFICER,
+    final OfficerPrincipal officer = TestGeo.officer(UUID.randomUUID(), "o@sos.vn", "O", RoleName.OFFICER,
             null, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
 
     static Message<byte[]> frame(StompCommand command, String destination, Map<String, String> headers, Principal user) {

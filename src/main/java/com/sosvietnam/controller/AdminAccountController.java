@@ -1,14 +1,20 @@
 package com.sosvietnam.controller;
 
+import com.sosvietnam.model.payload.exception.ResponseBuilder;
+import com.sosvietnam.model.payload.request.NewAccountRequest;
 import com.sosvietnam.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,6 +33,14 @@ public class AdminAccountController {
             MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     private final AccountService accountService;
+
+    @Operation(summary = "Create new officer / admin account",
+            description = "address = detail only (house number, street); ward/province come from ward_id/province_id. Role required: ADMIN")
+    @PostMapping
+    public ResponseEntity<Object> createNewAccount(@Valid @RequestBody NewAccountRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.CREATED, "Tạo tài khoản thành công",
+                accountService.createAccountByAdmin(request));
+    }
 
     @Operation(summary = "Export all accounts to Excel (.xlsx)", description = "Password column shows only seed passwords still in use (DB keeps bcrypt hashes only). Role required: ADMIN")
     @GetMapping("/export")

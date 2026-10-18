@@ -40,7 +40,11 @@ public class RegistrationRequest {
 
     private String address;
 
-    private String province;
+    /** Mã tỉnh (provinces.code), không bắt buộc. */
+    @JsonProperty("province_id")
+    private String provinceId;
 
-    private String ward;
+    /** wards.id, phải thuộc province_id. */
+    @JsonProperty("ward_id")
+    private Long wardId;
 }
