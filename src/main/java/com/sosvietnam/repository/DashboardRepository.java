@@ -60,12 +60,10 @@ public class DashboardRepository {
         return n == null ? 0 : n;
     }
 
-    /** Nhãn sự cố phổ biến nhất (incident_tags là mảng jsonb); ca không chọn nhãn gom vào tag null. */
+    /** Nhãn sự cố phổ biến nhất (incident_tag); ca không chọn nhãn gom vào tag null. */
     public List<Map<String, Object>> byTag(Filter f, int limit) {
-        String sql = "SELECT t.tag, count(*) AS cnt FROM incidents i "
-                + "LEFT JOIN LATERAL jsonb_array_elements_text("
-                + "  CASE WHEN jsonb_typeof(i.incident_tags) = 'array' THEN i.incident_tags ELSE '[]'::jsonb END) AS t(tag) ON true "
-                + "WHERE " + where(f, true) + " GROUP BY t.tag ORDER BY cnt DESC, t.tag LIMIT :limit";
+        String sql = "SELECT i.incident_tag AS tag, count(*) AS cnt FROM incidents i "
+                + "WHERE " + where(f, true) + " GROUP BY i.incident_tag ORDER BY cnt DESC, i.incident_tag LIMIT :limit";
         return jdbc.queryForList(sql, params(f).addValue("limit", limit));
     }
 

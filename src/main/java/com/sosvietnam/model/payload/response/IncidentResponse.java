@@ -116,7 +116,7 @@ public class IncidentResponse {
                 .emergencyType(incident.getEmergencyType())
                 .status(incident.getStatus())
                 .description(incident.getDescription())
-                .incidentTags(incident.getIncidentTags() == null ? List.of() : incident.getIncidentTags())
+                .incidentTags(incident.tags())
                 .address(incident.getAddress())
                 .ward(incident.wardName())
                 .wardId(incident.wardId())

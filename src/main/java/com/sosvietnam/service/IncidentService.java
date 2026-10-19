@@ -8,6 +8,7 @@ import com.sosvietnam.model.payload.request.IncidentLookupRequest;
 import com.sosvietnam.model.payload.request.ReleaseIncidentRequest;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.model.payload.response.HandoverCandidateResponse;
+import com.sosvietnam.model.payload.response.IncidentDetailResponse;
 import com.sosvietnam.model.payload.response.IncidentLookupResponse;
 import com.sosvietnam.model.payload.response.IncidentQueueResponse;
 import com.sosvietnam.model.payload.response.IncidentTrackingResponse;
@@ -33,6 +34,9 @@ public interface IncidentService {
      * @param agency chỉ ADMIN được lọc theo lực lượng; cán bộ luôn là lực lượng của mình
      */
     ListResponse getHistory(Integer days, String query, AgencyType agency, int pageNo, int pageSize);
+
+    /** Chi tiết 1 ca cho cán bộ (cùng phạm vi xem với hàng đợi / lịch sử): media, điều động, lượt giữ ca. */
+    IncidentDetailResponse getDetail(String id);
 
     /** Phân luồng bù các ca còn mở chưa có lực lượng / cấp (do BE bản cũ tạo). Trả về số ca đã xử lý. */
     int routeUnroutedIncidents();

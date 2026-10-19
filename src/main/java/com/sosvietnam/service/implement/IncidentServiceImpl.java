@@ -22,6 +22,7 @@ import com.sosvietnam.model.payload.request.IncidentLookupRequest;
 import com.sosvietnam.model.payload.request.ReleaseIncidentRequest;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.model.payload.response.HandoverCandidateResponse;
+import com.sosvietnam.model.payload.response.IncidentDetailResponse;
 import com.sosvietnam.model.payload.response.IncidentHistoryResponse;
 import com.sosvietnam.model.payload.response.IncidentLookupResponse;
 import com.sosvietnam.model.payload.response.IncidentQueueResponse;
@@ -180,7 +181,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .emergencyType(request.getEmergencyType())
                 .status(IncidentStatus.PENDING)
                 .description(request.getDescription())
-                .incidentTags(cleanTags(request.getIncidentTags()))
+                .incidentTag(firstTag(request.getIncidentTags()))
                 .address(request.getAddress())
                 .ward(area.ward())
                 .province(area.province())
@@ -285,6 +286,20 @@ public class IncidentServiceImpl implements IncidentService {
                         incidentDispatchRepository.countByIncident_Id(i.getId())))
                 .toList();
         return listResponse(content, visible.size(), pageNo, pageSize);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public IncidentDetailResponse getDetail(String id) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(id);
+        if (!IncidentAccess.canView(me, incident)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Ca " + id + " không thuộc phạm vi của đơn vị bạn");
+        }
+        return IncidentDetailResponse.from(incident,
+                incidentMediaRepository.findByIncident_IdOrderByCreatedAtAsc(id),
+                incidentDispatchRepository.findByIncident_IdOrderByDispatchedAtAsc(id),
+                incidentClaimRepository.findByIncident_IdOrderByClaimedAtAsc(id));
     }
 
     /** Ca của lực lượng mình (ADMIN: mọi lực lượng) trong địa bàn được xem, mới nhất trước. */
@@ -754,14 +769,15 @@ public class IncidentServiceImpl implements IncidentService {
         return "incidents/" + incidentId;
     }
 
-    private static List<String> cleanTags(List<String> tags) {
-        if (tags == null) return new ArrayList<>();
-        return new ArrayList<>(tags.stream()
+    /** Người dân chỉ chọn 1 gợi ý: lấy nhãn đầu tiên khác rỗng, không có thì null. */
+    private static String firstTag(List<String> tags) {
+        if (tags == null) return null;
+        return tags.stream()
                 .filter(Objects::nonNull)
                 .map(String::trim)
                 .filter(t -> !t.isEmpty())
-                .distinct()
-                .toList());
+                .findFirst()
+                .orElse(null);
     }
 
     /** Mã tra cứu chưa có ca nào dùng (31^8 tổ hợp, trùng gần như không xảy ra). */

@@ -425,8 +425,11 @@ class ApiContractTest {
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.page_size").value(50));
         verify(incidentService).getQueue(0, 50, null);
+        // /recent no longer exists: it is read as an incident id now and the service answers 404
+        when(incidentService.getDetail("recent")).thenThrow(new com.sosvietnam.model.payload.exception.SosException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "Không tìm thấy vụ việc ID: recent"));
         mvc.perform(get("/api/v1/incidents/recent").header("Authorization", "Bearer " + access))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isNotFound());
     }
 
     @Test

@@ -1,0 +1,116 @@
+# SOS Việt Nam 2026 — Backend (handoff cho Claude)
+
+> Giao tiếp: tiếng Việt, xưng tao/mày. User code Java Spring Boot (thích `application.properties`, không dùng yml).
+> Bối cảnh chung (mục tiêu, main flow, cách làm việc, trạng thái module): xem `C:\Users\TINH KHUNG\IdeaProjects\sos-vietnam-fe-v2\CLAUDE.md`. Tài liệu chi tiết: Obsidian `Data for life\` (`Kiến trúc.md`, `Execute cmd.md`, `Database\`, `R2 media save.md`).
+
+## Cách làm việc
+- BE chỉ làm khi user đã duyệt danh sách việc (FE làm trước, báo BE cần gì).
+- Style code theo `C:\Users\TINH KHUNG\IdeaProjects\HIV-TMSS`: controller → service (interface) → `service/implement/*ServiceImpl` → repository; DTO trong `model/payload/request|response`, enum trong `model/payload/enums` (kiểu HIV có field mô tả).
+- **Không tự commit**: làm xong để nguyên working tree, user test xong bảo mới commit (`type(scope): ...`), commit xong dán nguyên commit message. Không push nếu không được bảo. Chạy `mvn test` trước khi commit.
+
+## Stack
+Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=update`), JWT, AWS SDK S3 (Cloudflare R2), Apache POI, springdoc. Git: nhánh làm việc `develop` (đã push tới 1ff8697, user tự merge sang `main`), deploy từ `main`.
+
+## Quy ước API (đã chốt)
+- Mọi API dưới `/api/v1/...`. Response `{ http_status, time_stamp, message, data }`; lỗi `{ httpStatus, timestamp, message, error?, data? }`.
+- JSON snake_case, luôn trả DTO, field lạ → 400.
+- Login/refresh chỉ trả `access_token` + `refresh_token`; thông tin qua `GET /auth/me` (có `agency_type`, `unit_level`). Register công khai luôn CITIZEN, chỉ trả message.
+- `/api/v1/admin/**` chỉ ADMIN. `GET /geo/**`, `/stations/**` công khai.
+- Địa bàn trong API: `province_id` (= `provinces.code`) + `province` (tên), `ward_id` + `ward`. Geo: `GET /geo/provinces` (`code`, `name`...), `GET /geo/provinces/{provinceId}/wards` (sắp theo tên, tỉnh lạ 404; thay `/geo/wards?provinceCode` cũ, 18/10/2026), `GET /geo/resolve` trả `province_id`/`ward_id`.
+
+## Dữ liệu / seed
+- `accounts.unit_level` (enum `UnitLevel`: `NATIONAL`, `PROVINCE`, `WARD`). `AgencyType` có `MOBILE_POLICE` (CSCĐ) và `supports(level)`: POLICE xã+tỉnh, MOBILE_POLICE chỉ tỉnh, FIRE đội(WARD)+phòng(PROVINCE), HOSPITAL 1 cấp (PROVINCE).
+- Seeder chạy sau Flyway, theo thứ tự `ProvinceDataSeeder` (@Order 1, chỉ khi bảng trống) → `WardDataSeeder` (2, chỉ khi trống, bỏ qua xã không xác định được tỉnh) → `DataSeeder` (3). Seeder CHỈ ghi dữ liệu; đổi bảng/index hay sửa dữ liệu cũ một lần thì viết file Flyway (đã bỏ `migrateLegacyAgencies` và lệnh tạo index trong seeder, 18/10/2026).
+- `DataSeeder` mỗi lần khởi động: role; admin (`SEED_ADMIN_PASSWORD`, đồng bộ mật khẩu, luôn NATIONAL + không lực lượng, trụ sở Phường Hoàn Kiếm/Hà Nội nếu đang trống); 6 tài khoản test Cần Thơ từ `data/test_accounts.json` (`SEED_TEST_ACCOUNT_PASSWORD`, đồng bộ mật khẩu; `ward` bắt buộc theo tên, thiếu tỉnh/xã thì bỏ qua, `address` chỉ số nhà/đường); trạm cứu hộ từ `data/rescue_stations.json` chỉ nạp lại khi SHA-256 đổi (bảng `seed_versions`), upsert theo `code`, giữ id.
+- `GET /api/v1/admin/accounts/export`: Excel, cột mật khẩu chỉ có giá trị khi tài khoản còn dùng mật khẩu seed (DB chỉ có bcrypt).
+- Thêm giá trị enum mới: Hibernate không cập nhật CHECK cũ → thêm `DROP CONSTRAINT IF EXISTS` vào `schema.sql` (đã làm cho `agency_type`; `incidents.emergency_type/status` vẫn còn CHECK).
+- Media: `STORAGE_PROVIDER=local|r2`, R2 bucket private, xem qua link ký 10 phút.
+
+## Đã xong gần nhất (commit 15fb74b, chưa push)
+- `GET /api/v1/stations?province&agency&level` (công khai, gzip): thêm `level` (enum `StationLevel` NATIONAL/PROVINCE/WARD/ENTERPRISE), `officer`, `email`, `services`, `facility_type`; "Đang cập nhật" lưu null.
+- `AgencyType.CSGT` tách khỏi `TRAFFIC_RESCUE` (53 CSGT / 37 cứu hộ). File ghi các doanh nghiệp cứu hộ là `csgt` + `enterprise` → seeder đổi thành TRAFFIC_RESCUE trừ tên có "CSGT".
+- Seeder có `STATIONS_SEED_FORMAT` trộn vào checksum: đổi cột/mapping thì tăng số này để nạp lại.
+- `GET /api/v1/geo/data-status` (OFFICER/ADMIN) đọc `seed_versions` (thêm cột `version`, `checked_at`); `boundaries` chỉ có version sau lần bando sync đầu tiên (cron 6h hoặc ADMIN `sync-now`).
+- `GET /api/v1/weather/current?lat&lng` (OFFICER/ADMIN): Open-Meteo, cache 10 phút, lỗi → 503.
+- Trạm `st-caxansonbd` (CA Xã An Sơn, ghi tỉnh Bình Dương) đã xoá khỏi JSON (commit sau 15fb74b): trùng CA Phường Chánh Phú Hòa.
+
+## Đã xong (commit 1ff8697, đã push develop)
+- `AgencyType` chỉ còn POLICE, MOBILE_POLICE, FIRE, HOSPITAL (bỏ CSGT, TRAFFIC_RESCUE, MILITARY). Seeder: trạm `csgt`/`traffic-rescue` → POLICE (dữ liệu trạm user sẽ chuẩn hoá sau). Admin seed không còn agency.
+- Trạm dùng `StationLevel` (NATIONAL/PROVINCE/WARD/ENTERPRISE), tài khoản dùng `UnitLevel`. `STATIONS_SEED_FORMAT` = "4".
+- `GET /api/v1/stations` phân trang kiểu HIV-TMSS: `pageNo/pageSize/sortBy/sortDir` (mặc định `util/AppConstants`, pageSize tối đa 1000), lọc bằng `util/RescueStationSpecification` (`province` tìm chứa, không phân biệt hoa thường), trả `ListResponse { content, page_no, page_size, total_elements, total_pages, last }`. FE `getAllStations()` đọc trang 0 rồi các trang còn lại song song.
+- Enum `RoleName` (ADMIN/OFFICER/CITIZEN, kiểu HIV-TMSS có `role` + `description`) thay chuỗi trong DataSeeder, SecurityConfig, JwtTokenProvider, AccountServiceImpl, AuthenServiceImpl; xoá `UserRole` không dùng.
+
+## Module 5 — hàng đợi + phân luồng + nhận ca (xong 15/10/2026, CHƯA commit, chờ user test)
+- `AgencyType`: POLICE, CSGT (thay hẳn CSCĐ/MOBILE_POLICE; DataSeeder tự chuyển tài khoản cũ, test account `csgt.cantho@sos.vn`), FIRE, HOSPITAL. Field `intakeLevel` (cấp nhận ca) + `escalates`.
+- Phân luồng lúc tạo ca: `EmergencyType.agency` (TRAFFIC→CSGT). Công an → cấp xã nếu xã có ít nhất 1 tài khoản công an đang hoạt động, không thì tỉnh; CSGT/PCCC → thẳng cấp phòng (tỉnh), không leo thang; AMBULANCE → 400 (y tế không nhận ca); không biết tỉnh → NATIONAL (chỉ ADMIN). Cột `incidents.routed_agency/routed_level/escalate_at/escalated_at`.
+- Quyền xem/nhận: `util/IncidentAccess` (so tên tỉnh/xã bỏ dấu, bỏ "TP."). Xã thấy ca xuất phát ở xã (kể cả đã leo thang, chỉ theo dõi); tỉnh thấy mọi ca của lực lượng trong tỉnh, nhận ca cấp tỉnh; lực lượng khác không thấy nhau.
+- Nhận ca kiểu đặt xe: `POST /incidents/{id}/claim` (UPDATE có điều kiện, 409 nếu chậm chân), mỗi người 1 ca (index unique `ux_incidents_active_handler`), `POST /{id}/release` (trả hàng đợi hoặc `to_account_id` giao thẳng người cùng đơn vị đang rảnh), `GET /{id}/handover-candidates`. Bảng lịch sử `incident_claims`. Status mới `ACCEPTED`. `incidents.handler_id/claimed_at/accepted_at`.
+- `GET /incidents/queue` thay `/recent` (đã xoá). STOMP: JWT trong frame CONNECT (`StompAuthChannelInterceptor`), chỉ SUBSCRIBE `/user/queue/incidents`, tin `{event, incident}` gửi riêng từng người (`IncidentNotifier`), bỏ topic chung.
+- Leo thang: hẹn giờ từng ca (`incidentTaskScheduler`) + quét lại khi khởi động (ca quá hạn lúc BE tắt leo thang ngay); nhả ca thì đồng hồ tính tiếp từ lúc tạo. `app.incident.escalation-minutes=15`.
+- Đã test: 57 unit test, e2e 22/22 qua STOMP thật, leo thang 1' thật, giao diện trên browser.
+- Không có ca trực / lịch trực (bỏ 15/10/2026): mọi tài khoản công an của xã đều vào hàng đợi và nhận ca được. Giao diện dùng chữ "cán bộ"/"trực", không dùng "trực ban". CSGT/PCCC cấp xã (đội) vẫn lưu trong bảng trạm và tài khoản WARD, không nhận ca.
+- `GET /incidents/queue?pageNo&pageSize` trả `ListResponse` (pageSize mặc định 50, tối đa 100); FE đọc hết các trang.
+- Phân luồng bù (`routeUnroutedIncidents`, lúc khởi động + mỗi lần gọi queue): ca còn mở có `routed_agency` null (do BE bản cũ/`main` tạo) được phân luồng lại, hạn leo thang tính từ lúc tạo.
+- Múi giờ: `main()` đặt `TimeZone.setDefault(Asia/Ho_Chi_Minh)` như HIV-TMSS (Render chạy UTC, ghi chung DB với local). Ca tạo trước khi sửa (vd `SOS-20261016-B48870`) vẫn lệch 7 tiếng.
+- Làm sau: tự nhả sau 3' mất kết nối + giật ca.
+- Làm sau (video call): ghi âm và lưu lại video cuộc gọi.
+
+## Huỷ báo cáo (16/10/2026, CHƯA commit)
+- `POST /api/v1/incidents/{id}/cancel` (dân, header `X-SOS-Access-Token`, body tuỳ chọn `{ reason }`: MISTAKE/RESOLVED_SELF/CALLED_HOTLINE/OTHER): huỷ được khi ca còn mở (kể cả đã có người nhận), 409 nếu đã đóng; UPDATE có điều kiện, đóng lượt giữ ca (`ClaimEndReason.CLOSED`), báo hàng đợi `INCIDENT_REMOVED`. `GET /{id}/tracking` (dân) trả `IncidentTrackingResponse`.
+- Enum `CancelReason` (+ `NO_RESPONDER` chỉ hệ thống dùng). Cột `incidents.cancelled_at`, `cancel_reason`.
+- Lúc BE khởi động: ca PENDING chưa ai nhận, tạo quá `app.incident.auto-cancel-minutes=60` → CANCELLED lý do NO_RESPONDER (lần chạy đầu 16/10 huỷ 25 ca test).
+- Số điện thoại sai → 400 (`@Pattern` ở `CreateIncidentRequest`, handler `ConstraintViolationException`; lỗi validate có `message` gộp).
+
+## Video call (16/10/2026, CHƯA commit)
+- `GET /api/v1/calls/ice-servers` (cán bộ JWT, hoặc dân `X-SOS-Access-Token` + `?incident_id=`): STUN + TURN Cloudflare ngắn hạn (`CallServiceImpl`, cache tới gần hết `app.turn.ttl-seconds=3600`, bỏ URL cổng 53). Env `CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`; trống = chỉ STUN (`relay=false`).
+- STOMP cho dân: CONNECT với `X-SOS-Incident-Id` + `X-SOS-Access-Token` → `CitizenPrincipal` (tên `citizen:{id}`). Dân nhận trạng thái ca ở `/user/queue/incident` (IncidentNotifierImpl đẩy kèm mỗi sự kiện).
+- Tín hiệu gọi: client SEND `/app/calls` (`CallController` @MessageMapping, payload `CallSignalMessage`), server chuyển tiếp giữa dân và đúng cán bộ đang giữ ca qua `/user/queue/calls`, tự điền `from`/`peer_name`/`unit_name`; sai quyền / ca đóng → trả `reject`/`end` cho người gửi. Không lưu SDP/ICE. Giới hạn frame 256 KB.
+- `util/CitizenTokens` (sha256 + so khớp) dùng chung REST và STOMP.
+- Đã test: 85 unit test; gọi thật 2 trình duyệt Playwright (camera giả) qua BE 8081: đổ chuông, nghe, hình 2 chiều, cúp máy, dân gọi lại, cán bộ từ chối.
+
+## Status ca (đổi 16/10/2026, CHƯA commit)
+- `PENDING` → nhận ca → `VERIFYING` (xác minh, gọi điện đối chiếu thật/giả; thay ACCEPTED cũ) → cán bộ `POST /incidents/{id}/request-dispatch` → `RESOLVING` (điều động lực lượng, module sau) → `RESOLVED` (dân + cán bộ cùng xác nhận, module sau). `CANCELLED` như cũ. Đã bỏ ACCEPTED, DISPATCHED (`/dispatch` cũ giờ đặt RESOLVING).
+- `IncidentStatus.ACTIVE` = PENDING/VERIFYING/RESOLVING, `HELD` = VERIFYING/RESOLVING. Nhả ca chỉ lúc VERIFYING; giao ca cả VERIFYING và RESOLVING.
+- `POST /incidents/{id}/escalate` (chuyển ngay ca cấp xã đang có người giữ lên tỉnh → PENDING cấp tỉnh, bỏ người giữ, `ClaimEndReason.ESCALATED`): cán bộ giữ ca (VERIFYING hoặc RESOLVING), hoặc dân (citizen token) khi ca VERIFYING đã quá `escalate_at` (cán bộ nhận rồi treo máy); RESOLVING thì dân bị 409.
+- DataSeeder lúc khởi động: đổi ACCEPTED→VERIFYING, DISPATCHED→RESOLVING; tạo lại index `ux_incidents_active_handler` theo status mới.
+- Đã test: 93 unit test; API + giao diện thật trên 8081 (dân yêu cầu lên tỉnh khi quá hạn, cán bộ yêu cầu điều động, nút dân bị mờ khi RESOLVING).
+
+## Chuẩn hoá DB + Flyway (16/10/2026, CHƯA commit; ĐÃ chạy V2 lên DB chung lúc 17:32, backup trước đó: scratchpad `backup/before-v2-20261016.dump`)
+- Flyway: `src/main/resources/db/migration`. `V1__baseline.sql` = schema trước Flyway (pg_dump, tên bảng không ghi schema), `V2__normalize_schema.sql` = chuẩn hoá. `ddl-auto=validate`, `spring.sql.init.mode=never`, đã xoá `schema.sql`. DB cũ: `baseline-on-migrate` đánh dấu V1 rồi chạy V2. **Đổi entity = viết thêm file V3, V4...** (Hibernate không tự sửa bảng nữa).
+- V2: bỏ `accounts.is_dispatcher`, `incidents.assigned_dispatcher/audio_url/transcript/assigned_station_id/media`, `wards.province_name`; `wards.province_code` -> `province_id` (FK `provinces.code`); `accounts/incidents/rescue_stations` có `province_id` + `ward_id` (FK), bỏ cột tên tỉnh/xã (tên lấy qua FK). Trạm/ca gán xã theo toạ độ (ST_Contains), tài khoản theo tên, cấp tỉnh lấy xã trụ sở. `location` = generated column từ lat/lng (+ GiST).
+- Bảng mới: `incident_dispatches` (PK incident_id + station_id, ai/lúc nào/cấp nào điều động; `/dispatch` ghi vào đây) và `incident_media` (kind IMAGE/VIDEO/AUDIO/CALL_RECORDING, storage_key trên R2, sha256, uploaded_by).
+- Code: entity `@ManyToOne Province/Ward` (kiểu HIV-TMSS), `OfficerPrincipal` mang provinceId/wardId (+ tên để hiển thị), `IncidentAccess` so khoá, `DashboardRepository` lọc `province_id/ward_id`, `AreaNames` chỉ để so tên gõ từ ngoài (bộ lọc admin, seed). API vẫn trả tên `province`/`ward` + thêm `province_id`/`ward_id`.
+- Giao ca bắt buộc lý do (>= 5 ký tự, lưu `incident_claims.note`).
+- Đã thử: 94 unit test; chạy cả V1+V2 + validate + seeder + API chính trên schema tạm `mig_check` (đã xoá). Refresh token sẽ chuyển sang Redis (chưa làm).
+- Đang làm: DB local trên Postgres 16 (cổng 5432, có PostGIS), script `local-db/create-local-db.sql` (role `sos_dev`, DB `sos_vietnam_dev`; chạy bằng psql -W user postgres, pgpass.conf có mật khẩu postgres cũ sai).
+- BE `main` trên Render (code cũ) KHÔNG chạy được với schema mới: giữ tắt tới khi merge develop -> main.
+
+## Tạo tài khoản admin + mã tra cứu ca (18/10/2026, CHƯA commit)
+- `POST /api/v1/admin/accounts` (ADMIN, body `NewAccountRequest` kiểu `NewAccount` của HIV-TMSS): `role_name` OFFICER/ADMIN, OFFICER bắt buộc `agency_type` + `unit_level` hợp lệ (`AgencyType.supports`), ADMIN tự thành NATIONAL không lực lượng; `province_id` + `ward_id` bắt buộc (xã phải thuộc tỉnh; cấp tỉnh = xã đặt trụ sở); email trùng 409. Trả `AccountInfoResponse.from(account)`.
+- `accounts.address` chỉ giữ phần chi tiết (số nhà, đường); `Account.fullAddress()` = address + xã + tỉnh, API trả thêm `full_address`. `test_accounts.json` đã bỏ xã/tỉnh khỏi address.
+- FE: trang `/officer/accounts/new` (chỉ ADMIN, mở từ menu bánh răng "phân quyền & quản trị").
+- V3 `incidents.lookup_code` (8 ký tự bảng `util/LookupCodes`, bỏ 0/O/1/I/L, unique, hiển thị `XXXX-XXXX`): cấp lúc tạo ca, `/tracking` chỉ trả `lookup_code` khi RESOLVED. `POST /api/v1/incidents/lookup` (công khai, body `{ lookup_code, phone_last4 }`, không đưa SĐT lên URL) trả `IncidentLookupResponse` (không có id, SĐT, toạ độ, tên cán bộ); sai mã/sai SĐT cùng 404. Ca không có SĐT không tra cứu được. FE: màn chờ hiện mã khi hoàn tất, nút "Tra Cứu" ở dock trang dân.
+- `GET /api/v1/incidents/history?days&q&agency&pageNo&pageSize` (OFFICER/ADMIN): ca đã đóng (RESOLVED/CANCELLED) cùng phạm vi xem với hàng đợi (`IncidentAccess.canView`), mới nhất trước, `days` 1-90 (mặc định 7), `q` tìm mã/tên/SĐT/địa chỉ/xã không dấu, `agency` chỉ ADMIN; trả `IncidentHistoryResponse` (handler_name = lượt nhận ca cuối, dispatch_count, closed_at). `GET /incidents/queue` thêm `days` (tuỳ chọn). FE: cửa sổ Hàng đợi / Lịch sử có lọc 1/7/30 ngày + phân trang 4 ca (hàng đợi lọc/chia trang ở FE vì là danh sách sống qua STOMP), thanh ô bấm có nút ⌃/⌄ ẩn hiện.
+- V3 đã có trên DB chung (applied 18/10 14:05). Đã test: 107 unit test; API + giao diện thật trên 8081 (ca test `SHJV-MW3P` đặt RESOLVED bằng SQL vì chưa có module đóng ca; tài khoản test `test.taotk.1792306996903@sos.vn`).
+
+## Chi tiết ca + trạng thái cán bộ (18/10/2026)
+- `GET /api/v1/incidents/{id}` (OFFICER/ADMIN, cùng phạm vi hàng đợi, ngoài phạm vi 403): `IncidentDetailResponse` (media url, điều động, lịch sử nhận/giao ca). V4: `incidents.incident_tag` text (1 nhãn), API vẫn trả `incident_tags` mảng 0-1. Queue trả thêm `image_count`/`video_count`.
+- `GET /api/v1/officers/status` (OFFICER: cùng đơn vị theo `IncidentAccess.sameUnit`, kể cả mình; ADMIN: mọi OFFICER đang hoạt động): `online` = đang có kết nối STOMP (`IncidentNotifier.onlineEmails`, chỉ đúng khi 1 instance BE), `busy` + `held_incident` = đang giữ ca. Chưa có `last_seen_at`.
+- FE: nút "Cán bộ" ở thanh trái mở cửa sổ danh sách cán bộ; đang giữ ca thì giao ca cho người trực tuyến + rảnh (lý do >= 5 ký tự, dùng `/release` với `to_account_id`).
+
+## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
+1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
+2. ~~Dashboard "Thống Kê"~~ (xong 15/10/2026, CHƯA commit): `GET /api/v1/dashboard/summary?from&to` (ADMIN thêm `province`, `agency`), phạm vi giống quyền xem hàng đợi. SQL gộp nhóm trong `repository/DashboardRepository` (NamedParameterJdbcTemplate; so tỉnh/xã bằng unaccent + bỏ "TP."; đổi giờ server → giờ VN qua `:serverZone`). `fake_alarm_count`/`resolved_count` = null tới khi có module đóng ca. `by_day` có `accepted` + `within_sla_rate` (biểu đồ tỷ lệ nhận 15' theo ngày, admin). `by_agency` (cấp tỉnh + toàn quốc) đếm MỌI lực lượng trong địa bàn cho biểu đồ tròn "Tỷ trọng" (tỉnh: Lực lượng / Xã-phường; admin: Tỉnh / Lực lượng; cấp xã không có). Không làm `/dashboard/escalating` (FE lấy từ `/incidents/queue`). FE: trang `/officer/statistics`, mở bằng nút "Thống kê" trên bản đồ (bỏ thanh thống kê cũ). Xuất Excel làm sau.
+3. Tiếp theo: module chi tiết ca + đóng ca (hoàn tất / báo khống), rồi chỉ đường, biên bản.
+
+## Lưu ý / lỗi đã gặp
+- Extension Java của Antigravity tự biên dịch vào `target/classes` (ecj) → class hỏng "Unresolved compilation problems / Flexible Constructor Bodies" khi devtools restart. Test ổn định: `mvn clean package -DskipTests`, chép jar ra chỗ khác, chạy `"$JAVA_HOME/bin/java" -jar ...` (java trên PATH bị hỏng, dùng JDK 21 trong JAVA_HOME).
+- CORS: danh sách origin ở `app.cors.allowed-origins` (env `CORS_ALLOWED_ORIGINS`), mặc định `localhost:5173`, `3000`, `127.0.0.1:*`, `https://sos-vietnam-fe-latest.onrender.com`. Origin lạ → REST và bắt tay WebSocket đều 403 (vd FE dev chạy cổng 5174). FE prod qua nginx đã xoá header Origin nên không phụ thuộc danh sách này.
+- **BE prod trên Render (nhánh `main`) dùng chung DB với local**: seeder cũ của `main` mỗi lần khởi động (free tier ngủ rồi thức) thấy count 3714 ≠ 3717 → truncate + nạp lại định dạng cũ (level null, `TRAFFIC_RESCUE`, code null) mà không sửa `seed_versions` → local tưởng đã nạp, lọc `level` ra rỗng. Chữa tạm: `delete from seed_versions where name='rescue_stations'` rồi restart BE local. Hết hẳn khi `main` có seeder mới.
+- `unaccent` đã bật trên DB Render (schema.sql cũng `CREATE EXTENSION IF NOT EXISTS unaccent`).
+- `.env` trỏ **DB Postgres trên Render**; chạy local là seeder ghi vào DB đó (user đồng ý). psql: `C:\Program Files\PostgreSQL\18\bin\psql.exe`, cần `PGSSLMODE=require`.
+- Port 8080 thường là BE user đang chạy → test bằng `SERVER_PORT=8081`, đừng kill tiến trình của user. Tắt bản test thì tắt cả tiến trình java con lẫn mvn cha (devtools tự restart khi build lại).
+- **Không chạy `mvn clean/test/package` trong repo này** khi user đang chạy BE 8080 (`mvn spring-boot:run` + devtools đọc `target/` của repo → bị restart/hỏng). Chép `src` + `pom.xml` + `.env` sang thư mục scratchpad rồi build/test/chạy 8081 từ bản sao.
+- `Unresolved compilation problems` khi chạy = IDE build hỏng `target/` → `mvn clean`.
+- `Unable to establish loopback connection` (HttpClient) trong môi trường của Claude → thêm `-Dspring-boot.run.jvmArguments=-Djdk.net.unixdomain.tmpdir=C:/Users/Public/jdk-uds`.
+- Không đưa mật khẩu/secret vào code, test, commit hay chat.

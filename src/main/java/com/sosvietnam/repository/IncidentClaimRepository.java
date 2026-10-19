@@ -15,4 +15,7 @@ public interface IncidentClaimRepository extends JpaRepository<IncidentClaim, Lo
 
     /** Lượt nhận ca gần nhất (cán bộ xử lý cuối cùng, cho lịch sử). */
     Optional<IncidentClaim> findFirstByIncident_IdOrderByClaimedAtDesc(String incidentId);
+
+    /** Toàn bộ lượt giữ ca, cũ trước (hộp chi tiết ca). */
+    java.util.List<IncidentClaim> findByIncident_IdOrderByClaimedAtAsc(String incidentId);
 }
