@@ -19,7 +19,8 @@ public interface IncidentMediaRepository extends JpaRepository<IncidentMedia, Lo
 
     long countByIncident_Id(String incidentId);
 
-    /** Số file của nhiều ca một lúc (hàng đợi): [incidentId, count]. */
-    @Query("SELECT m.incident.id, count(m) FROM IncidentMedia m WHERE m.incident.id IN :ids GROUP BY m.incident.id")
-    List<Object[]> countByIncidentIds(@Param("ids") Collection<String> ids);
+    /** Số file theo loại của nhiều ca một lúc (hàng đợi): [incidentId, kind, count]. */
+    @Query("SELECT m.incident.id, m.kind, count(m) FROM IncidentMedia m WHERE m.incident.id IN :ids "
+            + "GROUP BY m.incident.id, m.kind")
+    List<Object[]> countByIncidentIdsAndKind(@Param("ids") Collection<String> ids);
 }

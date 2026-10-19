@@ -72,6 +72,14 @@ public class IncidentQueueResponse {
     @JsonProperty("media_count")
     private int mediaCount;
 
+    /** Ảnh hiện trường (thẻ ca hiện biểu tượng ảnh + số lượng). */
+    @JsonProperty("image_count")
+    private int imageCount;
+
+    /** Video hiện trường (biểu tượng máy quay). */
+    @JsonProperty("video_count")
+    private int videoCount;
+
     @JsonProperty("created_at")
     private OffsetDateTime createdAt;
 
@@ -103,8 +111,13 @@ public class IncidentQueueResponse {
         private String fullName;
     }
 
+    /** Số file đính kèm của một ca: tổng và theo loại. */
+    public record MediaCounts(int total, int images, int videos) {
+        public static final MediaCounts NONE = new MediaCounts(0, 0, 0);
+    }
+
     public static IncidentQueueResponse from(Incident i, Handler handler, boolean heldByMe, boolean canHandle,
-                                             int mediaCount) {
+                                             MediaCounts media) {
         return IncidentQueueResponse.builder()
                 .id(i.getId())
                 .emergencyType(i.getEmergencyType())
@@ -120,7 +133,9 @@ public class IncidentQueueResponse {
                 .description(i.getDescription())
                 .citizenName(i.getCitizenName())
                 .phone(i.getPhone())
-                .mediaCount(mediaCount)
+                .mediaCount(media.total())
+                .imageCount(media.images())
+                .videoCount(media.videos())
                 .createdAt(withZone(i.getCreatedAt()))
                 .escalateAt(withZone(i.getEscalateAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))

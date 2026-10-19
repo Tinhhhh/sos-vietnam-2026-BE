@@ -63,7 +63,8 @@ public class IncidentNotifierImpl implements IncidentNotifier {
             Incident incident = incidentRepository.findById(incidentId).orElse(null);
             if (incident == null) return;
             String handlerName = handlerNames(List.of(incident)).get(incident.getHandlerId());
-            int mediaCount = (int) incidentMediaRepository.countByIncident_Id(incident.getId());
+            IncidentQueueResponse.MediaCounts mediaCount = mediaCounts(List.of(incident))
+                    .getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
             for (SimpUser user : userRegistry.getUsers()) {
                 if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
                 if (!IncidentAccess.canView(viewer, incident)) continue;
@@ -88,14 +89,15 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     @Override
     public List<IncidentQueueResponse> toQueueViews(Collection<Incident> incidents, OfficerPrincipal viewer) {
         Map<UUID, String> names = handlerNames(incidents);
-        Map<String, Integer> media = mediaCounts(incidents);
+        Map<String, IncidentQueueResponse.MediaCounts> media = mediaCounts(incidents);
         return incidents.stream()
-                .map(i -> toView(i, viewer, names.get(i.getHandlerId()), media.getOrDefault(i.getId(), 0)))
+                .map(i -> toView(i, viewer, names.get(i.getHandlerId()),
+                        media.getOrDefault(i.getId(), IncidentQueueResponse.MediaCounts.NONE)))
                 .toList();
     }
 
     private static IncidentQueueResponse toView(Incident incident, OfficerPrincipal viewer, String handlerName,
-                                                int mediaCount) {
+                                                IncidentQueueResponse.MediaCounts mediaCount) {
         IncidentQueueResponse.Handler handler = incident.getHandlerId() == null ? null
                 : new IncidentQueueResponse.Handler(incident.getHandlerId(), handlerName);
         boolean heldByMe = incident.getHandlerId() != null && incident.getHandlerId().equals(viewer.accountId());
@@ -103,13 +105,20 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                 mediaCount);
     }
 
-    /** Số ảnh/video của nhiều ca trong 1 truy vấn (hàng đợi hiển thị "n tệp"). */
-    private Map<String, Integer> mediaCounts(Collection<Incident> incidents) {
-        Map<String, Integer> counts = new HashMap<>();
-        if (incidents.isEmpty()) return counts;
-        for (Object[] row : incidentMediaRepository.countByIncidentIds(incidents.stream().map(Incident::getId).toList())) {
-            counts.put((String) row[0], ((Number) row[1]).intValue());
+    /** Số ảnh / video của nhiều ca trong 1 truy vấn (thẻ ca hiện biểu tượng ảnh, máy quay + số lượng). */
+    private Map<String, IncidentQueueResponse.MediaCounts> mediaCounts(Collection<Incident> incidents) {
+        Map<String, int[]> raw = new HashMap<>(); // [total, images, videos]
+        if (incidents.isEmpty()) return new HashMap<>();
+        for (Object[] row : incidentMediaRepository.countByIncidentIdsAndKind(
+                incidents.stream().map(Incident::getId).toList())) {
+            int[] c = raw.computeIfAbsent((String) row[0], k -> new int[3]);
+            int n = ((Number) row[2]).intValue();
+            c[0] += n;
+            if (row[1] == com.sosvietnam.model.payload.enums.MediaKind.IMAGE) c[1] += n;
+            if (row[1] == com.sosvietnam.model.payload.enums.MediaKind.VIDEO) c[2] += n;
         }
+        Map<String, IncidentQueueResponse.MediaCounts> counts = new HashMap<>();
+        raw.forEach((id, c) -> counts.put(id, new IncidentQueueResponse.MediaCounts(c[0], c[1], c[2])));
         return counts;
     }
 

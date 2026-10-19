@@ -70,7 +70,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/incidents/queue", "/api/v1/incidents/history", "/api/v1/incidents/*", "/api/v1/incidents/*/handover-candidates")
                                 .hasAnyAuthority(STAFF)
                         // thống kê của cán bộ (phạm vi lấy từ tài khoản)
-                        .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/**").hasAnyAuthority(STAFF)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/**", "/api/v1/officers/**").hasAnyAuthority(STAFF)
                         .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch", "/api/v1/incidents/*/claim",
                                 "/api/v1/incidents/*/release", "/api/v1/incidents/*/request-dispatch").hasAnyAuthority(STAFF)
 
