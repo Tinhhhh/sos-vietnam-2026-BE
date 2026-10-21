@@ -3,6 +3,7 @@ package com.sosvietnam.model.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.CancelReason;
+import com.sosvietnam.model.payload.enums.DestinationSource;
 import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.UnitLevel;
@@ -120,6 +121,35 @@ public class Incident {
     // Lần nhận ca đầu tiên (thời gian nhận ca trên dashboard), không đổi khi nhả / giao lại
     @Column(name = "accepted_at")
     private LocalDateTime acceptedAt;
+
+    // ---- Điều động ----
+    // Điểm đến hiện hành của lực lượng: mặc định = GPS người dân (latitude/longitude giữ nguyên để đối chiếu),
+    // cán bộ sửa khi GPS lệch hoặc dân cho thêm địa chỉ
+    @Column(name = "dest_latitude")
+    private Double destLatitude;
+
+    @Column(name = "dest_longitude")
+    private Double destLongitude;
+
+    @Column(name = "dest_address", length = 500)
+    private String destAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dest_source", length = 20)
+    private DestinationSource destSource;
+
+    @Column(name = "dest_updated_by")
+    private UUID destUpdatedBy;
+
+    // Hai bên cùng xác nhận đã xử lý xong thì mới RESOLVED
+    @Column(name = "officer_confirmed_at")
+    private LocalDateTime officerConfirmedAt;
+
+    @Column(name = "officer_confirmed_by")
+    private UUID officerConfirmedBy;
+
+    @Column(name = "citizen_confirmed_at")
+    private LocalDateTime citizenConfirmedAt;
 
     // ---- Huỷ ca ----
     // Người dân tự huỷ, hoặc hệ thống huỷ ca chờ quá lâu (status = CANCELLED)

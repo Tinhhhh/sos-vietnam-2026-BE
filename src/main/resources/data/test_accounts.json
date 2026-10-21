@@ -1,10 +1,20 @@
 {
-  "description": "Tài khoản cán bộ để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An). province / ward là tên trong bảng provinces / wards (seeder đổi sang province_id / ward_id); cấp tỉnh ghi xã nơi đặt trụ sở. Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
+  "description": "Tài khoản cán bộ để test, mỗi cấp của mỗi lực lượng 1 tài khoản (TP. Cần Thơ / Phường Tân An), riêng Công an Phường Tân An có 3 tài khoản và Phường Ninh Kiều 2 tài khoản để thử giao ca / uỷ quyền. province / ward là tên trong bảng provinces / wards (seeder đổi sang province_id / ward_id); cấp tỉnh ghi xã nơi đặt trụ sở. Không chứa mật khẩu: tất cả dùng SEED_TEST_ACCOUNT_PASSWORD trong .env; để trống thì không nạp file này.",
   "accounts": [
     {
       "email": "congan.cantho@sos.vn",
       "last_name": "Cán Bộ",
       "first_name": "Công An TP. Cần Thơ",
+      "agency_type": "POLICE",
+      "unit_level": "PROVINCE",
+      "province": "Cần Thơ",
+      "ward": "Phường Cái Khế",
+      "address": "Số 9A Trần Phú"
+    },
+    {
+      "email": "congan.cantho2@sos.vn",
+      "last_name": "Võ Thành",
+      "first_name": "Long",
       "agency_type": "POLICE",
       "unit_level": "PROVINCE",
       "province": "Cần Thơ",
@@ -20,6 +30,46 @@
       "province": "Cần Thơ",
       "ward": "Phường Tân An",
       "address": "02 Nguyễn Tri Phương, Kv.10"
+    },
+    {
+      "email": "congan.tanan2@sos.vn",
+      "last_name": "Trần Minh",
+      "first_name": "Khoa",
+      "agency_type": "POLICE",
+      "unit_level": "WARD",
+      "province": "Cần Thơ",
+      "ward": "Phường Tân An",
+      "address": "02 Nguyễn Tri Phương, Kv.10"
+    },
+    {
+      "email": "congan.tanan3@sos.vn",
+      "last_name": "Lê Thu",
+      "first_name": "Hà",
+      "agency_type": "POLICE",
+      "unit_level": "WARD",
+      "province": "Cần Thơ",
+      "ward": "Phường Tân An",
+      "address": "02 Nguyễn Tri Phương, Kv.10"
+    },
+    {
+      "email": "congan.ninhkieu@sos.vn",
+      "last_name": "Phạm Văn",
+      "first_name": "Nam",
+      "agency_type": "POLICE",
+      "unit_level": "WARD",
+      "province": "Cần Thơ",
+      "ward": "Phường Ninh Kiều",
+      "address": "Số 1 Đại lộ Hoà Bình"
+    },
+    {
+      "email": "congan.ninhkieu2@sos.vn",
+      "last_name": "Đỗ Thị",
+      "first_name": "Lan",
+      "agency_type": "POLICE",
+      "unit_level": "WARD",
+      "province": "Cần Thơ",
+      "ward": "Phường Ninh Kiều",
+      "address": "Số 1 Đại lộ Hoà Bình"
     },
     {
       "email": "csgt.cantho@sos.vn",

@@ -3,6 +3,7 @@ package com.sosvietnam.controller;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.CancelIncidentRequest;
+import com.sosvietnam.model.payload.request.OfficerCancelRequest;
 import com.sosvietnam.model.payload.request.CreateIncidentRequest;
 import com.sosvietnam.model.payload.request.DispatchRequest;
 import com.sosvietnam.model.payload.request.IncidentLookupRequest;
@@ -185,6 +186,15 @@ public class IncidentController {
             @Valid @RequestBody(required = false) CancelIncidentRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã huỷ tin báo SOS",
                 incidentService.cancelByCitizen(id, citizenAccessToken, request));
+    }
+
+    @Operation(summary = "The officer holding the incident cancels it (any step), with a reason (5-255)",
+            description = "Status -> CANCELLED (reason OFFICER_CANCELLED, text kept on the claim). Role required: OFFICER, ADMIN")
+    @PostMapping("/{id}/officer-cancel")
+    public ResponseEntity<Object> cancelByOfficer(@PathVariable("id") String id,
+                                                  @Valid @RequestBody OfficerCancelRequest request) {
+        incidentService.cancelByOfficer(id, request.getReason());
+        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã huỷ ca");
     }
 
     @Operation(summary = "Download an attached photo/video",

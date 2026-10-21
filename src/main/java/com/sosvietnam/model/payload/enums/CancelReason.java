@@ -4,7 +4,8 @@ import lombok.Getter;
 
 /**
  * Lý do một tin báo SOS bị huỷ. Người dân chọn 4 lý do đầu (không bắt buộc);
- * NO_RESPONDER chỉ hệ thống đặt khi ca chờ quá lâu mà không ai tiếp nhận.
+ * NO_RESPONDER chỉ hệ thống đặt khi ca chờ quá lâu mà không ai tiếp nhận; OFFICER_CANCELLED khi cán bộ giữ ca huỷ
+ * (lý do ghi ở incident_claims.note).
  */
 @Getter
 public enum CancelReason {
@@ -12,7 +13,8 @@ public enum CancelReason {
     RESOLVED_SELF("Sự việc đã ổn", true),
     CALLED_HOTLINE("Đã gọi 113 / 114", true),
     OTHER("Lý do khác", true),
-    NO_RESPONDER("Quá lâu không có cán bộ tiếp nhận, hệ thống tự huỷ", false);
+    NO_RESPONDER("Quá lâu không có cán bộ tiếp nhận, hệ thống tự huỷ", false),
+    OFFICER_CANCELLED("Cán bộ huỷ ca", false);
 
     private final String label;
     /** Người dân được chọn lý do này khi tự huỷ. */

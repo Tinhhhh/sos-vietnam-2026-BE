@@ -16,4 +16,7 @@ public class CreateIncidentResponse {
     private IncidentResponse incident;
     @JsonProperty("citizen_access_token")
     private String citizenAccessToken;
+    /** true: số điện thoại đang có SOS mở, BE trả lại ca đó (token mới) thay vì tạo ca mới */
+    @JsonProperty("resumed")
+    private boolean resumed;
 }

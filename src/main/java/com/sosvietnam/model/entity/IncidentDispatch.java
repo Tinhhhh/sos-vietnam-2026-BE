@@ -1,17 +1,17 @@
 package com.sosvietnam.model.entity;
 
+import com.sosvietnam.model.payload.enums.DispatchRole;
+import com.sosvietnam.model.payload.enums.DispatchStatus;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 /**
- * Lượt điều động: một trạm / lực lượng (rescue_stations) được điều tới tham gia xử lý một ca.
- * Quan hệ n-n: 1 ca có nhiều trạm (vd xã điều rồi tỉnh điều thêm khi chuyển lên tỉnh), 1 trạm tham gia nhiều ca.
- * Khoá chính là cặp (incident_id, station_id).
+ * Lượt điều động: một trạm / lực lượng (rescue_stations) được cử tới xử lý một ca.
+ * Mỗi ca có tối đa 1 lượt PRIMARY đang hoạt động (index ux_incident_dispatches_primary), thêm lượt SUPPORT nếu cần.
+ * Tuyến đường của lượt ở incident_routes, vị trí xe ở incident_route_positions.
  */
 @Entity
 @Table(name = "incident_dispatches")
@@ -22,28 +22,41 @@ import java.util.Objects;
 @Builder
 public class IncidentDispatch {
 
-    @EmbeddedId
-    private Key id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @MapsId("incidentId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "incident_id")
+    @JoinColumn(name = "incident_id", nullable = false)
     private Incident incident;
 
-    @MapsId("stationId")
     @ManyToOne(optional = false)
-    @JoinColumn(name = "station_id")
+    @JoinColumn(name = "station_id", nullable = false)
     private RescueStation station;
 
     // Cán bộ ra lệnh điều động; null với dữ liệu cũ
-    @ManyToOne(fetch = FetchType.LAZY)
+    // EAGER: thẻ hàng đợi (đẩy qua STOMP ngoài transaction) cần tên người giao / người nhận
+    @ManyToOne
     @JoinColumn(name = "dispatched_by")
     private Account dispatchedBy;
 
-    // Cấp ra lệnh (xã / tỉnh)
+    // Cấp của người ra lệnh (bên giao việc)
     @Enumerated(EnumType.STRING)
     @Column(name = "unit_level", length = 20)
     private UnitLevel unitLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", length = 20, nullable = false)
+    private DispatchRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    private DispatchStatus status;
+
+    // Cán bộ của đơn vị được uỷ quyền (bên nhận việc); null = chính đơn vị ra lệnh đi
+    @ManyToOne
+    @JoinColumn(name = "assigned_to")
+    private Account assignedTo;
 
     @Column(length = 500)
     private String note;
@@ -51,26 +64,18 @@ public class IncidentDispatch {
     @Column(name = "dispatched_at", nullable = false)
     private LocalDateTime dispatchedAt;
 
-    @Embeddable
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class Key implements Serializable {
-        @Column(name = "incident_id", length = 50)
-        private String incidentId;
+    @Column(name = "responded_at")
+    private LocalDateTime respondedAt;
 
-        @Column(name = "station_id")
-        private Long stationId;
+    @Column(name = "reject_reason", length = 255)
+    private String rejectReason;
 
-        @Override
-        public boolean equals(Object o) {
-            return o instanceof Key k && Objects.equals(incidentId, k.incidentId) && Objects.equals(stationId, k.stationId);
-        }
+    @Column(name = "departed_at")
+    private LocalDateTime departedAt;
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(incidentId, stationId);
-        }
-    }
+    @Column(name = "arrived_at")
+    private LocalDateTime arrivedAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

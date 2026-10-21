@@ -15,6 +15,9 @@ public interface IncidentNotifier {
     /** Gửi ngay; nếu đang trong transaction thì đợi commit xong mới gửi (để không báo một thay đổi bị rollback). */
     void notify(String incidentId, IncidentEvent event);
 
+    /** Chỉ báo màn theo dõi của người báo tin (vd văn bản báo cáo vừa được lập / ký), không đụng hàng đợi cán bộ. */
+    void notifyCitizen(String incidentId);
+
     /** Email các trực ban đang kết nối màn hình trực ban. */
     Set<String> onlineEmails();
 

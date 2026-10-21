@@ -1,5 +1,6 @@
 package com.sosvietnam.service;
 
+import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.payload.response.OfficerStatusResponse;
 
 import java.util.List;
@@ -12,4 +13,7 @@ public interface OfficerService {
      * ADMIN: mọi cán bộ đang hoạt động. Sắp xếp: trực tuyến & rảnh trước, rồi đang giữ ca, rồi ngoại tuyến.
      */
     List<OfficerStatusResponse> getUnitOfficers();
+
+    /** Trạng thái (trực tuyến, đang giữ ca) của một danh sách cán bộ, cùng thứ tự sắp xếp như trên. */
+    List<OfficerStatusResponse> describe(List<Account> officers);
 }

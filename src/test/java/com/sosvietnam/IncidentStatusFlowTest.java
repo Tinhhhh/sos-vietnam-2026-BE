@@ -1,5 +1,6 @@
 package com.sosvietnam;
 
+import com.sosvietnam.model.payload.enums.CancelReason;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.entity.IncidentClaim;
@@ -47,8 +48,11 @@ class IncidentStatusFlowTest {
     final IncidentClaimRepository claimRepo = mock(IncidentClaimRepository.class);
     final AccountRepository accountRepo = mock(AccountRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
+    final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo,
-            mock(GeoService.class), mock(MediaStorageService.class), notifier, mock(IncidentEscalationService.class));
+            mock(GeoService.class), mock(MediaStorageService.class), notifier, escalation,
+            mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
 
     final Account officer = Account.builder().id(UUID.randomUUID()).email("congan.tanan@sos.vn").firstName("Cán")
             .lastName("Bộ").role(Role.builder().id(2L).roleName("OFFICER").build()).agencyType(AgencyType.POLICE)
@@ -137,6 +141,42 @@ class IncidentStatusFlowTest {
 
         verify(incidentRepo).escalateHeld(eq("SOS-1"), eq(officer.getId()), eq(Set.of(IncidentStatus.VERIFYING)), any());
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_ESCALATED);
+    }
+
+    @Test
+    void citizen_escalates_pendingIncidentNobodyTookPastDeadline() {
+        incident.setStatus(IncidentStatus.PENDING);
+        incident.setHandlerId(null);
+        incident.setEscalateAt(LocalDateTime.now().minusMinutes(1));
+        when(escalation.escalateIfDue("SOS-1")).thenReturn(true);
+
+        service.escalateNow("SOS-1", "tok");
+
+        verify(escalation).escalateIfDue("SOS-1");
+        verify(incidentRepo, never()).escalateHeld(any(), any(), any(), any());
+    }
+
+    @Test
+    void officerCancels_heldIncident_anyStep_closesClaimWithReason() {
+        loginAsOfficer();
+        IncidentClaim claim = IncidentClaim.builder().claimedAt(LocalDateTime.now().minusMinutes(3)).build();
+        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
+                .thenReturn(Optional.of(claim));
+        when(incidentRepo.cancel(eq("SOS-1"), eq(CancelReason.OFFICER_CANCELLED), eq(IncidentStatus.HELD), any())).thenReturn(1);
+
+        service.cancelByOfficer("SOS-1", "Người báo xác nhận báo nhầm");
+
+        assertThat(claim.getEndReason()).isEqualTo(ClaimEndReason.CLOSED);
+        assertThat(claim.getNote()).contains("báo nhầm");
+        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
+    }
+
+    @Test
+    void officerCancel_notHolder_isForbidden() {
+        loginAsOfficer();
+        incident.setHandlerId(UUID.randomUUID());
+        assertThatThrownBy(() -> service.cancelByOfficer("SOS-1", "Lý do bất kỳ"))
+                .isInstanceOf(SosException.class).extracting("httpStatus").isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test

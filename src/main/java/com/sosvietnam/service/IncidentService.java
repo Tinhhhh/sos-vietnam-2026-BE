@@ -60,6 +60,10 @@ public interface IncidentService {
     /** Người dân tra cứu lại ca bằng mã tra cứu + 4 số cuối SĐT đã báo. */
     IncidentLookupResponse lookup(IncidentLookupRequest request);
 
+
+    /** Cán bộ đang giữ ca huỷ ca ở bất kỳ bước nào (xác minh, điều động), kèm lý do. */
+    void cancelByOfficer(String id, String reason);
+
     /** Người báo tin tự huỷ ca còn mở (kể cả khi đã có cán bộ nhận). */
     IncidentTrackingResponse cancelByCitizen(String id, String citizenAccessToken, CancelIncidentRequest request);
 

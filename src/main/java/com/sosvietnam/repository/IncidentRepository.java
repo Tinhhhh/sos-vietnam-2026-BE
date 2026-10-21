@@ -39,6 +39,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
 
     List<Incident> findByHandlerIdInAndStatusIn(Collection<UUID> handlerIds, Collection<IncidentStatus> statuses);
 
+    /** Ca còn mở theo tên người báo (ca test [DEMO] của DemoIncidentSeeder). */
+    List<Incident> findByCitizenNameInAndStatusIn(Collection<String> names, Collection<IncidentStatus> statuses);
+
     /** Ca Công an cấp xã còn chờ, chưa leo thang: hẹn giờ lại khi BE khởi động. */
     @Query("""
         SELECT i FROM Incident i
@@ -130,6 +133,9 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     int escalate(@Param("id") String id, @Param("now") LocalDateTime now);
 
     Optional<Incident> findByLookupCode(String lookupCode);
+
+    /** Ca còn mở của 1 số điện thoại (chặn gửi trùng + người dân quay lại ca đang mở), mới nhất trước */
+    List<Incident> findByPhoneAndStatusInOrderByCreatedAtDesc(String phone, Collection<IncidentStatus> statuses);
 
     boolean existsByLookupCode(String lookupCode);
 }

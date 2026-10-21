@@ -44,7 +44,16 @@ public class OfficerServiceImpl implements OfficerService {
                 : accountRepository.findActiveOfficers(me.agency(), me.level()).stream()
                         .filter(a -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(a)))
                         .toList();
+        return describe(officers, me);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<OfficerStatusResponse> describe(List<Account> officers) {
+        return describe(officers, currentOfficer());
+    }
+
+    private List<OfficerStatusResponse> describe(List<Account> officers, OfficerPrincipal me) {
         Map<UUID, Incident> held = officers.isEmpty() ? Map.of()
                 : incidentRepository.findByHandlerIdInAndStatusIn(
                                 officers.stream().map(Account::getId).toList(), IncidentStatus.ACTIVE).stream()
