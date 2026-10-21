@@ -95,6 +95,37 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     }
 
     @Override
+    public void notifyRemovedFor(String incidentId, com.sosvietnam.model.payload.enums.AgencyType previousAgency) {
+        Runnable push = () -> {
+            try {
+                Incident incident = incidentRepository.findById(incidentId).orElse(null);
+                if (incident == null) return;
+                String handlerName = handlerNames(List.of(incident)).get(incident.getHandlerId());
+                IncidentQueueResponse.MediaCounts mediaCount = mediaCounts(List.of(incident))
+                        .getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
+                for (SimpUser user : userRegistry.getUsers()) {
+                    if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
+                    if (viewer.agency() != previousAgency || IncidentAccess.canView(viewer, incident)) continue;
+                    messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION, new IncidentEventMessage(
+                            IncidentEvent.INCIDENT_REMOVED, toView(incident, viewer, handlerName, mediaCount, null)));
+                }
+            } catch (Exception e) {
+                log.warn("Could not push removal of incident {}: {}", incidentId, e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    push.run();
+                }
+            });
+        } else {
+            push.run();
+        }
+    }
+
+    @Override
     public void notifyCitizen(String incidentId) {
         Runnable push = () -> {
             try {

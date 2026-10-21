@@ -8,7 +8,9 @@ public enum ClaimEndReason {
     RELEASED("Trả về hàng đợi chung"),
     HANDED_OVER("Giao cho cán bộ khác"),
     ESCALATED("Chuyển lên cấp tỉnh"),
-    CLOSED("Ca đã kết thúc");
+    CLOSED("Ca đã kết thúc"),
+    AUTO_RELEASED("Tự trả về hàng đợi (cán bộ mất kết nối)"),
+    TRANSFERRED("Chuyển sang lực lượng khác");
 
     private final String label;
 

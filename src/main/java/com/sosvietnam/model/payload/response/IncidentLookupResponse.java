@@ -104,6 +104,13 @@ public class IncidentLookupResponse {
     @JsonProperty("escalated_at")
     private OffsetDateTime escalatedAt;
 
+    /** Vì sao chuyển lên tỉnh: NO_RESPONSE_TIMEOUT / CITIZEN_REQUEST / OFFICER_REQUEST (V9) */
+    @JsonProperty("escalation_reason")
+    private com.sosvietnam.model.payload.enums.EscalationReason escalationReason;
+
+    @JsonProperty("escalation_reason_label")
+    private String escalationReasonLabel;
+
     @JsonProperty("cancelled_at")
     private OffsetDateTime cancelledAt;
 
@@ -236,6 +243,8 @@ public class IncidentLookupResponse {
                 .createdAt(withZone(i.getCreatedAt()))
                 .acceptedAt(withZone(i.getAcceptedAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))
+                .escalationReason(i.getEscalationReason())
+                .escalationReasonLabel(i.getEscalationReason() == null ? null : i.getEscalationReason().getLabel())
                 .cancelledAt(withZone(i.getCancelledAt()))
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())
                 .dispatches(dispatches.stream().map(d -> {

@@ -148,13 +148,15 @@ public class IncidentController {
     @Operation(summary = "Move a ward incident up to the province right now",
             description = "Officer holding it (JWT; VERIFYING or RESOLVING), or the citizen (header X-SOS-Access-Token) "
                     + "once the incident is VERIFYING past its 15-minute deadline. The incident goes back to PENDING at "
-                    + "province level without a handler. Role required: OFFICER, ADMIN or citizen token")
+                    + "province level without a handler. Officer: body { reason } required (5-500 characters), saved as "
+                    + "escalation_note. Role required: OFFICER, ADMIN or citizen token")
     @PostMapping("/{id}/escalate")
     public ResponseEntity<Object> escalateNow(
             @PathVariable("id") String id,
-            @RequestHeader(value = CITIZEN_TOKEN_HEADER, required = false) String citizenAccessToken) {
+            @RequestHeader(value = CITIZEN_TOKEN_HEADER, required = false) String citizenAccessToken,
+            @Valid @RequestBody(required = false) com.sosvietnam.model.payload.request.EscalateRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã chuyển ca lên cấp tỉnh/thành phố",
-                incidentService.escalateNow(id, citizenAccessToken));
+                incidentService.escalateNow(id, citizenAccessToken, request == null ? null : request.getReason()));
     }
 
     @Operation(summary = "Citizen: look up a past incident by lookup code + last 4 phone digits",
@@ -186,6 +188,17 @@ public class IncidentController {
             @Valid @RequestBody(required = false) CancelIncidentRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã huỷ tin báo SOS",
                 incidentService.cancelByCitizen(id, citizenAccessToken, request));
+    }
+
+    @Operation(summary = "Move a held incident to another force (wrong force chosen by the citizen)",
+            description = "Officer holding it while VERIFYING. body { agency: POLICE | CSGT | FIRE, reason (5-500) }. "
+                    + "The incident goes back to PENDING in the new force's queue (level routed again); the old force's "
+                    + "queues drop the card. Role required: OFFICER, ADMIN")
+    @PostMapping("/{id}/transfer")
+    public ResponseEntity<Object> transferAgency(@PathVariable("id") String id,
+                                                 @Valid @RequestBody com.sosvietnam.model.payload.request.TransferIncidentRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Đã chuyển ca sang lực lượng khác",
+                incidentService.transferAgency(id, request));
     }
 
     @Operation(summary = "The officer holding the incident cancels it (any step), with a reason (5-255)",

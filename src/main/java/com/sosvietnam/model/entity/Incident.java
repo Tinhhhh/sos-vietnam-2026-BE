@@ -160,6 +160,31 @@ public class Incident {
     @Column(name = "cancel_reason", length = 30)
     private CancelReason cancelReason;
 
+    // Lý do chuyển lên cấp tỉnh (V9)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "escalation_reason", length = 30)
+    private com.sosvietnam.model.payload.enums.EscalationReason escalationReason;
+
+    @Column(name = "escalation_note", length = 500)
+    private String escalationNote;
+
+    @Column(name = "escalated_by")
+    private UUID escalatedBy;
+
+    // Chuyển sang lực lượng khác (V10)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transferred_from", length = 20)
+    private AgencyType transferredFrom;
+
+    @Column(name = "transfer_reason", length = 500)
+    private String transferReason;
+
+    @Column(name = "transferred_by")
+    private UUID transferredBy;
+
+    @Column(name = "transferred_at")
+    private LocalDateTime transferredAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

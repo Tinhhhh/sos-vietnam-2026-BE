@@ -85,7 +85,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/**", "/api/v1/officers/**").hasAnyAuthority(STAFF)
                         .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch", "/api/v1/incidents/*/claim",
                                 "/api/v1/incidents/*/release", "/api/v1/incidents/*/request-dispatch",
-                                "/api/v1/incidents/*/officer-cancel").hasAnyAuthority(STAFF)
+                                "/api/v1/incidents/*/officer-cancel", "/api/v1/incidents/*/transfer").hasAnyAuthority(STAFF)
 
                         // ── Quản trị ────────────────────────────────────────────────
                         .requestMatchers("/api/v1/admin/**").hasAuthority(ADMIN)
