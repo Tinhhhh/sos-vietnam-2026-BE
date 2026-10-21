@@ -14,6 +14,7 @@ import com.sosvietnam.model.payload.enums.CancelReason;
 import com.sosvietnam.model.payload.enums.ClaimEndReason;
 import com.sosvietnam.model.payload.enums.DispatchRole;
 import com.sosvietnam.model.payload.enums.DispatchStatus;
+import com.sosvietnam.model.payload.enums.EmergencyType;
 import com.sosvietnam.model.payload.enums.IncidentEvent;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.MediaKind;
@@ -114,6 +115,8 @@ public class IncidentServiceImpl implements IncidentService {
     private static final long MAX_VIDEO_BYTES = 20L * 1024 * 1024;
     // Mỗi sự cố: tối đa 5 ảnh + 1 video hiện trường
     private static final int MAX_IMAGES_PER_INCIDENT = 5;
+    // Ảnh/video kèm lúc gửi SOS: FE tải lên ngay sau khi tạo ca
+    private static final long INITIAL_MEDIA_MINUTES = 10;
     private static final int MAX_VIDEOS_PER_INCIDENT = 1;
     private static final Map<String, String> EXTENSION_BY_TYPE = Map.ofEntries(
             Map.entry("image/jpeg", "jpg"),
@@ -260,6 +263,87 @@ public class IncidentServiceImpl implements IncidentService {
             return new CreateIncidentResponse(IncidentResponse.from(saved, List.of(), List.of()), token, true);
         }
         return null;
+    }
+
+    /** Chạy sau khi transaction commit (ngoài transaction thì chạy ngay) */
+    private static void afterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
+    }
+
+    @Override
+    @Transactional
+    public boolean autoRelease(String id, UUID handlerId, String note) {
+        LocalDateTime now = LocalDateTime.now();
+        if (incidentRepository.release(id, handlerId, now) == 0) return false;
+        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, handlerId)
+                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.AUTO_RELEASED, null, note));
+        Incident released = findIncident(id);
+        afterCommit(() -> escalationService.schedule(released));
+        log.info("⏏️ [AUTO-RELEASE] Incident {} back to the queue: holder {} offline", id, handlerId);
+        notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public IncidentQueueResponse transferAgency(String id, com.sosvietnam.model.payload.request.TransferIncidentRequest request) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(id);
+        if (!me.accountId().equals(incident.getHandlerId())) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
+        }
+        if (incident.getStatus() != IncidentStatus.VERIFYING) {
+            throw new SosException(HttpStatus.CONFLICT, "Chỉ chuyển lực lượng được khi đang xác minh (chưa điều động)");
+        }
+        AgencyType target = request.getAgency();
+        AgencyType previous = incident.getRoutedAgency();
+        if (target == null || !target.receivesIncidents()) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Lực lượng này không nhận ca qua SOS");
+        }
+        if (target == previous) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Ca đang ở lực lượng này rồi");
+        }
+        String reason = request.getReason() == null ? "" : request.getReason().trim();
+        if (reason.length() < 5) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Ghi lý do chuyển lực lượng (ít nhất 5 ký tự)");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        UnitLevel level = routeLevel(target, new GeoService.Area(incident.getProvince(), incident.getWard()));
+        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, me.accountId())
+                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.TRANSFERRED, null,
+                        "Chuyển sang " + target.getLabel() + ": " + reason));
+        java.util.Arrays.stream(EmergencyType.values()).filter(t -> t.getAgency() == target).findFirst()
+                .ifPresent(incident::setEmergencyType);
+        incident.setRoutedAgency(target);
+        incident.setRoutedLevel(level);
+        incident.setStatus(IncidentStatus.PENDING);
+        incident.setHandlerId(null);
+        incident.setClaimedAt(null);
+        incident.setEscalateAt(level == UnitLevel.WARD && target.isEscalates() ? now.plusMinutes(escalationMinutes) : null);
+        incident.setEscalatedAt(null);
+        incident.setEscalationReason(null);
+        incident.setEscalationNote(null);
+        incident.setEscalatedBy(null);
+        incident.setTransferredFrom(previous);
+        incident.setTransferReason(reason);
+        incident.setTransferredBy(me.accountId());
+        incident.setTransferredAt(now);
+        incident.setUpdatedAt(now);
+        Incident saved = incidentRepository.save(incident);
+        afterCommit(() -> escalationService.schedule(saved));
+        log.info("🔀 [TRANSFER] Incident {} moved {} -> {} {} by {}", id, previous, target, level, me.email());
+        notifier.notifyRemovedFor(id, previous);
+        notifier.notify(id, IncidentEvent.INCIDENT_NEW);
+        return queueView(id, me);
     }
 
     /**
@@ -635,6 +719,14 @@ public class IncidentServiceImpl implements IncidentService {
         if (files == null || files.isEmpty()) {
             throw new SosException(HttpStatus.BAD_REQUEST, "Chưa chọn ảnh/video nào");
         }
+        // Ảnh/video gửi kèm lúc báo tin (ca vừa tạo) hoặc bổ sung khi đã có cán bộ nhận ca; ca đóng thì thôi
+        boolean justCreated = incident.getStatus() == IncidentStatus.PENDING && incident.getCreatedAt() != null
+                && incident.getCreatedAt().isAfter(LocalDateTime.now().minusMinutes(INITIAL_MEDIA_MINUTES));
+        if (!justCreated && !IncidentStatus.HELD.contains(incident.getStatus())) {
+            throw new SosException(HttpStatus.CONFLICT, IncidentStatus.ACTIVE.contains(incident.getStatus())
+                    ? "Chỉ bổ sung ảnh/video được khi đã có cán bộ tiếp nhận tin báo"
+                    : "Tin báo đã kết thúc, không bổ sung ảnh/video được nữa");
+        }
         if (incidentMediaRepository.countByIncident_Id(id) + files.size() > MAX_MEDIA_PER_INCIDENT) {
             throw new SosException(HttpStatus.BAD_REQUEST, "Tối đa " + MAX_MEDIA_PER_INCIDENT + " ảnh/video cho mỗi sự cố");
         }
@@ -710,7 +802,7 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Transactional
     @Override
-    public IncidentTrackingResponse escalateNow(String id, String citizenAccessToken) {
+    public IncidentTrackingResponse escalateNow(String id, String citizenAccessToken, String reason) {
         Incident incident = findIncident(id);
         boolean byCitizen = citizenAccessToken != null && !citizenAccessToken.isBlank();
         Set<IncidentStatus> from;
@@ -731,8 +823,11 @@ public class IncidentServiceImpl implements IncidentService {
                         || !escalationService.escalateIfDue(id)) {
                     throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại để xem trạng thái mới");
                 }
+                Incident moved = findIncident(id);
+                moved.setEscalationReason(com.sosvietnam.model.payload.enums.EscalationReason.CITIZEN_REQUEST);
+                incidentRepository.save(moved);
                 log.info("⚡ [ESCALATION] Incident {} moved to province now (by citizen, nobody took it)", id);
-                return tracking(findIncident(id));
+                return tracking(moved);
             }
             from = Set.of(IncidentStatus.VERIFYING);
             who = "citizen";
@@ -740,6 +835,9 @@ public class IncidentServiceImpl implements IncidentService {
             OfficerPrincipal me = currentOfficer();
             if (!me.accountId().equals(incident.getHandlerId())) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
+            }
+            if (reason == null || reason.trim().length() < 5) {
+                throw new SosException(HttpStatus.BAD_REQUEST, "Ghi lý do chuyển lên cấp tỉnh (ít nhất 5 ký tự)");
             }
             from = IncidentStatus.HELD;
             who = me.email();
@@ -752,9 +850,15 @@ public class IncidentServiceImpl implements IncidentService {
         if (handlerId == null || incidentRepository.escalateHeld(id, handlerId, from, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại để xem trạng thái mới");
         }
-        String note = byCitizen ? "Người báo tin yêu cầu chuyển lên cấp tỉnh" : "Cán bộ chuyển lên cấp tỉnh";
+        String note = byCitizen ? "Người báo tin yêu cầu chuyển lên cấp tỉnh" : reason.trim();
         incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, handlerId)
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.ESCALATED, null, note));
+        Incident moved = findIncident(id);
+        moved.setEscalationReason(byCitizen ? com.sosvietnam.model.payload.enums.EscalationReason.CITIZEN_REQUEST
+                : com.sosvietnam.model.payload.enums.EscalationReason.OFFICER_REQUEST);
+        moved.setEscalationNote(byCitizen ? null : reason.trim());
+        moved.setEscalatedBy(byCitizen ? null : handlerId);
+        incidentRepository.save(moved);
         log.info("⚡ [ESCALATION] Incident {} moved to province now (by {})", id, who);
         notifier.notify(id, IncidentEvent.INCIDENT_ESCALATED);
         return tracking(findIncident(id));

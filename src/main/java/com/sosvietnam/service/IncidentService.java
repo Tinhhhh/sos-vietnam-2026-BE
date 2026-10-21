@@ -74,7 +74,16 @@ public interface IncidentService {
      * Chuyển ca cấp xã lên cấp tỉnh ngay. Cán bộ đang giữ ca: lúc VERIFYING hoặc RESOLVING (không xử lý được).
      * Người dân (citizen token): chỉ khi ca vẫn VERIFYING và đã quá hạn 15 phút (cán bộ nhận rồi treo máy).
      */
-    IncidentTrackingResponse escalateNow(String id, String citizenAccessToken);
+    IncidentTrackingResponse escalateNow(String id, String citizenAccessToken, String reason);
+
+    /**
+     * Hệ thống trả ca VERIFYING về hàng đợi khi người giữ mất kết nối quá lâu (watchdog).
+     * @return false nếu ca đã đổi (người đó vừa nhả / đã điều động / người khác giữ)
+     */
+    boolean autoRelease(String id, java.util.UUID handlerId, String note);
+
+    /** Cán bộ giữ ca (VERIFYING) chuyển ca sang lực lượng khác: ca về PENDING ở hàng đợi lực lượng mới. */
+    IncidentQueueResponse transferAgency(String id, com.sosvietnam.model.payload.request.TransferIncidentRequest request);
 
     /** Huỷ các ca chờ quá lâu mà chưa ai nhận (lý do NO_RESPONDER). Trả về số ca đã huỷ. */
     int cancelStaleIncidents();

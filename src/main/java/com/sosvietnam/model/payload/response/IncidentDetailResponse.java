@@ -96,6 +96,27 @@ public class IncidentDetailResponse {
     @JsonProperty("escalated_at")
     private OffsetDateTime escalatedAt;
 
+    /** Vì sao chuyển lên tỉnh: NO_RESPONSE_TIMEOUT / CITIZEN_REQUEST / OFFICER_REQUEST (V9) */
+    /** Lực lượng trước khi chuyển + lý do (V10), null nếu ca chưa chuyển lực lượng */
+    @JsonProperty("transferred_from")
+    private com.sosvietnam.model.payload.enums.AgencyType transferredFrom;
+
+    @JsonProperty("transferred_from_label")
+    private String transferredFromLabel;
+
+    @JsonProperty("transfer_reason")
+    private String transferReason;
+
+    @JsonProperty("escalation_reason")
+    private com.sosvietnam.model.payload.enums.EscalationReason escalationReason;
+
+    @JsonProperty("escalation_reason_label")
+    private String escalationReasonLabel;
+
+    /** Lý do cán bộ xã ghi khi tự chuyển lên tỉnh */
+    @JsonProperty("escalation_note")
+    private String escalationNote;
+
     @JsonProperty("cancelled_at")
     private OffsetDateTime cancelledAt;
 
@@ -194,6 +215,12 @@ public class IncidentDetailResponse {
                 .acceptedAt(withZone(i.getAcceptedAt()))
                 .escalateAt(withZone(i.getEscalateAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))
+                .transferredFrom(i.getTransferredFrom())
+                .transferredFromLabel(i.getTransferredFrom() == null ? null : i.getTransferredFrom().getLabel())
+                .transferReason(i.getTransferReason())
+                .escalationReason(i.getEscalationReason())
+                .escalationReasonLabel(i.getEscalationReason() == null ? null : i.getEscalationReason().getLabel())
+                .escalationNote(i.getEscalationNote())
                 .cancelledAt(withZone(i.getCancelledAt()))
                 .cancelReason(i.getCancelReason())
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())

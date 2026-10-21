@@ -18,6 +18,9 @@ public interface IncidentNotifier {
     /** Chỉ báo màn theo dõi của người báo tin (vd văn bản báo cáo vừa được lập / ký), không đụng hàng đợi cán bộ. */
     void notifyCitizen(String incidentId);
 
+    /** Gỡ thẻ ca khỏi hàng đợi của cán bộ lực lượng cũ (sau khi ca chuyển sang lực lượng khác). */
+    void notifyRemovedFor(String incidentId, com.sosvietnam.model.payload.enums.AgencyType previousAgency);
+
     /** Email các trực ban đang kết nối màn hình trực ban. */
     Set<String> onlineEmails();
 

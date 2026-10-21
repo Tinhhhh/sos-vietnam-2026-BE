@@ -120,11 +120,15 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     /** Ca chưa ai nhận, tạo trước mốc `before` (để hệ thống tự huỷ). */
     List<Incident> findByStatusAndHandlerIdIsNullAndCreatedAtBefore(IncidentStatus status, LocalDateTime before);
 
+    /** Ca đang có người giữ ở 1 status (watchdog tự nhả ca khi cán bộ mất kết nối) */
+    List<Incident> findByStatusAndHandlerIdIsNotNull(IncidentStatus status);
+
     /** Chỉ leo thang khi ca vẫn chưa ai nhận và đã quá hạn: người vừa nhận ca thì lệnh này không làm gì. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Incident i SET i.routedLevel = com.sosvietnam.model.payload.enums.UnitLevel.PROVINCE,
-               i.escalatedAt = :now, i.updatedAt = :now
+               i.escalatedAt = :now, i.updatedAt = :now,
+               i.escalationReason = com.sosvietnam.model.payload.enums.EscalationReason.NO_RESPONSE_TIMEOUT
         WHERE i.id = :id AND i.handlerId IS NULL
           AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.PENDING
           AND i.routedLevel = com.sosvietnam.model.payload.enums.UnitLevel.WARD
