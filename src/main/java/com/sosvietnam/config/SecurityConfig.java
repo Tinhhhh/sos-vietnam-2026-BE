@@ -49,7 +49,7 @@ public class SecurityConfig {
 
                         // ── Auth: /me cần đăng nhập, còn lại công khai ──────────────
                         // (phải khai báo /me TRƯỚC "/api/v1/auth/**", rule nào khớp trước thắng)
-                        .requestMatchers("/api/v1/auth/me").authenticated()
+                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/change-password").authenticated()
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
                         // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─
@@ -64,6 +64,18 @@ public class SecurityConfig {
                                 // escalate: cán bộ (JWT) hoặc người dân (citizen token), service tự kiểm
                                 "/api/v1/incidents/*/escalate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/media/*", "/api/v1/incidents/*/tracking").permitAll()
+                        // người dân xem / ký văn bản báo cáo bằng citizen token hoặc mã tra cứu
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/lookup/document",
+                                "/api/v1/incidents/lookup/document/sign", "/api/v1/incidents/*/document/citizen-sign").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/document/citizen").permitAll()
+                        // văn bản báo cáo: cán bộ lập, ký, ký hộ, tải Word
+                        .requestMatchers("/api/v1/incidents/*/document", "/api/v1/incidents/*/document/**").hasAnyAuthority(STAFF)
+                        // kế hoạch điều động: cán bộ (JWT) hoặc người báo tin (citizen token), DispatchServiceImpl tự kiểm
+                        .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/dispatch-plan").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/incidents/*/dispatch-plan").hasAnyAuthority(STAFF)
+                        // xác nhận đã xử lý xong: cán bộ (JWT) hoặc người dân (citizen token), service tự kiểm
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch-plan/confirm").permitAll()
+                        .requestMatchers("/api/v1/incidents/*/dispatch-plan/**").hasAnyAuthority(STAFF)
                         // Cán bộ (JWT) hoặc người báo tin (citizen token): CallServiceImpl tự kiểm
                         .requestMatchers(HttpMethod.GET, "/api/v1/calls/ice-servers").permitAll()
                         // xem danh sách + phân công là việc của trực ban
@@ -72,7 +84,8 @@ public class SecurityConfig {
                         // thống kê của cán bộ (phạm vi lấy từ tài khoản)
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/**", "/api/v1/officers/**").hasAnyAuthority(STAFF)
                         .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch", "/api/v1/incidents/*/claim",
-                                "/api/v1/incidents/*/release", "/api/v1/incidents/*/request-dispatch").hasAnyAuthority(STAFF)
+                                "/api/v1/incidents/*/release", "/api/v1/incidents/*/request-dispatch",
+                                "/api/v1/incidents/*/officer-cancel").hasAnyAuthority(STAFF)
 
                         // ── Quản trị ────────────────────────────────────────────────
                         .requestMatchers("/api/v1/admin/**").hasAuthority(ADMIN)

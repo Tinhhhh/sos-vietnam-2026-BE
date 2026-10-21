@@ -101,6 +101,46 @@ public class IncidentQueueResponse {
     @JsonProperty("can_handle")
     private boolean canHandle;
 
+    /** Bước điều động hiện tại 1-4 của lượt chủ trì (null = chưa chọn trạm / đã bị từ chối). */
+    @JsonProperty("dispatch_step")
+    private Integer dispatchStep;
+
+    /** Bước 2 uỷ quyền: ca được giao cho một đơn vị cấp xã (null nếu không có). */
+    @JsonProperty("delegation")
+    private Delegation delegation;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Delegation {
+        @JsonProperty("dispatch_id")
+        private Long dispatchId;
+        @JsonProperty("status")
+        private com.sosvietnam.model.payload.enums.DispatchStatus status;
+        @JsonProperty("status_label")
+        private String statusLabel;
+        @JsonProperty("step")
+        private int step;
+        @JsonProperty("station_name")
+        private String stationName;
+        // Đơn vị giao việc (vd "Công an · Cấp tỉnh")
+        @JsonProperty("from_unit")
+        private String fromUnit;
+        @JsonProperty("from_officer")
+        private String fromOfficer;
+        @JsonProperty("assigned_to")
+        private Handler assignedTo;
+        // Người xem là cán bộ được giao (được nhận / từ chối / xuất phát)
+        @JsonProperty("assigned_to_me")
+        private boolean assignedToMe;
+        // Người xem thuộc đơn vị được uỷ quyền (thấy ca vì được uỷ quyền, không phải vì phân luồng)
+        @JsonProperty("delegated_to_my_unit")
+        private boolean delegatedToMyUnit;
+        @JsonProperty("reject_reason")
+        private String rejectReason;
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

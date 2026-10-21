@@ -1,5 +1,8 @@
 package com.sosvietnam.service.implement;
 
+import com.sosvietnam.repository.IncidentDispatchRepository;
+import com.sosvietnam.model.payload.enums.DispatchRole;
+import com.sosvietnam.model.entity.IncidentDispatch;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.payload.enums.IncidentEvent;
@@ -43,6 +46,8 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     private final IncidentRepository incidentRepository;
     private final AccountRepository accountRepository;
     private final IncidentMediaRepository incidentMediaRepository;
+    private final IncidentDispatchRepository incidentDispatchRepository;
+    private final com.sosvietnam.repository.IncidentDocumentRepository incidentDocumentRepository;
 
     @Override
     public void notify(String incidentId, IncidentEvent event) {
@@ -65,20 +70,59 @@ public class IncidentNotifierImpl implements IncidentNotifier {
             String handlerName = handlerNames(List.of(incident)).get(incident.getHandlerId());
             IncidentQueueResponse.MediaCounts mediaCount = mediaCounts(List.of(incident))
                     .getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
+            IncidentDispatch dispatch = incidentDispatchRepository
+                    .findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(incidentId, DispatchRole.PRIMARY).orElse(null);
             for (SimpUser user : userRegistry.getUsers()) {
                 if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
-                if (!IncidentAccess.canView(viewer, incident)) continue;
-                IncidentQueueResponse view = toView(incident, viewer, handlerName, mediaCount);
-                messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
-                        new IncidentEventMessage(event, view));
+                IncidentQueueResponse view;
+                if (IncidentAccess.canView(viewer, incident) || IncidentAccess.isDelegatedUnit(viewer, dispatch)) {
+                    view = toView(incident, viewer, handlerName, mediaCount, dispatch);
+                    messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
+                            new IncidentEventMessage(event, view));
+                } else if (IncidentAccess.isStationUnit(viewer, dispatch)) {
+                    // Đơn vị vừa từ chối uỷ quyền: gỡ thẻ ca khỏi hàng đợi của họ
+                    view = toView(incident, viewer, handlerName, mediaCount, dispatch);
+                    messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
+                            new IncidentEventMessage(IncidentEvent.INCIDENT_REMOVED, view));
+                }
             }
             // Màn chờ của người báo tin (gửi kể cả khi họ chưa kết nối: broker tự bỏ nếu không có ai nghe)
-            messagingTemplate.convertAndSendToUser(CitizenPrincipal.nameOf(incident.getId()), CITIZEN_DESTINATION,
-                    Map.of("event", event, "incident", IncidentTrackingResponse.from(incident, handlerName)));
+            sendCitizen(incident, event, handlerName);
         } catch (Exception e) {
             // Realtime chỉ là kênh báo nhanh: lỗi gửi không được làm hỏng thao tác chính
             log.warn("Could not push {} for incident {}: {}", event, incidentId, e.getMessage());
         }
+    }
+
+    @Override
+    public void notifyCitizen(String incidentId) {
+        Runnable push = () -> {
+            try {
+                Incident incident = incidentRepository.findById(incidentId).orElse(null);
+                if (incident == null) return;
+                sendCitizen(incident, IncidentEvent.INCIDENT_UPDATED,
+                        handlerNames(List.of(incident)).get(incident.getHandlerId()));
+            } catch (Exception e) {
+                log.warn("Could not push the citizen update for incident {}: {}", incidentId, e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    push.run();
+                }
+            });
+        } else {
+            push.run();
+        }
+    }
+
+    private void sendCitizen(Incident incident, IncidentEvent event, String handlerName) {
+        String documentStatus = com.sosvietnam.model.entity.IncidentDocument.statusOf(
+                incidentDocumentRepository.findById(incident.getId()).orElse(null));
+        messagingTemplate.convertAndSendToUser(CitizenPrincipal.nameOf(incident.getId()), CITIZEN_DESTINATION,
+                Map.of("event", event, "incident", IncidentTrackingResponse.from(incident, handlerName, documentStatus)));
     }
 
     @Override
@@ -90,19 +134,50 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     public List<IncidentQueueResponse> toQueueViews(Collection<Incident> incidents, OfficerPrincipal viewer) {
         Map<UUID, String> names = handlerNames(incidents);
         Map<String, IncidentQueueResponse.MediaCounts> media = mediaCounts(incidents);
+        Map<String, IncidentDispatch> dispatches = incidents.isEmpty() ? Map.of()
+                : incidentDispatchRepository.findByIncident_IdInAndRole(
+                                incidents.stream().map(Incident::getId).toList(), DispatchRole.PRIMARY).stream()
+                        // mới nhất của mỗi ca
+                        .collect(Collectors.toMap(d -> d.getIncident().getId(), d -> d,
+                                (a, b) -> a.getDispatchedAt().isAfter(b.getDispatchedAt()) ? a : b));
         return incidents.stream()
                 .map(i -> toView(i, viewer, names.get(i.getHandlerId()),
-                        media.getOrDefault(i.getId(), IncidentQueueResponse.MediaCounts.NONE)))
+                        media.getOrDefault(i.getId(), IncidentQueueResponse.MediaCounts.NONE), dispatches.get(i.getId())))
                 .toList();
     }
 
     private static IncidentQueueResponse toView(Incident incident, OfficerPrincipal viewer, String handlerName,
-                                                IncidentQueueResponse.MediaCounts mediaCount) {
+                                                IncidentQueueResponse.MediaCounts mediaCount, IncidentDispatch dispatch) {
         IncidentQueueResponse.Handler handler = incident.getHandlerId() == null ? null
                 : new IncidentQueueResponse.Handler(incident.getHandlerId(), handlerName);
         boolean heldByMe = incident.getHandlerId() != null && incident.getHandlerId().equals(viewer.accountId());
-        return IncidentQueueResponse.from(incident, handler, heldByMe, IncidentAccess.canHandle(viewer, incident),
-                mediaCount);
+        IncidentQueueResponse view = IncidentQueueResponse.from(incident, handler, heldByMe,
+                IncidentAccess.canHandle(viewer, incident), mediaCount);
+        view.setDelegation(delegationOf(dispatch, viewer));
+        view.setDispatchStep(dispatch == null || dispatch.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED
+                ? null : dispatch.getStatus().getStep());
+        return view;
+    }
+
+    /** Khối "uỷ quyền" của thẻ ca: chỉ khi trạm chủ trì là đơn vị khác đã được giao cho một cán bộ. */
+    private static IncidentQueueResponse.Delegation delegationOf(IncidentDispatch d, OfficerPrincipal viewer) {
+        if (d == null || d.getAssignedTo() == null) return null;
+        Account by = d.getDispatchedBy();
+        return IncidentQueueResponse.Delegation.builder()
+                .dispatchId(d.getId())
+                .status(d.getStatus())
+                .statusLabel(d.getStatus().getLabel())
+                .step(d.getStatus().getStep())
+                .stationName(d.getStation().getName())
+                .fromUnit(by == null || by.getAgencyType() == null ? null
+                        : by.getAgencyType().getLabel() + (by.getUnitLevel() == null ? ""
+                        : " · " + by.getAgencyType().levelLabel(by.getUnitLevel())))
+                .fromOfficer(by == null ? null : by.fullName())
+                .assignedTo(new IncidentQueueResponse.Handler(d.getAssignedTo().getId(), d.getAssignedTo().fullName()))
+                .assignedToMe(IncidentAccess.isAssignee(viewer, d))
+                .delegatedToMyUnit(IncidentAccess.isDelegatedUnit(viewer, d))
+                .rejectReason(d.getRejectReason())
+                .build();
     }
 
     /** Số ảnh / video của nhiều ca trong 1 truy vấn (thẻ ca hiện biểu tượng ảnh, máy quay + số lượng). */

@@ -1,6 +1,7 @@
 package com.sosvietnam.service;
 
 import com.sosvietnam.model.payload.request.AuthenticationRequest;
+import com.sosvietnam.model.payload.request.ChangePasswordRequest;
 import com.sosvietnam.model.payload.request.RegistrationRequest;
 import com.sosvietnam.model.payload.response.AccountInfoResponse;
 import com.sosvietnam.model.payload.response.AuthenticationResponse;
@@ -16,4 +17,7 @@ public interface AuthenService {
     void register(RegistrationRequest request);
 
     AccountInfoResponse getCurrentAccount();
+
+    /** Người đang đăng nhập đổi mật khẩu: phải nhập đúng mật khẩu hiện tại, mật khẩu mới khác mật khẩu cũ. */
+    void changePassword(ChangePasswordRequest request);
 }

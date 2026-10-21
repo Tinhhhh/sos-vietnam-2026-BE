@@ -178,7 +178,7 @@ public class GlobalExceptionHandler {
                         ExceptionResponse.builder()
                                 .httpStatus(HttpStatus.PAYLOAD_TOO_LARGE.value())
                                 .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
-                                .message("Tệp tải lên quá lớn (ảnh tối đa 10MB, video tối đa 15MB)")
+                                .message("Tệp tải lên quá lớn (ảnh tối đa 10MB, video tối đa 20MB)")
                                 .build()
                 );
     }

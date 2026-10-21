@@ -7,6 +7,7 @@ import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.request.AuthenticationRequest;
+import com.sosvietnam.model.payload.request.ChangePasswordRequest;
 import com.sosvietnam.model.payload.request.RegistrationRequest;
 import com.sosvietnam.model.payload.response.AccountInfoResponse;
 import com.sosvietnam.model.payload.response.AuthenticationResponse;
@@ -182,6 +183,21 @@ public class AuthenServiceImpl implements AuthenService {
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Account not found"));
 
         return AccountInfoResponse.from(account);
+    }
+
+    @Override
+    public void changePassword(ChangePasswordRequest request) {
+        Account account = accountRepository.findByEmail(SecurityContextHolder.getContext().getAuthentication().getName())
+                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
+        if (!passwordEncoder.matches(request.getCurrentPassword(), account.getPassword())) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), account.getPassword())) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+        account.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        accountRepository.save(account);
+        log.info("[CHANGE PASSWORD] {}", account.getEmail());
     }
 
     /** Lưu refresh token, gắn với jwtId của access token đi cùng (dùng khi logout). */

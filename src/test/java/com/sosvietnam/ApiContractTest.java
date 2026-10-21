@@ -361,7 +361,7 @@ class ApiContractTest {
             assertThat(req.getEmergencyType()).isEqualTo(EmergencyType.POLICE);
             assertThat(req.getCitizenName()).isEqualTo("Người dân");
             assertThat(req.getIncidentTags()).containsExactly("Trộm");
-            return new CreateIncidentResponse(inc, "tok123");
+            return new CreateIncidentResponse(inc, "tok123", false);
         });
         mvc.perform(post("/api/v1/incidents").contentType(MediaType.APPLICATION_JSON).content("""
                         {"emergency_type":"POLICE","citizen_name":"Người dân","incident_tags":["Trộm"],

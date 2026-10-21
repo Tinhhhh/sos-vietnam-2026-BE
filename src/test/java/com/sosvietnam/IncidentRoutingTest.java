@@ -52,7 +52,9 @@ class IncidentRoutingTest {
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, geo,
-            mock(MediaStorageService.class), notifier, escalation);
+            mock(MediaStorageService.class), notifier, escalation,
+            mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     final Account caTanAn = officerAccount("congan.tanan@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Tân An");

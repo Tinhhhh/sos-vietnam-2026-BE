@@ -85,6 +85,10 @@ public class IncidentHistoryResponse {
     @JsonProperty("dispatch_count")
     private long dispatchCount;
 
+    /** Văn bản báo cáo: NONE (chưa lập), DRAFT (đã lưu, chưa đủ chữ ký), SIGNED (đủ chữ ký 2 bên) */
+    @JsonProperty("document_status")
+    private String documentStatus;
+
     public static IncidentHistoryResponse from(Incident i, String handlerName, long dispatchCount) {
         LocalDateTime closed = i.getStatus() == IncidentStatus.CANCELLED && i.getCancelledAt() != null
                 ? i.getCancelledAt() : i.getUpdatedAt();

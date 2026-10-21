@@ -1,6 +1,10 @@
 package com.sosvietnam.util;
 
 import com.sosvietnam.model.entity.Incident;
+import com.sosvietnam.model.entity.IncidentDispatch;
+import com.sosvietnam.model.entity.RescueStation;
+import com.sosvietnam.model.payload.enums.DispatchRole;
+import com.sosvietnam.model.payload.enums.DispatchStatus;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.security.OfficerPrincipal;
 import lombok.experimental.UtilityClass;
@@ -35,6 +39,32 @@ public class IncidentAccess {
         if (!canView(officer, incident)) return false;
         if (officer.isAdmin()) return incident.getRoutedLevel() == UnitLevel.NATIONAL;
         return officer.level() == incident.getRoutedLevel();
+    }
+
+    /**
+     * Đơn vị được uỷ quyền (bước 2 điều động): cán bộ cấp xã cùng lực lượng + cùng xã với trạm được chọn
+     * thấy ca khi đã có người được giao (assigned_to) và lượt chưa bị từ chối / chưa xong.
+     */
+    public boolean isDelegatedUnit(OfficerPrincipal officer, IncidentDispatch dispatch) {
+        return isStationUnit(officer, dispatch) && dispatch.getAssignedTo() != null
+                && DispatchStatus.DELEGATED.contains(dispatch.getStatus());
+    }
+
+    /**
+     * Cán bộ thuộc đơn vị của trạm của lượt chủ trì (kể cả khi lượt đã bị từ chối / thu hồi): dùng để gỡ thẻ ca
+     * khỏi hàng đợi của đơn vị không còn được uỷ quyền.
+     */
+    public boolean isStationUnit(OfficerPrincipal officer, IncidentDispatch dispatch) {
+        if (dispatch == null || dispatch.getRole() != DispatchRole.PRIMARY) return false;
+        RescueStation station = dispatch.getStation();
+        return officer.level() == UnitLevel.WARD && officer.agency() != null
+                && officer.agency() == station.getAgencyType() && same(officer.wardId(), station.wardId());
+    }
+
+    /** Cán bộ đang được giao lượt điều động này (người bấm nhận / từ chối / xuất phát). */
+    public boolean isAssignee(OfficerPrincipal officer, IncidentDispatch dispatch) {
+        return dispatch != null && dispatch.getAssignedTo() != null
+                && officer.accountId().equals(dispatch.getAssignedTo().getId());
     }
 
     /** Hai cán bộ cùng đơn vị (cùng lực lượng, cấp, tỉnh; cấp xã thì cùng xã): được giao ca cho nhau. */

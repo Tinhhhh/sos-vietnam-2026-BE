@@ -2,6 +2,7 @@ package com.sosvietnam.controller;
 
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.AuthenticationRequest;
+import com.sosvietnam.model.payload.request.ChangePasswordRequest;
 import com.sosvietnam.model.payload.request.RegistrationRequest;
 import com.sosvietnam.security.CustomLogoutHandler;
 import com.sosvietnam.service.AuthenService;
@@ -69,6 +70,13 @@ public class AuthController {
     public ResponseEntity<Object> register(@RequestBody @Valid RegistrationRequest request) {
         authService.register(request);
         return ResponseBuilder.returnMessage(HttpStatus.OK, "Your account is created successfully");
+    }
+
+    @Operation(summary = "Change my password", description = "current_password must match; new_password 8-100 characters. Role required: logged in")
+    @PostMapping("/change-password")
+    public ResponseEntity<Object> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã đổi mật khẩu");
     }
 
     @Operation(summary = "Get current authenticated account details", description = "Role required: logged in")

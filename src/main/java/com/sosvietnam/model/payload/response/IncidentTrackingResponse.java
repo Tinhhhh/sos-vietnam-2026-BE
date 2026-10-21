@@ -76,6 +76,14 @@ public class IncidentTrackingResponse {
     @JsonProperty("lookup_code")
     private String lookupCode;
 
+    /** Văn bản báo cáo: NONE / AWAITING_CITIZEN / CITIZEN_SIGNED / SIGNED (IncidentDocument.statusOf) */
+    @JsonProperty("document_status")
+    private String documentStatus;
+
+    /** Lúc ca hoàn tất (RESOLVED), null với ca chưa xong */
+    @JsonProperty("resolved_at")
+    private OffsetDateTime resolvedAt;
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -86,6 +94,10 @@ public class IncidentTrackingResponse {
 
     /** @param handlerName tên cán bộ đang giữ ca, null = chưa ai nhận */
     public static IncidentTrackingResponse from(Incident i, String handlerName) {
+        return from(i, handlerName, "NONE");
+    }
+
+    public static IncidentTrackingResponse from(Incident i, String handlerName, String documentStatus) {
         return IncidentTrackingResponse.builder()
                 .id(i.getId())
                 .emergencyType(i.getEmergencyType())
@@ -103,6 +115,8 @@ public class IncidentTrackingResponse {
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())
                 .handler(handlerName == null ? null : new Handler(handlerName))
                 .lookupCode(i.getStatus() == IncidentStatus.RESOLVED ? LookupCodes.format(i.getLookupCode()) : null)
+                .documentStatus(documentStatus)
+                .resolvedAt(i.getStatus() == IncidentStatus.RESOLVED ? withZone(i.getUpdatedAt()) : null)
                 .build();
     }
 
