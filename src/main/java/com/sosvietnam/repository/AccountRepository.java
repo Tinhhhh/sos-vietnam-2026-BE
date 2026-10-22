@@ -26,4 +26,7 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     /** Xã có ít nhất 1 cán bộ của lực lượng này ở cấp xã đang hoạt động (để phân luồng ca vào xã). */
     boolean existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType agency, UnitLevel level, Long wardId);
+
+    /** Cán bộ cấp xã đang hoạt động của một lực lượng ở một xã (đối chiếu ai đang trực tuyến lúc phân luồng). */
+    List<Account> findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType agency, UnitLevel level, Long wardId);
 }
