@@ -348,16 +348,32 @@ public class IncidentServiceImpl implements IncidentService {
 
     /**
      * Cấp nhận ca: không biết tỉnh -> NATIONAL (chỉ trung tâm chỉ huy thấy); lực lượng trực ở xã (Công an)
-     * mà xác định được xã và xã có trực ban -> WARD; còn lại vào thẳng cấp tỉnh/phòng.
+     * mà xác định được xã và xã có cán bộ đang trực tuyến (có phiên STOMP) -> WARD; còn lại vào thẳng cấp tỉnh/phòng,
+     * không để ca chờ 15 phút ở một xã không ai nhận được.
      */
     private UnitLevel routeLevel(AgencyType agency, GeoService.Area area) {
+        return routeLevel(agency, area, true);
+    }
+
+    /** requireOnline=false: chỉ cần xã có tài khoản (phân luồng bù lúc khởi động, khi chưa ai kết nối). */
+    private UnitLevel routeLevel(AgencyType agency, GeoService.Area area, boolean requireOnline) {
         if (area.province() == null) {
             return UnitLevel.NATIONAL;
         }
-        if (agency.getIntakeLevel() == UnitLevel.WARD && area.ward() != null
-                && accountRepository.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(
-                        agency, UnitLevel.WARD, area.ward().getId())) {
-            return UnitLevel.WARD;
+        if (agency.getIntakeLevel() == UnitLevel.WARD && area.ward() != null) {
+            if (!requireOnline) {
+                return accountRepository.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(
+                        agency, UnitLevel.WARD, area.ward().getId()) ? UnitLevel.WARD : UnitLevel.PROVINCE;
+            }
+            Set<String> online = notifier.onlineEmails().stream()
+                    .map(e -> e.toLowerCase(java.util.Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+            boolean anyoneOnline = accountRepository
+                    .findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(agency, UnitLevel.WARD, area.ward().getId())
+                    .stream().anyMatch(a -> a.getEmail() != null && online.contains(a.getEmail().toLowerCase(java.util.Locale.ROOT)));
+            if (anyoneOnline) {
+                return UnitLevel.WARD;
+            }
+            log.info("📶 [ROUTING] No {} officer online in ward {} -> province", agency, area.ward().getName());
         }
         return UnitLevel.PROVINCE;
     }
@@ -549,7 +565,7 @@ public class IncidentServiceImpl implements IncidentService {
             AgencyType agency = incident.getEmergencyType() == null
                     ? AgencyType.POLICE : incident.getEmergencyType().getAgency();
             GeoService.Area area = new GeoService.Area(incident.getProvince(), incident.getWard());
-            UnitLevel level = agency.receivesIncidents() ? routeLevel(agency, area) : UnitLevel.NATIONAL;
+            UnitLevel level = agency.receivesIncidents() ? routeLevel(agency, area, false) : UnitLevel.NATIONAL;
             incident.setRoutedAgency(agency);
             incident.setRoutedLevel(level);
             // Hạn leo thang tính từ lúc tạo ca như ca mới; đã quá hạn thì lịch hẹn leo thang ngay

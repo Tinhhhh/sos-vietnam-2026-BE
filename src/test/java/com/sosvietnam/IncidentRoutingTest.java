@@ -72,6 +72,9 @@ class IncidentRoutingTest {
         when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.TAN_AN));
         when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType.POLICE, UnitLevel.WARD,
                 TestGeo.TAN_AN.getId())).thenReturn(true);
+        when(accountRepo.findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType.POLICE, UnitLevel.WARD,
+                TestGeo.TAN_AN.getId())).thenReturn(List.of(caTanAn, caTanAn2));
+        when(notifier.onlineEmails()).thenReturn(java.util.Set.of("CongAn.TanAn@sos.vn"));
     }
 
     @AfterEach
@@ -101,8 +104,17 @@ class IncidentRoutingTest {
     }
 
     @Test
+    void police_wardWithOfficersButNoneOnline_goesStraightToProvince() {
+        when(notifier.onlineEmails()).thenReturn(java.util.Set.of("someone.else@sos.vn"));
+        Incident inc = create(EmergencyType.POLICE);
+        assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.PROVINCE);
+        assertThat(inc.getEscalateAt()).isNull();
+    }
+
+    @Test
     void police_wardWithoutOfficer_goesStraightToProvince() {
         when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(any(), any(), any())).thenReturn(false);
+        when(accountRepo.findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(any(), any(), any())).thenReturn(List.of());
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.PROVINCE);
         assertThat(inc.getEscalateAt()).isNull();
