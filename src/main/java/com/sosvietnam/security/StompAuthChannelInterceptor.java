@@ -80,7 +80,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new MessageDeliveryException("Token không hợp lệ hoặc đã hết hạn");
         }
         AccessToken token = jwtTokenProvider.getTokenFromJwt(jwt);
-        if (token == null || jwtTokenProvider.isTokenRevoked(token.getUserId(), token.getJwtId())) {
+        if (token == null || jwtTokenProvider.isTokenRevoked(token.getUserId(), token.getJwtId())
+                || jwtTokenProvider.isIssuedBeforeLogoutAll(jwt)) {
             throw new MessageDeliveryException("Token đã bị thu hồi");
         }
         OfficerPrincipal officer = accountRepository.findByEmail(jwtTokenProvider.getUsernameFromJwt(jwt))

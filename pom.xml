@@ -34,6 +34,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!-- Revoked tokens / "log out everywhere" marks survive restarts (REDIS_URL; empty = memory only) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- Schema migrations: src/main/resources/db/migration/V*__*.sql (version from Spring Boot BOM) -->
         <dependency>
             <groupId>org.flywaydb</groupId>

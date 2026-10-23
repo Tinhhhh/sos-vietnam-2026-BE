@@ -110,6 +110,13 @@ public class AuthenServiceImpl implements AuthenService {
         if (oldRefreshToken.isRevoked() || oldRefreshToken.isExpired()) {
             throw new SosException(HttpStatus.UNAUTHORIZED, "Token is invalid or expired");
         }
+        // Cấp trước lần đổi mật khẩu (đá văng mọi phiên): máy cũ không được xin token mới
+        if (jwtTokenProvider.isIssuedBeforeLogoutAll(refreshToken)) {
+            oldRefreshToken.setRevoked(true);
+            oldRefreshToken.setExpired(true);
+            refreshTokenRepository.save(oldRefreshToken);
+            throw new SosException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập đã kết thúc, vui lòng đăng nhập lại");
+        }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
         Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -197,7 +204,9 @@ public class AuthenServiceImpl implements AuthenService {
         }
         account.setPassword(passwordEncoder.encode(request.getNewPassword()));
         accountRepository.save(account);
-        log.info("[CHANGE PASSWORD] {}", account.getEmail());
+        // Như HIV-TMSS: đổi mật khẩu thì mọi phiên đang đăng nhập (mọi thiết bị, kể cả máy này) phải đăng nhập lại
+        jwtTokenProvider.disableOldTokens(account.getId());
+        log.info("[CHANGE PASSWORD] {} (đã đá văng mọi phiên)", account.getEmail());
     }
 
     /** Lưu refresh token, gắn với jwtId của access token đi cùng (dùng khi logout). */

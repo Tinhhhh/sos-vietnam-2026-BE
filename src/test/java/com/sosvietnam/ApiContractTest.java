@@ -64,7 +64,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {AuthController.class, GeoController.class, StationController.class, IncidentController.class,
         WeatherController.class, DashboardController.class})
 @Import({SecurityConfig.class, BeanConfiguration.class, JwtAuthenticationFilter.class, JwtTokenProvider.class,
-        JwtAuthenticationEntryPoint.class, CustomLogoutHandler.class, CustomUserDetailService.class, AuthenServiceImpl.class})
+        TokenRevocationStore.class, JwtAuthenticationEntryPoint.class, CustomLogoutHandler.class,
+        CustomUserDetailService.class, AuthenServiceImpl.class})
 @TestPropertySource(properties = "app.jwt.secret-key=q83vEi7pZf2mR1tYw9LkXc4N6bHs0aJdUe5gVo8iTzQyP3rKfW2xCnMbLh7sDjA1")
 class ApiContractTest {
 
@@ -193,6 +194,33 @@ class ApiContractTest {
         // dùng lại refresh token cũ -> 401
         mvc.perform(post("/api/v1/auth/refresh-token").header("Authorization", "Bearer " + first.get("refresh_token").asText()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** Như HIV-TMSS: đổi mật khẩu đá văng mọi phiên (laptop + điện thoại), kể cả refresh token của chúng. */
+    @Test
+    void changePassword_logsOutEveryDevice_includingRefreshTokens() throws Exception {
+        JsonNode laptop = login("officer@sos.vn", "Officer@123").get("data");
+        JsonNode phone = login("officer@sos.vn", "Officer@123").get("data");
+        // đăng nhập máy thứ 2 không làm máy thứ 1 bị out
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + laptop.get("access_token").asText()))
+                .andExpect(status().isOk());
+
+        Thread.sleep(1100); // iat của JWT tính theo giây: token cấp trong cùng giây với mốc vẫn dùng được
+        mvc.perform(post("/api/v1/auth/change-password").contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + phone.get("access_token").asText())
+                        .content("{\"current_password\":\"Officer@123\",\"new_password\":\"Officer@456\"}"))
+                .andExpect(status().isOk());
+
+        for (JsonNode device : List.of(laptop, phone)) {
+            mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + device.get("access_token").asText()))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(post("/api/v1/auth/refresh-token")
+                            .header("Authorization", "Bearer " + device.get("refresh_token").asText()))
+                    .andExpect(status().isUnauthorized());
+        }
+        // đăng nhập lại bằng mật khẩu mới thì dùng được
+        String fresh = login("officer@sos.vn", "Officer@456").get("data").get("access_token").asText();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + fresh)).andExpect(status().isOk());
     }
 
     @Test

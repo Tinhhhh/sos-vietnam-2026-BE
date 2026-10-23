@@ -26,14 +26,15 @@ class ChangePasswordTest {
 
     final AccountRepository accounts = mock(AccountRepository.class);
     final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
+    final JwtTokenProvider jwt = mock(JwtTokenProvider.class);
     final AuthenServiceImpl service = new AuthenServiceImpl(mock(AuthenticationManager.class), accounts,
             mock(ProvinceRepository.class), mock(WardRepository.class), mock(RoleRepository.class),
-            mock(RefreshTokenRepository.class), encoder, mock(JwtTokenProvider.class), mock(UserDetailsService.class));
+            mock(RefreshTokenRepository.class), encoder, jwt, mock(UserDetailsService.class));
     Account me;
 
     @BeforeEach
     void setUp() {
-        me = Account.builder().email("me@sos.vn").password(encoder.encode("old-pass-1")).build();
+        me = Account.builder().id(java.util.UUID.randomUUID()).email("me@sos.vn").password(encoder.encode("old-pass-1")).build();
         when(accounts.findByEmail("me@sos.vn")).thenReturn(Optional.of(me));
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("me@sos.vn", null, "OFFICER"));
     }
@@ -48,6 +49,8 @@ class ChangePasswordTest {
         service.changePassword(new ChangePasswordRequest("old-pass-1", "new-pass-2"));
         assertThat(encoder.matches("new-pass-2", me.getPassword())).isTrue();
         verify(accounts).save(me);
+        // mọi phiên đang đăng nhập của tài khoản bị đá văng
+        verify(jwt).disableOldTokens(me.getId());
     }
 
     @Test
@@ -55,6 +58,7 @@ class ChangePasswordTest {
         assertThatThrownBy(() -> service.changePassword(new ChangePasswordRequest("nope", "new-pass-2")))
                 .isInstanceOf(SosException.class).hasMessageContaining("hiện tại không đúng");
         verify(accounts, never()).save(any());
+        verify(jwt, never()).disableOldTokens(any());
     }
 
     @Test
