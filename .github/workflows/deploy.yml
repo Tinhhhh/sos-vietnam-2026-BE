@@ -1,4 +1,4 @@
-name: Build, Push to Docker Hub and Deploy to Render
+name: Build, Push to Docker Hub and Deploy to VPS
 
 on:
   push:
@@ -41,6 +41,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Tên image Docker bắt buộc chữ thường (secret có thể ghi "Tinhhhh")
+      - name: Image name
+        run: echo "IMAGE=$(echo '${{ secrets.DOCKERHUB_USERNAME }}' | tr '[:upper:]' '[:lower:]')/sos-vietnam" >> "$GITHUB_ENV"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -48,17 +52,19 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/sos-vietnam:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/sos-vietnam:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trigger Render Deploy Hook
+      # Deploy lên VPS: ssh vào và chạy /opt/sos/deploy-service.sh be <sha> (kéo image mới, khởi động lại, đợi BE trả lời được)
+      - name: Deploy to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            echo "Triggering Render Deploy Hook..."
-            curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-            echo "Render Deploy Hook triggered successfully!"
-          else
-            echo "RENDER_DEPLOY_HOOK_URL is not set, skipping auto-deploy."
-          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=yes "root@$VPS_HOST" "/opt/sos/deploy-service.sh be ${{ github.sha }}"
