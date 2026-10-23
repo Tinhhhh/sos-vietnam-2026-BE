@@ -82,7 +82,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Code: entity `@ManyToOne Province/Ward` (kiểu HIV-TMSS), `OfficerPrincipal` mang provinceId/wardId (+ tên để hiển thị), `IncidentAccess` so khoá, `DashboardRepository` lọc `province_id/ward_id`, `AreaNames` chỉ để so tên gõ từ ngoài (bộ lọc admin, seed). API vẫn trả tên `province`/`ward` + thêm `province_id`/`ward_id`.
 - Giao ca bắt buộc lý do (>= 5 ký tự, lưu `incident_claims.note`).
 - Đã thử: 94 unit test; chạy cả V1+V2 + validate + seeder + API chính trên schema tạm `mig_check` (đã xoá). Refresh token sẽ chuyển sang Redis (chưa làm).
-- Đang làm: DB local trên Postgres 16 (cổng 5432, có PostGIS), script `local-db/create-local-db.sql` (role `sos_dev`, DB `sos_vietnam_dev`; chạy bằng psql -W user postgres, pgpass.conf có mật khẩu postgres cũ sai).
+- DB local (23/10/2026): container Docker `sos-db-local` (`postgis/postgis:18-3.6`, cùng bản VPS, `127.0.0.1:5434`, DB `sos_vietnam_dev`, user `sos_dev`, volume `sos-db-local`, restart unless-stopped; cần Docker Desktop chạy). Dữ liệu chép từ DB VPS (pg_dump -Fc qua ssh, pg_restore --no-owner; 2 lỗi schema tiger/topology có sẵn là vô hại). Postgres 16 trên máy (5432) không dùng: quên mật khẩu postgres.
 - BE `main` trên Render (code cũ) KHÔNG chạy được với schema mới: giữ tắt tới khi merge develop -> main.
 
 ## Tạo tài khoản admin + mã tra cứu ca (18/10/2026, CHƯA commit)
@@ -139,7 +139,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - CORS: danh sách origin ở `app.cors.allowed-origins` (env `CORS_ALLOWED_ORIGINS`), mặc định `localhost:5173`, `3000`, `127.0.0.1:*`, `https://sos-vietnam-fe-latest.onrender.com`. Origin lạ → REST và bắt tay WebSocket đều 403 (vd FE dev chạy cổng 5174). FE prod qua nginx đã xoá header Origin nên không phụ thuộc danh sách này.
 - **BE prod trên Render (nhánh `main`) dùng chung DB với local**: seeder cũ của `main` mỗi lần khởi động (free tier ngủ rồi thức) thấy count 3714 ≠ 3717 → truncate + nạp lại định dạng cũ (level null, `TRAFFIC_RESCUE`, code null) mà không sửa `seed_versions` → local tưởng đã nạp, lọc `level` ra rỗng. Chữa tạm: `delete from seed_versions where name='rescue_stations'` rồi restart BE local. Hết hẳn khi `main` có seeder mới.
 - `unaccent` đã bật trên DB Render (schema.sql cũng `CREATE EXTENSION IF NOT EXISTS unaccent`).
-- `.env` trỏ **DB Postgres trên Render**; chạy local là seeder ghi vào DB đó (user đồng ý). psql: `C:\Program Files\PostgreSQL\18\bin\psql.exe`, cần `PGSSLMODE=require`.
+- `.env` local trỏ DB local Docker (bản cũ trỏ Render lưu ở `.env.render-backup`). `REDIS_URL` ở local để comment: Redis Cloud dùng chung với VPS + DB local là bản sao VPS (cùng id tài khoản), đăng xuất / đổi mật khẩu ở local có thể đá văng tài khoản thật trên VPS. DB thật nằm trên VPS (`/opt/sos`, xem `deploy/README.md`), DB Render chỉ còn là bản cũ. psql: `C:\Program Files\PostgreSQL\18\bin\psql.exe`, cần `PGSSLMODE=require`.
 - Port 8080 thường là BE user đang chạy → test bằng `SERVER_PORT=8081`, đừng kill tiến trình của user. Tắt bản test thì tắt cả tiến trình java con lẫn mvn cha (devtools tự restart khi build lại).
 - **Không chạy `mvn clean/test/package` trong repo này** khi user đang chạy BE 8080 (`mvn spring-boot:run` + devtools đọc `target/` của repo → bị restart/hỏng). Chép `src` + `pom.xml` + `.env` sang thư mục scratchpad rồi build/test/chạy 8081 từ bản sao.
 - `Unresolved compilation problems` khi chạy = IDE build hỏng `target/` → `mvn clean`.
