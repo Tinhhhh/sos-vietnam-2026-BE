@@ -21,13 +21,11 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Sinh và đọc JWT (access token + refresh token). Không ghi DB.
- * Blacklist access token đã thu hồi được giữ trong bộ nhớ (mất khi restart server).
+ * Token đã thu hồi và mốc "đá văng mọi phiên" nằm ở TokenRevocationStore (RAM + Redis).
  */
 @Component
 @Slf4j
@@ -36,9 +34,7 @@ public class JwtTokenProvider {
 
     private final AccountRepository accountRepository;
     private final RoleRepository roleRepository;
-
-    // In-memory blacklist for revoked tokens (userId_jwtId -> expiryTimestamp)
-    private final Map<String, Long> tokenBlacklist = new ConcurrentHashMap<>();
+    private final TokenRevocationStore revocations;
 
     // Public sample key from online JWT tutorials (this repo shipped with it); anyone can sign tokens with it.
     private static final String PUBLIC_SAMPLE_KEY = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
@@ -194,7 +190,30 @@ public class JwtTokenProvider {
 
     public boolean isTokenValid(String jwt, String username) {
         String tokenUserName = getUsernameFromJwt(jwt);
-        return tokenUserName.equals(username) && !isTokenExpired(jwt);
+        return tokenUserName.equals(username) && !isTokenExpired(jwt) && !isIssuedBeforeLogoutAll(jwt);
+    }
+
+    /**
+     * Token (access hoặc refresh) cấp trước lần "đá văng mọi phiên" gần nhất của tài khoản (đổi mật khẩu)?
+     * Như TOKEN_IAT_AVAILABLE của HIV-TMSS, áp cho cả refresh token để máy cũ không xin được token mới.
+     */
+    public boolean isIssuedBeforeLogoutAll(String jwt) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(jwt)
+                    .getPayload();
+            Object id = claims.get("id");
+            return id != null && revocations.issuedBeforeLogoutAll(UUID.fromString(id.toString()), claims.getIssuedAt());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /** Đá văng mọi phiên đang đăng nhập của tài khoản (mọi thiết bị). Nhớ đủ lâu để chặn cả refresh token. */
+    public void disableOldTokens(UUID accountId) {
+        revocations.logoutEverywhere(accountId, Math.max(jwtAccessExpiration, jwtRefreshExpiration));
     }
 
     public boolean isTokenExpired(String jwt) {
@@ -226,21 +245,11 @@ public class JwtTokenProvider {
     }
 
     public boolean isTokenRevoked(UUID userId, UUID jwtId) {
-        if (userId == null || jwtId == null) return false;
-        String key = userId + "_" + jwtId;
-        Long expiry = tokenBlacklist.get(key);
-        if (expiry == null) return false;
-        if (System.currentTimeMillis() > expiry) {
-            tokenBlacklist.remove(key);
-            return false;
-        }
-        return true;
+        return revocations.isRevoked(userId, jwtId);
     }
 
     public void revokeAccessToken(UUID userId, UUID jwtId) {
-        if (userId == null || jwtId == null) return;
-        String key = userId + "_" + jwtId;
-        tokenBlacklist.put(key, System.currentTimeMillis() + jwtAccessExpiration);
+        revocations.revoke(userId, jwtId, jwtAccessExpiration);
     }
 
     public String getJwtFromRequest(HttpServletRequest request) {

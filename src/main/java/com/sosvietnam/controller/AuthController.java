@@ -72,11 +72,11 @@ public class AuthController {
         return ResponseBuilder.returnMessage(HttpStatus.OK, "Your account is created successfully");
     }
 
-    @Operation(summary = "Change my password", description = "current_password must match; new_password 8-100 characters. Role required: logged in")
+    @Operation(summary = "Change my password", description = "current_password must match; new_password 8-100 characters. Logs out every session of the account (all devices). Role required: logged in")
     @PostMapping("/change-password")
     public ResponseEntity<Object> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
         authService.changePassword(request);
-        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã đổi mật khẩu");
+        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã đổi mật khẩu, vui lòng đăng nhập lại trên mọi thiết bị");
     }
 
     @Operation(summary = "Get current authenticated account details", description = "Role required: logged in")
