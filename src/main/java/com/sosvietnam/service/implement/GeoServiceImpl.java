@@ -16,6 +16,7 @@ import com.sosvietnam.model.payload.response.WardResponse;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
 import com.sosvietnam.repository.SeedVersionRepository;
+import com.sosvietnam.repository.StationContactRepository;
 import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.GeoService;
 import com.sosvietnam.util.AppConstants;
@@ -36,6 +37,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -54,6 +56,7 @@ public class GeoServiceImpl implements GeoService {
     private final SeedVersionRepository seedVersionRepository;
     private final ModelMapper modelMapper;
     private final AreaNameCache areaNameCache;
+    private final StationContactRepository stationContactRepository;
     // Field của RescueStation được phép sort (tên field Java, không phải tên cột)
     private static final List<String> STATION_SORT_FIELDS = List.of("id", "name", "province", "ward", "agencyType", "level");
 
@@ -129,9 +132,26 @@ public class GeoServiceImpl implements GeoService {
     @Override
     public List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit) {
         String agencyStr = agencyType != null ? agencyType.name() : null;
-        return rescueStationRepository.findNearestStations(lat, lng, agencyStr, radiusMeters, limit).stream()
+        return withUnitContacts(rescueStationRepository.findNearestStations(lat, lng, agencyStr, radiusMeters, limit).stream()
                 .map(st -> StationResponse.from(st, areaNameCache))
-                .toList();
+                .toList());
+    }
+
+    /**
+     * Chỉ huy lấy từ tài khoản đơn vị (cùng nguồn với danh sách cán bộ trong Cài đặt), không có đơn vị thì giữ dữ liệu
+     * file trạm. SĐT trực / email: giữ của trạm, trạm trống thì lấy SĐT trực ban / email đơn vị.
+     */
+    private List<StationResponse> withUnitContacts(List<StationResponse> stations) {
+        Map<Long, StationContactRepository.Contact> contacts =
+                stationContactRepository.findByStationIds(stations.stream().map(StationResponse::getId).toList());
+        for (StationResponse s : stations) {
+            StationContactRepository.Contact c = contacts.get(s.getId());
+            if (c == null) continue;
+            if (c.officer() != null) s.setOfficer(c.officer());
+            if (s.getPhone() == null) s.setPhone(c.dutyPhone());
+            if (s.getEmail() == null) s.setEmail(c.email());
+        }
+        return stations;
     }
 
     @Override
@@ -161,9 +181,9 @@ public class GeoServiceImpl implements GeoService {
         Page<RescueStation> stations = rescueStationRepository.findAll(spec, pageable);
 
         ListResponse listResponse = new ListResponse();
-        listResponse.setContent(stations.getContent().stream()
+        listResponse.setContent(withUnitContacts(stations.getContent().stream()
                 .map(st -> StationResponse.from(st, areaNameCache))
-                .toList());
+                .toList()));
         listResponse.setPageNo(pageNo);
         listResponse.setPageSize(pageSize);
         listResponse.setTotalElements(stations.getTotalElements());

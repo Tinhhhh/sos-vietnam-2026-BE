@@ -14,6 +14,7 @@ import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
 import com.sosvietnam.repository.SeedVersionRepository;
+import com.sosvietnam.repository.StationContactRepository;
 import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.service.implement.GeoServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,7 +46,8 @@ class GeoServiceMappingTest {
     final RescueStationRepository stationRepo = mock(RescueStationRepository.class);
     final SeedVersionRepository seedRepo = mock(SeedVersionRepository.class);
     final com.sosvietnam.util.AreaNameCache areaNames = mock(com.sosvietnam.util.AreaNameCache.class);
-    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper(), areaNames);
+    final StationContactRepository contacts = mock(StationContactRepository.class);
+    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper(), areaNames, contacts);
     final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     final GeometryFactory gf = new GeometryFactory();
@@ -62,6 +65,24 @@ class GeoServiceMappingTest {
         assertThat(out).contains("\"agency_type\":\"POLICE\"", "\"name\":\"CA Phường Ba Đình\"", "\"latitude\":21.04", "\"id\":7",
                         "\"province\":\"Hà Nội\"", "\"ward\":\"Phường Ba Đình\"", "\"ward_id\":102")
                 .doesNotContain("location", "geometry");
+    }
+
+    @Test
+    void stations_takeCommanderFromUnit_fillMissingPhoneAndEmail() {
+        when(stationRepo.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of(
+                RescueStation.builder().id(7L).name("CA Xã Vĩnh Lộc").agencyType(AgencyType.POLICE).officer("Trực ban CAX").build(),
+                RescueStation.builder().id(8L).name("CA Phường Ba Đình").agencyType(AgencyType.POLICE).phone("0243")
+                        .email("badinh@ca.vn").build(),
+                RescueStation.builder().id(9L).name("Cứu hộ ABC").agencyType(AgencyType.CSGT).officer("Ông A").build()));
+        when(contacts.findByStationIds(anyCollection())).thenReturn(Map.of(
+                7L, new StationContactRepository.Contact("Trung tá Vũ Công Hùng", "0965080234", "congan.vinhloc.camau@sos.vn"),
+                8L, new StationContactRepository.Contact("Trung tá Lê Minh An", "0911111111", "congan.badinh.hanoi@sos.vn")));
+        var list = service.findNearestStations(9, 105, AgencyType.POLICE, 1000, 5);
+        assertThat(list.get(0)).extracting("officer", "phone", "email")
+                .containsExactly("Trung tá Vũ Công Hùng", "0965080234", "congan.vinhloc.camau@sos.vn");
+        assertThat(list.get(1)).extracting("officer", "phone", "email")
+                .containsExactly("Trung tá Lê Minh An", "0243", "badinh@ca.vn");
+        assertThat(list.get(2).getOfficer()).isEqualTo("Ông A");
     }
 
     @Test
