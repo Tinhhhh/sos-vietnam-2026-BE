@@ -136,7 +136,7 @@ public class DemoIncidentSeeder {
         incidentRepository.save(incident);
         log.info("🧪 [DEMO INCIDENTS] đóng ca test {} (RESOLVING quá {} phút)", incident.getId(), resolvingMinutes);
         if (handlerId == null) return;
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(incident.getId(), handlerId)
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(incident.getId(), handlerId)
                 .ifPresent(claim -> {
                     claim.setReleasedAt(now);
                     claim.setEndReason(ClaimEndReason.CLOSED);

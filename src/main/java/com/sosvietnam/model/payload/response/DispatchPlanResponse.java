@@ -100,8 +100,8 @@ public class DispatchPlanResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Officer {
-        @JsonProperty("account_id")
-        private java.util.UUID accountId;
+        @JsonProperty("member_id")
+        private java.util.UUID memberId;
         @JsonProperty("full_name")
         private String fullName;
         @JsonProperty("phone")
@@ -157,8 +157,8 @@ public class DispatchPlanResponse {
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
                 .assignedTo(d.getAssignedTo() == null ? null : Officer.builder()
-                        .accountId(d.getAssignedTo().getId())
-                        .fullName(d.getAssignedTo().fullName())
+                        .memberId(d.getAssignedTo().getId())
+                        .fullName(d.getAssignedTo().displayName())
                         .phone(d.getAssignedTo().getPhone())
                         .build())
                 .rejectReason(d.getRejectReason())

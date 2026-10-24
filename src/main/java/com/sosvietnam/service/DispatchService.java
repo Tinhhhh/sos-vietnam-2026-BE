@@ -26,7 +26,7 @@ public interface DispatchService {
     List<OfficerStatusResponse> getCandidates(String incidentId);
 
     /** Bước 2 "Lập tức liên hệ": giao lượt cho một cán bộ của đơn vị đó; ca vào hàng đợi của đơn vị, chờ nhận. */
-    DispatchPlanResponse delegate(String incidentId, UUID accountId);
+    DispatchPlanResponse delegate(String incidentId, UUID memberId);
 
     /**
      * Bên giao thu hồi lượt đã gửi mà người kia chưa trả lời (không nhận / không liên lạc được):

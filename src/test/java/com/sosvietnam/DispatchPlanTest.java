@@ -32,12 +32,15 @@ class DispatchPlanTest {
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
     final IncidentRouteRepository routes = mock(IncidentRouteRepository.class);
     final RescueStationRepository stations = mock(RescueStationRepository.class);
-    final AccountRepository accounts = mock(AccountRepository.class);
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    // cán bộ mà members.findById / getReferenceById trả về (id cán bộ = id tài khoản trong test)
+    final java.util.Map<UUID, Account> known = new java.util.HashMap<>();
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final com.sosvietnam.service.OfficerService officers = mock(com.sosvietnam.service.OfficerService.class);
     final IncidentClaimRepository claims = mock(IncidentClaimRepository.class);
     final IncidentReportRepository reports = mock(IncidentReportRepository.class);
-    final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes, stations, accounts, notifier,
+    final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes, stations, members,
+            new com.sosvietnam.security.CurrentOfficer(), notifier,
             officers, claims, reports);
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
@@ -56,8 +59,10 @@ class DispatchPlanTest {
                 .latitude(10.0276).longitude(105.7574).build();
         station = RescueStation.builder().id(7L).name("Công An Phường Tân An").agencyType(AgencyType.POLICE)
                 .level(StationLevel.WARD).latitude(10.03).longitude(105.76).address("02 Nguyễn Tri Phương").build();
-        when(accounts.findByEmail("me@sos.vn")).thenReturn(Optional.of(me));
-        when(accounts.getReferenceById(me.getId())).thenReturn(me);
+
+        known.put(me.getId(), me);
+        when(members.findById(any())).thenAnswer(i -> Optional.ofNullable(known.get((UUID) i.getArgument(0))).map(TestGeo::member));
+        when(members.getReferenceById(any())).thenAnswer(i -> TestGeo.member(known.get((UUID) i.getArgument(0))));
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
         when(stations.findById(7L)).thenReturn(Optional.of(station));
         when(dispatches.save(any())).thenAnswer(inv -> {
@@ -66,7 +71,7 @@ class DispatchPlanTest {
             return d;
         });
         when(routes.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("me@sos.vn", null, "OFFICER"));
+        TestGeo.signIn(me);
     }
 
     @AfterEach
@@ -137,9 +142,11 @@ class DispatchPlanTest {
     // ---------------------------------------------------------------- bước 2 uỷ quyền
 
     Account wardOfficer(String email) {
-        return Account.builder().id(UUID.randomUUID()).email(email).firstName("Hà").lastName("Lê Thu").role(officerRole)
+        Account a = Account.builder().id(UUID.randomUUID()).email(email).firstName("Hà").lastName("Lê Thu").role(officerRole)
                 .agencyType(AgencyType.POLICE).unitLevel(UnitLevel.WARD).province(TestGeo.province("Cần Thơ"))
                 .ward(station.getWard()).isActive(true).build();
+        known.put(a.getId(), a);
+        return a;
     }
 
     IncidentDispatch pending() {
@@ -157,16 +164,14 @@ class DispatchPlanTest {
         station.setWard(TestGeo.ward("Phường Tân An"));
         IncidentDispatch d = pending();
         Account target = wardOfficer("x@sos.vn");
-        when(accounts.findById(target.getId())).thenReturn(Optional.of(target));
 
         DispatchPlanResponse plan = service.delegate("SOS-1", target.getId());
-        assertThat(d.getAssignedTo()).isEqualTo(target);
+        assertThat(d.getAssignedTo().getId()).isEqualTo(target.getId());
         assertThat(plan.getAssignedTo().getFullName()).isEqualTo(target.fullName());
 
         d.setAssignedTo(null); // (đổi người chỉ khi chưa giao: xem test khoá bên dưới)
         Account stranger = wardOfficer("y@sos.vn");
         stranger.setWard(TestGeo.ward("Phường Cái Khế"));
-        when(accounts.findById(stranger.getId())).thenReturn(Optional.of(stranger));
         assertThatThrownBy(() -> service.delegate("SOS-1", stranger.getId()))
                 .isInstanceOf(SosException.class).hasMessageContaining("không thuộc đơn vị");
     }
@@ -174,12 +179,11 @@ class DispatchPlanTest {
     @Test
     void waitingForAnswer_locksPlanAndRecipient() {
         IncidentDispatch d = pending();
-        d.setAssignedTo(wardOfficer("ha@sos.vn"));
+        d.setAssignedTo(TestGeo.member(wardOfficer("ha@sos.vn")));
 
         assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
                 .isInstanceOf(SosException.class).hasMessageContaining("Đang chờ");
         Account other = wardOfficer("khoa@sos.vn");
-        when(accounts.findById(other.getId())).thenReturn(Optional.of(other));
         assertThatThrownBy(() -> service.delegate("SOS-1", other.getId()))
                 .isInstanceOf(SosException.class).hasMessageContaining("Đang chờ");
     }
@@ -189,16 +193,14 @@ class DispatchPlanTest {
         station.setWard(TestGeo.ward("Phường Tân An"));
         pending();
         Account busy = wardOfficer("busy@sos.vn");
-        when(accounts.findById(busy.getId())).thenReturn(Optional.of(busy));
         when(incidents.existsByHandlerIdAndStatusIn(eq(busy.getId()), any())).thenReturn(true);
         assertThatThrownBy(() -> service.delegate("SOS-1", busy.getId()))
                 .isInstanceOf(SosException.class).hasMessageContaining("đang trong ca khác");
 
         Account delegatedElsewhere = wardOfficer("other@sos.vn");
-        when(accounts.findById(delegatedElsewhere.getId())).thenReturn(Optional.of(delegatedElsewhere));
         Incident otherCase = Incident.builder().id("SOS-2").status(IncidentStatus.RESOLVING).build();
         IncidentDispatch elsewhere = IncidentDispatch.builder().id(22L).incident(otherCase).station(station)
-                .role(DispatchRole.PRIMARY).status(DispatchStatus.EN_ROUTE).assignedTo(delegatedElsewhere).build();
+                .role(DispatchRole.PRIMARY).status(DispatchStatus.EN_ROUTE).assignedTo(TestGeo.member(delegatedElsewhere)).build();
         when(dispatches.findActiveAssignments(eq(List.of(delegatedElsewhere.getId())), any(), any()))
                 .thenReturn(List.of(elsewhere));
         assertThatThrownBy(() -> service.delegate("SOS-1", delegatedElsewhere.getId()))
@@ -208,7 +210,7 @@ class DispatchPlanTest {
     @Test
     void withdraw_unansweredDelegation_unlocksThePlan() {
         IncidentDispatch d = pending();
-        d.setAssignedTo(wardOfficer("ha@sos.vn"));
+        d.setAssignedTo(TestGeo.member(wardOfficer("ha@sos.vn")));
         assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
                 .isInstanceOf(SosException.class).hasMessageContaining("Đang chờ");
 
@@ -232,10 +234,9 @@ class DispatchPlanTest {
         station.setWard(TestGeo.ward("Phường Tân An"));
         IncidentDispatch d = pending();
         Account free = wardOfficer("free@sos.vn");
-        when(accounts.findById(free.getId())).thenReturn(Optional.of(free));
         when(dispatches.findActiveAssignments(any(), any(), any())).thenReturn(List.of());
         service.delegate("SOS-1", free.getId());
-        assertThat(d.getAssignedTo()).isEqualTo(free);
+        assertThat(d.getAssignedTo().getId()).isEqualTo(free.getId());
     }
 
     @Test
@@ -252,9 +253,8 @@ class DispatchPlanTest {
     void assignee_accepts_thenDeparts_reachesTracking() {
         IncidentDispatch d = pending();
         Account assignee = wardOfficer("ha@sos.vn");
-        d.setAssignedTo(assignee);
-        when(accounts.findByEmail("ha@sos.vn")).thenReturn(Optional.of(assignee));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("ha@sos.vn", null, "OFFICER"));
+        d.setAssignedTo(TestGeo.member(assignee));
+        TestGeo.signIn(assignee);
 
         assertThat(service.accept("SOS-1").getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
         assertThat(d.getRespondedAt()).isNotNull();
@@ -268,13 +268,12 @@ class DispatchPlanTest {
     void reject_keepsReason_andOnlyTheAssigneeMayAnswer() {
         IncidentDispatch d = pending();
         Account assignee = wardOfficer("ha@sos.vn");
-        d.setAssignedTo(assignee);
+        d.setAssignedTo(TestGeo.member(assignee));
         // người giữ ca (me) không phải người được giao
         assertThatThrownBy(() -> service.accept("SOS-1"))
                 .isInstanceOf(SosException.class).hasMessageContaining("không được giao cho bạn");
 
-        when(accounts.findByEmail("ha@sos.vn")).thenReturn(Optional.of(assignee));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("ha@sos.vn", null, "OFFICER"));
+        TestGeo.signIn(assignee);
         DispatchPlanResponse plan = service.reject("SOS-1", "  Đơn vị đang xử lý vụ khác  ");
         assertThat(plan.getStatus()).isEqualTo(DispatchStatus.REJECTED);
         assertThat(plan.getStep()).isEqualTo(1);

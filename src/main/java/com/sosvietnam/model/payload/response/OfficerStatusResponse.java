@@ -22,8 +22,8 @@ import java.util.UUID;
 @AllArgsConstructor
 public class OfficerStatusResponse {
 
-    @JsonProperty("account_id")
-    private UUID accountId;
+    @JsonProperty("member_id")
+    private UUID memberId;
 
     @JsonProperty("full_name")
     private String fullName;

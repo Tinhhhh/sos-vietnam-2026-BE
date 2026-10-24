@@ -3,6 +3,8 @@ package com.sosvietnam.controller;
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.AuthenticationRequest;
 import com.sosvietnam.model.payload.request.ChangePasswordRequest;
+import com.sosvietnam.model.payload.request.ChangePinRequest;
+import com.sosvietnam.model.payload.request.PinLoginRequest;
 import com.sosvietnam.model.payload.request.RegistrationRequest;
 import com.sosvietnam.security.CustomLogoutHandler;
 import com.sosvietnam.service.AuthenService;
@@ -20,6 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -77,6 +80,37 @@ public class AuthController {
     public ResponseEntity<Object> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
         authService.changePassword(request);
         return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã đổi mật khẩu, vui lòng đăng nhập lại trên mọi thiết bị");
+    }
+
+    @Operation(summary = "List the officers of my unit (login step 2)",
+            description = "Header 'Authorization: Bearer <unit_token>' from /login of a unit account. Role required: none")
+    @GetMapping("/unit/members")
+    public ResponseEntity<Object> getUnitMembers(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String unitToken) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Unit officers", authService.getUnitMembers(unitToken));
+    }
+
+    @Operation(summary = "Officer enters the PIN (login step 2)",
+            description = "Header 'Authorization: Bearer <unit_token>'. Wrong PIN 401 (5 times -> 423 locked); not activated 409. "
+                    + "Returns the officer's access + refresh token. Role required: none")
+    @PostMapping("/unit/pin")
+    public ResponseEntity<Object> pinLogin(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String unitToken,
+                                           @RequestBody @Valid PinLoginRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully Sign in", authService.loginMember(unitToken, request, false));
+    }
+
+    @Operation(summary = "Officer sets the first PIN with the activation code",
+            description = "Header 'Authorization: Bearer <unit_token>', body { member_id, activation_code, pin }. Role required: none")
+    @PostMapping("/unit/activate")
+    public ResponseEntity<Object> activate(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String unitToken,
+                                           @RequestBody @Valid PinLoginRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully Sign in", authService.loginMember(unitToken, request, true));
+    }
+
+    @Operation(summary = "Change my PIN", description = "Logs out every session of this officer only. Role required: OFFICER")
+    @PostMapping("/pin")
+    public ResponseEntity<Object> changePin(@RequestBody @Valid ChangePinRequest request) {
+        authService.changePin(request);
+        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã đổi PIN, vui lòng vào trực lại");
     }
 
     @Operation(summary = "Get current authenticated account details", description = "Role required: logged in")

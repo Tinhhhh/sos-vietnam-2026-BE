@@ -7,6 +7,7 @@ import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.security.CitizenPrincipal;
 import com.sosvietnam.security.JwtTokenProvider;
+import com.sosvietnam.security.OfficerPrincipalLoader;
 import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.security.StompAuthChannelInterceptor;
 import com.sosvietnam.util.CitizenTokens;
@@ -36,7 +37,7 @@ class StompAuthChannelInterceptorTest {
     final JwtTokenProvider jwt = mock(JwtTokenProvider.class);
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final StompAuthChannelInterceptor interceptor =
-            new StompAuthChannelInterceptor(jwt, mock(AccountRepository.class), incidents);
+            new StompAuthChannelInterceptor(jwt, mock(OfficerPrincipalLoader.class), incidents);
     final MessageChannel channel = mock(MessageChannel.class);
     final OfficerPrincipal officer = TestGeo.officer(UUID.randomUUID(), "o@sos.vn", "O", RoleName.OFFICER,
             null, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");

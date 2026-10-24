@@ -22,10 +22,9 @@ import static org.mockito.Mockito.*;
 class HeldIncidentWatchdogTest {
 
     final IncidentRepository incidentRepo = mock(IncidentRepository.class);
-    final AccountRepository accountRepo = mock(AccountRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentService service = mock(IncidentService.class);
-    final HeldIncidentWatchdog watchdog = new HeldIncidentWatchdog(incidentRepo, accountRepo, notifier, service);
+    final HeldIncidentWatchdog watchdog = new HeldIncidentWatchdog(incidentRepo, notifier, service);
 
     final UUID holder = UUID.randomUUID();
 
@@ -33,13 +32,12 @@ class HeldIncidentWatchdogTest {
         ReflectionTestUtils.setField(watchdog, "offlineReleaseMinutes", 3L);
         when(incidentRepo.findByStatusAndHandlerIdIsNotNull(IncidentStatus.VERIFYING))
                 .thenReturn(List.of(Incident.builder().id("SOS-1").handlerId(holder).build()));
-        when(accountRepo.findAllById(any())).thenReturn(List.of(Account.builder().id(holder).email("a@sos.vn").build()));
         when(service.autoRelease(any(), any(), any())).thenReturn(true);
     }
 
     @Test
     void onlineHolder_keepsTheCase() {
-        when(notifier.onlineEmails()).thenReturn(Set.of("a@sos.vn"));
+        when(notifier.onlineMemberIds()).thenReturn(Set.of(holder));
         LocalDateTime t = LocalDateTime.now();
         watchdog.check(t);
         watchdog.check(t.plusMinutes(10));
@@ -48,7 +46,7 @@ class HeldIncidentWatchdogTest {
 
     @Test
     void offlineHolder_releasedOnlyAfterTheGracePeriod() {
-        when(notifier.onlineEmails()).thenReturn(Set.of());
+        when(notifier.onlineMemberIds()).thenReturn(Set.of());
         LocalDateTime t = LocalDateTime.now();
         watchdog.check(t);
         watchdog.check(t.plusMinutes(2));
@@ -60,11 +58,11 @@ class HeldIncidentWatchdogTest {
     @Test
     void reconnectingResetsTheClock() {
         LocalDateTime t = LocalDateTime.now();
-        when(notifier.onlineEmails()).thenReturn(Set.of());
+        when(notifier.onlineMemberIds()).thenReturn(Set.of());
         watchdog.check(t);
-        when(notifier.onlineEmails()).thenReturn(Set.of("a@sos.vn"));
+        when(notifier.onlineMemberIds()).thenReturn(Set.of(holder));
         watchdog.check(t.plusMinutes(2));
-        when(notifier.onlineEmails()).thenReturn(Set.of());
+        when(notifier.onlineMemberIds()).thenReturn(Set.of());
         watchdog.check(t.plusMinutes(4));
         verify(service, never()).autoRelease(any(), any(), any());
     }

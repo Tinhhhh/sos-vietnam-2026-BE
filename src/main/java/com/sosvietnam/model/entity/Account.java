@@ -79,6 +79,11 @@ public class Account {
     @JoinColumn(name = "ward_id")
     private Ward ward;
 
+    // Tài khoản đơn vị theo định dạng mới (cán bộ vào trực bằng PIN); false = tài khoản cán bộ cũ chờ gộp
+    @Builder.Default
+    @Column(name = "unit_account", nullable = false)
+    private boolean unitAccount = false;
+
     @Column(name = "created_date", updatable = false)
     private LocalDateTime createdDate;
 

@@ -21,8 +21,11 @@ public interface IncidentNotifier {
     /** Gỡ thẻ ca khỏi hàng đợi của cán bộ lực lượng cũ (sau khi ca chuyển sang lực lượng khác). */
     void notifyRemovedFor(String incidentId, com.sosvietnam.model.payload.enums.AgencyType previousAgency);
 
-    /** Email các trực ban đang kết nối màn hình trực ban. */
-    Set<String> onlineEmails();
+    /** Cán bộ đang kết nối màn hình trực ban (mỗi phiên STOMP 1 cán bộ; chỉ đúng khi 1 instance BE). */
+    List<OfficerPrincipal> onlineOfficers();
+
+    /** member id của các cán bộ đang kết nối. */
+    Set<java.util.UUID> onlineMemberIds();
 
     /** Đổi ca sang dạng hàng đợi theo góc nhìn của một trực ban (kèm tên người đang giữ ca). */
     List<IncidentQueueResponse> toQueueViews(Collection<Incident> incidents, OfficerPrincipal viewer);

@@ -20,4 +20,14 @@ public interface AuthenService {
 
     /** Người đang đăng nhập đổi mật khẩu: phải nhập đúng mật khẩu hiện tại, mật khẩu mới khác mật khẩu cũ. */
     void changePassword(ChangePasswordRequest request);
+
+    /** Danh sách cán bộ để chọn lúc vào trực (header Authorization: Bearer unit_token). */
+    java.util.List<com.sosvietnam.model.payload.response.UnitMemberResponse> getUnitMembers(String unitToken);
+
+    /** Cán bộ nhập PIN (activate = đặt PIN lần đầu bằng mã kích hoạt) -> cặp token của cán bộ. */
+    AuthenticationResponse loginMember(String unitToken, com.sosvietnam.model.payload.request.PinLoginRequest request,
+                                       boolean activate);
+
+    /** Cán bộ đang trực tự đổi PIN: phiên của riêng cán bộ đó (mọi máy) bị đăng xuất. */
+    void changePin(com.sosvietnam.model.payload.request.ChangePinRequest request);
 }

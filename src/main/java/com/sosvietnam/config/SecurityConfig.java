@@ -50,6 +50,8 @@ public class SecurityConfig {
                         // ── Auth: /me cần đăng nhập, còn lại công khai ──────────────
                         // (phải khai báo /me TRƯỚC "/api/v1/auth/**", rule nào khớp trước thắng)
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/change-password").authenticated()
+                        .requestMatchers("/api/v1/auth/pin").hasAnyAuthority(STAFF)
+                        .requestMatchers("/api/v1/unit/**").hasAuthority(RoleName.OFFICER.getRole())
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
                         // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─

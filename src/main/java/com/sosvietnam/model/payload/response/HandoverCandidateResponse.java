@@ -12,8 +12,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class HandoverCandidateResponse {
-    @JsonProperty("account_id")
-    private UUID accountId;
+    @JsonProperty("member_id")
+    private UUID memberId;
 
     @JsonProperty("full_name")
     private String fullName;

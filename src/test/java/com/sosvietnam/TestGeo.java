@@ -1,12 +1,19 @@
 package com.sosvietnam;
 
+import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Province;
+import com.sosvietnam.model.entity.UnitMember;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.enums.UnitLevel;
+import com.sosvietnam.model.payload.enums.UnitRole;
 import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.util.AreaNames;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.time.LocalDateTime;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,8 +60,22 @@ public final class TestGeo {
                                            AgencyType agency, UnitLevel level, String provinceName, String wardName) {
         Province p = province(provinceName);
         Ward w = ward(wardName);
-        return new OfficerPrincipal(id, email, fullName, role, agency, level,
+        return new OfficerPrincipal(id, id, email, fullName, role, UnitRole.MEMBER, agency, level,
                 p == null ? null : p.getCode(), p == null ? null : p.getName(),
                 w == null ? null : w.getId(), w == null ? null : w.getName());
+    }
+
+    /** Cán bộ của tài khoản trong test: cùng id với tài khoản (như dữ liệu V11), họ tên = họ tên tài khoản. */
+    public static UnitMember member(Account account) {
+        return UnitMember.builder().id(account.getId()).account(account).fullName(account.fullName())
+                .unitRole(UnitRole.MEMBER).createdAt(LocalDateTime.now()).build();
+    }
+
+    /** Đăng nhập bằng cán bộ của tài khoản (principal = OfficerPrincipal như JwtAuthenticationFilter gắn). */
+    public static OfficerPrincipal signIn(Account account) {
+        OfficerPrincipal officer = OfficerPrincipal.of(member(account));
+        String role = account.getRole() == null ? "OFFICER" : account.getRole().getRoleName();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(officer, null, role));
+        return officer;
     }
 }

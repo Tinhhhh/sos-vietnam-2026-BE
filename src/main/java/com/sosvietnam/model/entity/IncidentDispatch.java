@@ -38,7 +38,7 @@ public class IncidentDispatch {
     // EAGER: thẻ hàng đợi (đẩy qua STOMP ngoài transaction) cần tên người giao / người nhận
     @ManyToOne
     @JoinColumn(name = "dispatched_by")
-    private Account dispatchedBy;
+    private UnitMember dispatchedBy;
 
     // Cấp của người ra lệnh (bên giao việc)
     @Enumerated(EnumType.STRING)
@@ -56,7 +56,7 @@ public class IncidentDispatch {
     // Cán bộ của đơn vị được uỷ quyền (bên nhận việc); null = chính đơn vị ra lệnh đi
     @ManyToOne
     @JoinColumn(name = "assigned_to")
-    private Account assignedTo;
+    private UnitMember assignedTo;
 
     @Column(length = 500)
     private String note;

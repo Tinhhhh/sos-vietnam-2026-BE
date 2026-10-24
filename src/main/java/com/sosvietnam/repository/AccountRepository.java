@@ -24,6 +24,16 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /** Mọi tài khoản đang hoạt động của một vai trò (ADMIN xem trạng thái cán bộ toàn quốc). */
     List<Account> findByRole_RoleNameAndIsActiveTrue(String roleName);
 
+    /** Tài khoản để xuất Excel, lọc tuỳ chọn (null = bỏ qua); nạp sẵn vai trò, tỉnh, xã để không N+1. */
+    @Query("""
+        SELECT a FROM Account a LEFT JOIN FETCH a.role LEFT JOIN FETCH a.province LEFT JOIN FETCH a.ward
+        WHERE (:provinceId IS NULL OR a.province.code = :provinceId)
+          AND (:agency IS NULL OR a.agencyType = :agency)
+          AND (:level IS NULL OR a.unitLevel = :level)
+        """)
+    List<Account> findForExport(@Param("provinceId") String provinceId, @Param("agency") AgencyType agency,
+                                @Param("level") UnitLevel level);
+
     /** Xã có ít nhất 1 cán bộ của lực lượng này ở cấp xã đang hoạt động (để phân luồng ca vào xã). */
     boolean existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType agency, UnitLevel level, Long wardId);
 

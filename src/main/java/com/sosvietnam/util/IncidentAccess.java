@@ -66,7 +66,7 @@ public class IncidentAccess {
     /** Cán bộ đang được giao lượt điều động này (người bấm nhận / từ chối / xuất phát). */
     public boolean isAssignee(OfficerPrincipal officer, IncidentDispatch dispatch) {
         return dispatch != null && dispatch.getAssignedTo() != null
-                && officer.accountId().equals(dispatch.getAssignedTo().getId());
+                && officer.memberId().equals(dispatch.getAssignedTo().getId());
     }
 
     /** Hai cán bộ cùng đơn vị (cùng lực lượng, cấp, tỉnh; cấp xã thì cùng xã): được giao ca cho nhau. */

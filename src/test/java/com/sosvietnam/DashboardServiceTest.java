@@ -34,9 +34,8 @@ import static org.mockito.Mockito.*;
 class DashboardServiceTest {
 
     final DashboardRepository repo = mock(DashboardRepository.class);
-    final AccountRepository accounts = mock(AccountRepository.class);
     final com.sosvietnam.repository.ProvinceRepository provinces = mock(com.sosvietnam.repository.ProvinceRepository.class);
-    final DashboardServiceImpl service = new DashboardServiceImpl(repo, accounts, provinces);
+    final DashboardServiceImpl service = new DashboardServiceImpl(repo, new com.sosvietnam.security.CurrentOfficer(), provinces);
 
     @BeforeEach
     void setUp() {
@@ -63,8 +62,7 @@ class DashboardServiceTest {
         Account a = Account.builder().id(UUID.randomUUID()).email("x@sos.vn").firstName("A").lastName("B")
                 .role(Role.builder().roleName(role).build()).agencyType(agency).unitLevel(level)
                 .province(TestGeo.province(province)).ward(TestGeo.ward(ward)).isActive(true).build();
-        when(accounts.findByEmail("x@sos.vn")).thenReturn(Optional.of(a));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("x@sos.vn", null, role));
+        TestGeo.signIn(a);
     }
 
     DashboardRepository.Filter currentFilter() {

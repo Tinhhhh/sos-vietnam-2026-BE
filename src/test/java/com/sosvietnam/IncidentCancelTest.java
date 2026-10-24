@@ -48,7 +48,8 @@ class IncidentCancelTest {
     final IncidentClaimRepository claimRepo = mock(IncidentClaimRepository.class);
     final AccountRepository accountRepo = mock(AccountRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo,
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
             mock(GeoService.class), mock(MediaStorageService.class), notifier, mock(IncidentEscalationService.class),
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
             mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
@@ -96,10 +97,10 @@ class IncidentCancelTest {
             incident.setHandlerId(officerId);
             return 1;
         });
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officerId))
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", officerId))
                 .thenReturn(Optional.of(claim));
-        when(accountRepo.findById(officerId)).thenReturn(Optional.of(
-                Account.builder().id(officerId).firstName("Văn").lastName("A").build()));
+        when(members.findById(officerId)).thenReturn(Optional.of(
+                TestGeo.member(Account.builder().id(officerId).firstName("Văn").lastName("A").build())));
 
         IncidentTrackingResponse res = service.cancelByCitizen("SOS-1", TOKEN, null); // no reason given
 

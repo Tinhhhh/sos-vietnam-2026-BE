@@ -6,11 +6,13 @@ import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.entity.SeedVersion;
+import com.sosvietnam.model.entity.UnitMember;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.model.payload.enums.StationLevel;
 import com.sosvietnam.model.payload.enums.UnitLevel;
+import com.sosvietnam.model.payload.enums.UnitRole;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.repository.RescueStationRepository;
@@ -33,6 +35,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -54,11 +57,11 @@ public class DataSeeder implements CommandLineRunner {
     private final ProvinceRepository provinceRepository;
     private final WardRepository wardRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
-    private static final String TEST_ACCOUNTS_FILE = "data/test_accounts.json";
     private static final String ADMIN_EMAIL = "admin@sos.vn";
     private static final String ADMIN_PROVINCE = "Hà Nội";
     private static final String ADMIN_WARD = "Phường Hoàn Kiếm";
@@ -93,16 +96,12 @@ public class DataSeeder implements CommandLineRunner {
     @Value("${app.seed.admin-password:}")
     private String adminPassword;
 
-    // From .env (SEED_TEST_ACCOUNT_PASSWORD), shared by every account in data/test_accounts.json.
     // Empty = the test accounts are not imported.
-    @Value("${app.seed.test-account-password:}")
-    private String testAccountPassword;
 
     @Override
     public void run(String... args) throws Exception {
         seedRoles();
         seedDefaultAccounts();
-        seedTestAccounts();
         seedRescueStations();
     }
 
@@ -147,10 +146,12 @@ public class DataSeeder implements CommandLineRunner {
                     .isActive(true)
                     .isLocked(false)
                     .build();
-            accountRepository.save(admin);
+            admin = accountRepository.save(admin);
             log.info("👑 [INIT ACCOUNT] Seeded Admin Account: {}", ADMIN_EMAIL);
+            ensureAdminMember(admin);
             return;
         }
+        ensureAdminMember(admin);
 
         boolean changed = false;
         if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
@@ -177,71 +178,17 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
-    /**
-     * Nạp tài khoản trực ban test từ data/test_accounts.json (theo email): chưa có thì tạo,
-     * có rồi thì cập nhật lực lượng / cấp / địa bàn và đồng bộ mật khẩu với .env.
-     * "ward" bắt buộc (cấp tỉnh = xã đặt trụ sở), "address" chỉ là số nhà / đường.
-     */
-    private void seedTestAccounts() {
-        if (!StringUtils.hasText(testAccountPassword)) {
-            log.info("[INIT TEST ACCOUNTS] Skipped: set SEED_TEST_ACCOUNT_PASSWORD in .env to import {}", TEST_ACCOUNTS_FILE);
-            return;
-        }
-        try {
-            ClassPathResource resource = new ClassPathResource(TEST_ACCOUNTS_FILE);
-            if (!resource.exists()) {
-                log.warn("⚠️ [INIT TEST ACCOUNTS] {} not found in classpath", TEST_ACCOUNTS_FILE);
-                return;
-            }
-            JsonNode accountsNode;
-            try (InputStream in = resource.getInputStream()) {
-                accountsNode = objectMapper.readTree(in).path("accounts");
-            }
-            Role officerRole = roleRepository.findByRoleName(RoleName.OFFICER.getRole())
-                    .orElseThrow(() -> new IllegalStateException("Role " + RoleName.OFFICER.getRole() + " chưa được khởi tạo"));
-
-            int created = 0;
-            int updated = 0;
-            for (JsonNode node : accountsNode) {
-                String email = node.path("email").asText("").trim();
-                AgencyType agency = AgencyType.valueOf(node.path("agency_type").asText());
-                UnitLevel level = UnitLevel.valueOf(node.path("unit_level").asText());
-                if (!StringUtils.hasText(email) || !agency.supports(level)) {
-                    log.warn("⚠️ [INIT TEST ACCOUNTS] Skipped {}: {} has no level {}", email, agency, level);
-                    continue;
-                }
-
-                Province province = findProvince(textOrNull(node, "province"));
-                Ward ward = findWard(province, textOrNull(node, "ward"));
-                if (province == null || ward == null) {
-                    log.warn("⚠️ [INIT TEST ACCOUNTS] Skipped {}: province/ward not found ({} / {})", email,
-                            textOrNull(node, "province"), textOrNull(node, "ward"));
-                    continue;
-                }
-
-                Account account = accountRepository.findByEmail(email).orElse(null);
-                boolean isNew = account == null;
-                if (isNew) {
-                    account = Account.builder().email(email).role(officerRole).isActive(true).isLocked(false).build();
-                }
-                account.setLastName(textOrNull(node, "last_name"));
-                account.setFirstName(textOrNull(node, "first_name"));
-                account.setAgencyType(agency);
-                account.setUnitLevel(level);
-                account.setProvince(province);
-                account.setWard(ward);
-                account.setAddress(textOrNull(node, "address"));
-                if (isNew || !passwordEncoder.matches(testAccountPassword, account.getPassword())) {
-                    account.setPassword(passwordEncoder.encode(testAccountPassword));
-                }
-                accountRepository.save(account);
-                if (isNew) created++;
-                else updated++;
-            }
-            log.info("[INIT TEST ACCOUNTS] {} created, {} updated from {}", created, updated, TEST_ACCOUNTS_FILE);
-        } catch (Exception e) {
-            log.error("❌ [INIT TEST ACCOUNTS] Failed to import test accounts: {}", e.getMessage(), e);
-        }
+    /** Admin vào thẳng (không PIN) bằng 1 cán bộ ẩn có cùng id với tài khoản (V11 đã tạo cho DB cũ). */
+    private void ensureAdminMember(Account admin) {
+        if (unitMemberRepository.countByAccount_IdAndActiveTrue(admin.getId()) > 0) return;
+        unitMemberRepository.save(UnitMember.builder()
+                .id(admin.getId())
+                .account(admin)
+                .fullName(admin.fullName())
+                .unitRole(UnitRole.COMMANDER)
+                .createdAt(LocalDateTime.now())
+                .build());
+        log.info("👑 [INIT ACCOUNT] Created the admin's officer profile");
     }
 
     /** Tỉnh theo tên ("Cần Thơ", "TP. Cần Thơ"...). */

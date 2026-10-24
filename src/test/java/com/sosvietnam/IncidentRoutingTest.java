@@ -1,6 +1,7 @@
 package com.sosvietnam;
 
 import com.sosvietnam.model.entity.Account;
+import com.sosvietnam.security.OfficerPrincipal;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.entity.IncidentClaim;
 import com.sosvietnam.model.entity.Role;
@@ -51,7 +52,8 @@ class IncidentRoutingTest {
     final GeoService geo = mock(GeoService.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, geo,
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(), geo,
             mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
             mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
@@ -72,9 +74,12 @@ class IncidentRoutingTest {
         when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.TAN_AN));
         when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType.POLICE, UnitLevel.WARD,
                 TestGeo.TAN_AN.getId())).thenReturn(true);
-        when(accountRepo.findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(AgencyType.POLICE, UnitLevel.WARD,
-                TestGeo.TAN_AN.getId())).thenReturn(List.of(caTanAn, caTanAn2));
-        when(notifier.onlineEmails()).thenReturn(java.util.Set.of("CongAn.TanAn@sos.vn"));
+        // cán bộ công an Phường Tân An đang trực tuyến (có phiên STOMP)
+        when(notifier.onlineOfficers()).thenReturn(List.of(OfficerPrincipal.of(TestGeo.member(caTanAn))));
+        when(members.findById(any())).thenReturn(Optional.empty());
+        for (Account a : List.of(caTanAn, caTanAn2)) {
+            when(members.findById(a.getId())).thenReturn(Optional.of(TestGeo.member(a)));
+        }
     }
 
     @AfterEach
@@ -105,7 +110,8 @@ class IncidentRoutingTest {
 
     @Test
     void police_wardWithOfficersButNoneOnline_goesStraightToProvince() {
-        when(notifier.onlineEmails()).thenReturn(java.util.Set.of("someone.else@sos.vn"));
+        when(notifier.onlineOfficers()).thenReturn(List.of(OfficerPrincipal.of(TestGeo.member(
+                officerAccount("someone.else@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Cái Khế")))));
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.PROVINCE);
         assertThat(inc.getEscalateAt()).isNull();
@@ -114,7 +120,7 @@ class IncidentRoutingTest {
     @Test
     void police_wardWithoutOfficer_goesStraightToProvince() {
         when(accountRepo.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(any(), any(), any())).thenReturn(false);
-        when(accountRepo.findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(any(), any(), any())).thenReturn(List.of());
+        when(notifier.onlineOfficers()).thenReturn(List.of());
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.PROVINCE);
         assertThat(inc.getEscalateAt()).isNull();
@@ -165,8 +171,7 @@ class IncidentRoutingTest {
     }
 
     void loginAs(Account account) {
-        when(accountRepo.findByEmail(account.getEmail())).thenReturn(Optional.of(account));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(account.getEmail(), null, "OFFICER"));
+        TestGeo.signIn(account);
     }
 
     @Test
@@ -214,7 +219,7 @@ class IncidentRoutingTest {
         when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(held));
         when(incidentRepo.release(eq("SOS-1"), eq(caTanAn.getId()), any())).thenReturn(1);
         IncidentClaim open = IncidentClaim.builder().claimedAt(LocalDateTime.now()).build();
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", caTanAn.getId())).thenReturn(Optional.of(open));
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", caTanAn.getId())).thenReturn(Optional.of(open));
         when(notifier.toQueueViews(any(), any())).thenReturn(List.of(new com.sosvietnam.model.payload.response.IncidentQueueResponse()));
 
         // Không có transaction thật trong unit test: đăng ký afterCommit cần synchronization đang bật
@@ -242,21 +247,20 @@ class IncidentRoutingTest {
         when(notifier.toQueueViews(any(), any())).thenReturn(List.of(new com.sosvietnam.model.payload.response.IncidentQueueResponse()));
 
         Account fire = officerAccount("pccc@sos.vn", AgencyType.FIRE, UnitLevel.PROVINCE, null);
-        when(accountRepo.findById(fire.getId())).thenReturn(Optional.of(fire));
+        when(members.findById(fire.getId())).thenReturn(Optional.of(TestGeo.member(fire)));
         ReleaseIncidentRequest toFire = new ReleaseIncidentRequest();
-        toFire.setToAccountId(fire.getId());
+        toFire.setToMemberId(fire.getId());
         toFire.setNote("Hết ca trực, giao lại");
         assertThatThrownBy(() -> service.releaseIncident("SOS-1", toFire)).extracting("httpStatus").isEqualTo(HttpStatus.BAD_REQUEST);
 
         // Giao ca bắt buộc lý do
-        when(accountRepo.findById(caTanAn2.getId())).thenReturn(Optional.of(caTanAn2));
         ReleaseIncidentRequest noReason = new ReleaseIncidentRequest();
-        noReason.setToAccountId(caTanAn2.getId());
+        noReason.setToMemberId(caTanAn2.getId());
         assertThatThrownBy(() -> service.releaseIncident("SOS-1", noReason))
                 .isInstanceOf(SosException.class).hasMessageContaining("lý do giao ca");
 
         ReleaseIncidentRequest toColleague = new ReleaseIncidentRequest();
-        toColleague.setToAccountId(caTanAn2.getId());
+        toColleague.setToMemberId(caTanAn2.getId());
         toColleague.setNote("Cần đi hiện trường khác");
         when(incidentRepo.existsByHandlerIdAndStatusIn(eq(caTanAn2.getId()), any())).thenReturn(true);
         assertThatThrownBy(() -> service.releaseIncident("SOS-1", toColleague)).extracting("httpStatus").isEqualTo(HttpStatus.CONFLICT);
@@ -265,7 +269,7 @@ class IncidentRoutingTest {
         when(incidentRepo.handOver("SOS-1", caTanAn.getId(), caTanAn2.getId(), null)).thenReturn(0);
         when(incidentRepo.handOver(eq("SOS-1"), eq(caTanAn.getId()), eq(caTanAn2.getId()), any())).thenReturn(1);
         service.releaseIncident("SOS-1", toColleague);
-        verify(claimRepo).save(argThat(c -> c.getAccount() == caTanAn2));
+        verify(claimRepo).save(argThat(c -> c.getMember() != null && c.getMember().getId().equals(caTanAn2.getId())));
         verify(escalation, never()).schedule(any());
     }
 
@@ -353,7 +357,7 @@ class IncidentRoutingTest {
         when(incidentRepo.findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
                 eq(IncidentStatus.CLOSED), any(), any())).thenReturn(List.of(resolved, cancelled, otherWard));
         when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc("SOS-R"))
-                .thenReturn(Optional.of(IncidentClaim.builder().account(caTanAn).claimedAt(LocalDateTime.now()).build()));
+                .thenReturn(Optional.of(IncidentClaim.builder().member(TestGeo.member(caTanAn)).claimedAt(LocalDateTime.now()).build()));
         when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc("SOS-C")).thenReturn(Optional.empty());
         when(dispatchRepo.countByIncident_Id("SOS-R")).thenReturn(2L);
 
@@ -381,7 +385,7 @@ class IncidentRoutingTest {
         mine.setIncidentTag("Trộm cắp");
         when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(mine));
         when(claimRepo.findByIncident_IdOrderByClaimedAtAsc("SOS-1")).thenReturn(List.of(
-                IncidentClaim.builder().account(caTanAn).claimedAt(LocalDateTime.now().minusMinutes(3))
+                IncidentClaim.builder().member(TestGeo.member(caTanAn)).claimedAt(LocalDateTime.now().minusMinutes(3))
                         .releasedAt(LocalDateTime.now()).endReason(com.sosvietnam.model.payload.enums.ClaimEndReason.RELEASED).build()));
 
         var detail = service.getDetail("SOS-1");

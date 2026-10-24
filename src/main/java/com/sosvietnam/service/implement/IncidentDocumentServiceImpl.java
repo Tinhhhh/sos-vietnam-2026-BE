@@ -18,7 +18,6 @@ import com.sosvietnam.model.payload.request.IncidentLookupRequest;
 import com.sosvietnam.model.payload.request.SignDocumentRequest;
 import com.sosvietnam.model.payload.response.IncidentDocumentResponse;
 import com.sosvietnam.model.payload.response.IncidentLookupResponse;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentClaimRepository;
 import com.sosvietnam.repository.IncidentDispatchRepository;
 import com.sosvietnam.repository.IncidentDocumentRepository;
@@ -63,11 +62,12 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     private static final int MIN_PROXY_REASON = 5;
 
     private final IncidentRepository incidentRepository;
+    private final com.sosvietnam.security.CurrentOfficer currentOfficer;
     private final IncidentClaimRepository incidentClaimRepository;
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final IncidentReportRepository incidentReportRepository;
     private final IncidentDocumentRepository documentRepository;
-    private final AccountRepository accountRepository;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
     private final com.sosvietnam.service.IncidentNotifier notifier;
 
     // ---------------------------------------------------------------- cán bộ
@@ -91,7 +91,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
         IncidentDocument doc = documentRepository.findById(incidentId).orElse(null);
         if (doc == null) {
             doc = draft(incident);
-            doc.setCreatedBy(me.accountId());
+            doc.setCreatedBy(me.memberId());
             doc.setCreatedAt(now);
         } else if (doc.locked()) {
             throw new SosException(HttpStatus.CONFLICT, "Văn bản đã đủ chữ ký 2 bên, không sửa được nữa");
@@ -101,7 +101,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
             log.info("📝 [DOCUMENT] {} content changed by {}: signatures cleared", incidentId, me.email());
         }
         apply(doc, request);
-        doc.setUpdatedBy(me.accountId());
+        doc.setUpdatedBy(me.memberId());
         doc.setUpdatedAt(now);
         return view(saved(doc), true, incident, true);
     }
@@ -117,9 +117,9 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
         doc.setOfficerSignName(request.getName().trim());
         doc.setOfficerSignType(request.getType());
         doc.setOfficerSignature(request.getType() == SignatureType.DRAW ? request.getSignatureData() : null);
-        doc.setOfficerSignedBy(me.accountId());
+        doc.setOfficerSignedBy(me.memberId());
         doc.setOfficerSignedAt(now);
-        doc.setUpdatedBy(me.accountId());
+        doc.setUpdatedBy(me.memberId());
         doc.setUpdatedAt(now);
         log.info("✍️ [DOCUMENT] {} signed by officer {}", incidentId, me.email());
         return view(saved(doc), true, incident, true);
@@ -145,9 +145,9 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
         LocalDateTime now = LocalDateTime.now();
         setCitizenSignature(doc, request, now);
         doc.setCitizenSignChannel(CitizenSignChannel.OFFICER_PROXY);
-        doc.setCitizenProxyBy(me.accountId());
+        doc.setCitizenProxyBy(me.memberId());
         doc.setCitizenProxyReason(reason);
-        doc.setUpdatedBy(me.accountId());
+        doc.setUpdatedBy(me.memberId());
         doc.setUpdatedAt(now);
         log.info("✍️ [DOCUMENT] {} citizen box signed by proxy {} ({})", incidentId, me.email(), reason);
         return view(saved(doc), true, incident, true);
@@ -213,7 +213,8 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     /** Bản nháp điền từ dữ liệu ca: đơn vị = người nhận ca cuối, kết quả = văn bản kết thúc ca (incident_reports). */
     IncidentDocument draft(Incident incident) {
         IncidentClaim claim = incidentClaimRepository.findFirstByIncident_IdOrderByClaimedAtDesc(incident.getId()).orElse(null);
-        Account officer = claim == null ? null : claim.getAccount();
+        com.sosvietnam.model.entity.UnitMember member = claim == null ? null : claim.getMember();
+        Account officer = member == null ? null : member.getAccount();
         List<IncidentDispatch> dispatches = incidentDispatchRepository.findByIncident_IdOrderByDispatchedAtAsc(incident.getId());
         IncidentReport report = incidentReportRepository.findById(incident.getId()).orElse(null);
 
@@ -234,7 +235,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
                 .headerUpper(header[0])
                 .headerLower(header[1])
                 .placeDate(placeDate(province, closedAt))
-                .officerName(officer == null ? null : officer.fullName())
+                .officerName(member == null ? null : member.displayName())
                 .officerTitle("Cán bộ tiếp nhận")
                 .unitName(unitName(agency, level, province, ward))
                 .unitAddress(officer == null ? null : blankToNull(officer.fullAddress()))
@@ -313,7 +314,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
         for (IncidentDispatch d : dispatches) {
             StringBuilder s = new StringBuilder("Điều động ").append(d.getStation().getName());
             if (d.getRole() != null) s.append(" (").append(d.getRole().getLabel().toLowerCase(Locale.ROOT)).append(")");
-            if (d.getAssignedTo() != null) s.append(", uỷ quyền cho ").append(d.getAssignedTo().fullName());
+            if (d.getAssignedTo() != null) s.append(", uỷ quyền cho ").append(d.getAssignedTo().displayName());
             if (d.getDepartedAt() != null) s.append(", xuất phát lúc ").append(d.getDepartedAt().format(HOUR));
             if (d.getArrivedAt() != null) s.append(", có mặt lúc ").append(d.getArrivedAt().format(HOUR));
             lines.add(s.toString());
@@ -345,7 +346,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     private Function<UUID, String> nameLookup() {
         Map<UUID, String> cache = new HashMap<>();
         return id -> id == null ? null : cache.computeIfAbsent(id,
-                k -> accountRepository.findById(k).map(Account::fullName).orElse(null));
+                k -> unitMemberRepository.findById(k).map(com.sosvietnam.model.entity.UnitMember::displayName).orElse(null));
     }
 
     private static void apply(IncidentDocument d, IncidentDocumentRequest r) {
@@ -439,15 +440,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     }
 
     private OfficerPrincipal currentOfficer() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new SosException(HttpStatus.UNAUTHORIZED, "Chưa đăng nhập");
-        }
-        OfficerPrincipal officer = accountRepository.findByEmail(authentication.getName())
-                .map(OfficerPrincipal::of)
-                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
-        if (!officer.isStaff()) throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ mới lập văn bản được");
-        return officer;
+        return currentOfficer.require();
     }
 
     private static String joinNonBlank(String sep, String... parts) {

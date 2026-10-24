@@ -41,9 +41,10 @@ class IncidentLookupTest {
     final IncidentRepository incidentRepo = mock(IncidentRepository.class);
     final IncidentDispatchRepository dispatchRepo = mock(IncidentDispatchRepository.class);
     final GeoService geo = mock(GeoService.class);
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, mock(IncidentClaimRepository.class),
             mock(IncidentMediaRepository.class), dispatchRepo, mock(RescueStationRepository.class),
-            mock(AccountRepository.class), geo, mock(MediaStorageService.class),
+            mock(AccountRepository.class), members, new com.sosvietnam.security.CurrentOfficer(), geo, mock(MediaStorageService.class),
             mock(IncidentNotifier.class), mock(IncidentEscalationService.class),
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
             mock(com.sosvietnam.repository.IncidentDocumentRepository.class));

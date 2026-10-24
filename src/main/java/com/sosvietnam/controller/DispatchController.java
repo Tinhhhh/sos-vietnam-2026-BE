@@ -51,7 +51,7 @@ public class DispatchController {
                     + "The incident shows in that ward unit's queue. Role required: OFFICER, ADMIN")
     @PostMapping("/delegate")
     public ResponseEntity<Object> delegate(@PathVariable String id, @RequestBody @Valid DelegateRequest request) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Delegated", dispatchService.delegate(id, request.getAccountId()));
+        return ResponseBuilder.returnData(HttpStatus.OK, "Delegated", dispatchService.delegate(id, request.getMemberId()));
     }
 
     @Operation(summary = "Withdraw a delegation that has not been answered yet (back to choosing in step 2)",

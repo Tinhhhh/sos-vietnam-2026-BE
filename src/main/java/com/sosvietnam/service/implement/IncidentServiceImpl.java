@@ -1,6 +1,5 @@
 package com.sosvietnam.service.implement;
 
-import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.entity.IncidentClaim;
 import com.sosvietnam.model.entity.IncidentDispatch;
@@ -144,6 +143,8 @@ public class IncidentServiceImpl implements IncidentService {
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final RescueStationRepository rescueStationRepository;
     private final AccountRepository accountRepository;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
+    private final com.sosvietnam.security.CurrentOfficer currentOfficer;
     private final GeoService geoService;
     private final MediaStorageService mediaStorageService;
     private final IncidentNotifier notifier;
@@ -284,7 +285,7 @@ public class IncidentServiceImpl implements IncidentService {
     public boolean autoRelease(String id, UUID handlerId, String note) {
         LocalDateTime now = LocalDateTime.now();
         if (incidentRepository.release(id, handlerId, now) == 0) return false;
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, handlerId)
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, handlerId)
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.AUTO_RELEASED, null, note));
         Incident released = findIncident(id);
         afterCommit(() -> escalationService.schedule(released));
@@ -298,7 +299,7 @@ public class IncidentServiceImpl implements IncidentService {
     public IncidentQueueResponse transferAgency(String id, com.sosvietnam.model.payload.request.TransferIncidentRequest request) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
         if (incident.getStatus() != IncidentStatus.VERIFYING) {
@@ -318,7 +319,7 @@ public class IncidentServiceImpl implements IncidentService {
         }
         LocalDateTime now = LocalDateTime.now();
         UnitLevel level = routeLevel(target, new GeoService.Area(incident.getProvince(), incident.getWard()));
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, me.accountId())
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.TRANSFERRED, null,
                         "Chuyển sang " + target.getLabel() + ": " + reason));
         java.util.Arrays.stream(EmergencyType.values()).filter(t -> t.getAgency() == target).findFirst()
@@ -335,7 +336,7 @@ public class IncidentServiceImpl implements IncidentService {
         incident.setEscalatedBy(null);
         incident.setTransferredFrom(previous);
         incident.setTransferReason(reason);
-        incident.setTransferredBy(me.accountId());
+        incident.setTransferredBy(me.memberId());
         incident.setTransferredAt(now);
         incident.setUpdatedAt(now);
         Incident saved = incidentRepository.save(incident);
@@ -365,11 +366,9 @@ public class IncidentServiceImpl implements IncidentService {
                 return accountRepository.existsByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(
                         agency, UnitLevel.WARD, area.ward().getId()) ? UnitLevel.WARD : UnitLevel.PROVINCE;
             }
-            Set<String> online = notifier.onlineEmails().stream()
-                    .map(e -> e.toLowerCase(java.util.Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
-            boolean anyoneOnline = accountRepository
-                    .findByAgencyTypeAndUnitLevelAndWard_IdAndIsActiveTrue(agency, UnitLevel.WARD, area.ward().getId())
-                    .stream().anyMatch(a -> a.getEmail() != null && online.contains(a.getEmail().toLowerCase(java.util.Locale.ROOT)));
+            Long wardId = area.ward().getId();
+            boolean anyoneOnline = notifier.onlineOfficers().stream()
+                    .anyMatch(o -> o.agency() == agency && o.level() == UnitLevel.WARD && wardId.equals(o.wardId()));
             if (anyoneOnline) {
                 return UnitLevel.WARD;
             }
@@ -398,7 +397,7 @@ public class IncidentServiceImpl implements IncidentService {
                     .role(DispatchRole.SUPPORT)
                     .status(DispatchStatus.EN_ROUTE)
                     .departedAt(now)
-                    .dispatchedBy(accountRepository.getReferenceById(me.accountId()))
+                    .dispatchedBy(unitMemberRepository.getReferenceById(me.memberId()))
                     .unitLevel(me.level())
                     .note(request.getNote())
                     .dispatchedAt(now)
@@ -510,7 +509,7 @@ public class IncidentServiceImpl implements IncidentService {
 
     private String lastHandlerName(Incident i) {
         return incidentClaimRepository.findFirstByIncident_IdOrderByClaimedAtDesc(i.getId())
-                .map(c -> c.getAccount().fullName())
+                .map(c -> c.getMember().displayName())
                 .orElse(null);
     }
 
@@ -592,14 +591,14 @@ public class IncidentServiceImpl implements IncidentService {
         if (incident.getHandlerId() != null || incident.getStatus() != IncidentStatus.PENDING) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã có cán bộ khác tiếp nhận");
         }
-        if (incidentRepository.existsByHandlerIdAndStatusIn(me.accountId(), IncidentStatus.ACTIVE)) {
+        if (incidentRepository.existsByHandlerIdAndStatusIn(me.memberId(), IncidentStatus.ACTIVE)) {
             throw new SosException(HttpStatus.CONFLICT, "Bạn đang giữ một ca khác: hoàn tất hoặc nhả ca đó trước");
         }
 
         LocalDateTime now = LocalDateTime.now();
         int claimed;
         try {
-            claimed = incidentRepository.claim(id, me.accountId(), incident.getRoutedLevel(), now);
+            claimed = incidentRepository.claim(id, me.memberId(), incident.getRoutedLevel(), now);
         } catch (DataIntegrityViolationException e) {
             // ux_incidents_active_handler: cùng người bấm nhận 2 ca gần như đồng thời
             throw new SosException(HttpStatus.CONFLICT, "Bạn đang giữ một ca khác: hoàn tất hoặc nhả ca đó trước");
@@ -609,7 +608,7 @@ public class IncidentServiceImpl implements IncidentService {
         }
         incidentClaimRepository.save(IncidentClaim.builder()
                 .incident(incidentRepository.getReferenceById(id))
-                .account(accountRepository.getReferenceById(me.accountId()))
+                .member(unitMemberRepository.getReferenceById(me.memberId()))
                 .claimedAt(now)
                 .build());
         log.info("🙋 [CLAIM] Incident {} claimed by {}", id, me.email());
@@ -623,41 +622,42 @@ public class IncidentServiceImpl implements IncidentService {
     public IncidentQueueResponse releaseIncident(String id, ReleaseIncidentRequest request) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
         LocalDateTime now = LocalDateTime.now();
         String note = request == null ? null : request.getNote();
-        UUID toId = request == null ? null : request.getToAccountId();
+        UUID toId = request == null ? null : request.getToMemberId();
         IncidentClaim myClaim = incidentClaimRepository
-                .findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, me.accountId())
+                .findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .orElse(null);
 
         if (toId != null) {
             if (note == null || note.trim().length() < 5) {
                 throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng nhập lý do giao ca (ít nhất 5 ký tự)");
             }
-            Account target = accountRepository.findById(toId)
+            com.sosvietnam.model.entity.UnitMember target = unitMemberRepository.findById(toId)
                     .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy cán bộ được giao"));
             OfficerPrincipal to = OfficerPrincipal.of(target);
-            if (toId.equals(me.accountId()) || !to.isStaff() || !target.isActive() || !IncidentAccess.sameUnit(me, to)) {
+            if (toId.equals(me.memberId()) || !to.isStaff() || !target.isActive() || target.isLocked()
+                    || !target.getAccount().isActive() || !IncidentAccess.sameUnit(me, to)) {
                 throw new SosException(HttpStatus.BAD_REQUEST, "Chỉ giao được cho cán bộ khác cùng đơn vị");
             }
             if (incidentRepository.existsByHandlerIdAndStatusIn(toId, IncidentStatus.ACTIVE)) {
-                throw new SosException(HttpStatus.CONFLICT, target.fullName() + " đang giữ một ca khác");
+                throw new SosException(HttpStatus.CONFLICT, target.displayName() + " đang giữ một ca khác");
             }
-            if (incidentRepository.handOver(id, me.accountId(), toId, now) == 0) {
+            if (incidentRepository.handOver(id, me.memberId(), toId, now) == 0) {
                 throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
             }
             closeClaim(myClaim, now, ClaimEndReason.HANDED_OVER, target, note);
             incidentClaimRepository.save(IncidentClaim.builder()
                     .incident(incidentRepository.getReferenceById(id))
-                    .account(target)
+                    .member(target)
                     .claimedAt(now)
                     .build()); // lý do giao ca chỉ nằm ở lượt của người giao
-            log.info("🤝 [HANDOVER] Incident {} handed from {} to {}", id, me.email(), target.getEmail());
+            log.info("🤝 [HANDOVER] Incident {} handed from {} to {} ({})", id, me.fullName(), target.getFullName(), me.email());
         } else {
-            if (incidentRepository.release(id, me.accountId(), now) == 0) {
+            if (incidentRepository.release(id, me.memberId(), now) == 0) {
                 throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
             }
             closeClaim(myClaim, now, ClaimEndReason.RELEASED, null, note);
@@ -680,26 +680,27 @@ public class IncidentServiceImpl implements IncidentService {
     public List<HandoverCandidateResponse> getHandoverCandidates(String id) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        List<Account> colleagues = accountRepository.findActiveOfficers(me.agency(), me.level()).stream()
-                .filter(a -> !a.getId().equals(me.accountId()))
-                .filter(a -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(a)))
+        List<com.sosvietnam.model.entity.UnitMember> colleagues = unitMemberRepository.findActiveOfficers(me.agency(), me.level()).stream()
+                .filter(m -> !me.is(m.getId()) && !m.isLocked())
+                .filter(m -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(m)))
                 .toList();
         Set<UUID> busy = incidentRepository
-                .findByHandlerIdInAndStatusIn(colleagues.stream().map(Account::getId).toList(), IncidentStatus.ACTIVE)
+                .findByHandlerIdInAndStatusIn(colleagues.stream().map(com.sosvietnam.model.entity.UnitMember::getId).toList(), IncidentStatus.ACTIVE)
                 .stream().map(Incident::getHandlerId).collect(Collectors.toSet());
-        Set<String> online = notifier.onlineEmails();
+        Set<UUID> online = notifier.onlineMemberIds();
         return colleagues.stream()
-                .map(a -> new HandoverCandidateResponse(a.getId(), a.fullName(), online.contains(a.getEmail()), busy.contains(a.getId())))
+                .map(m -> new HandoverCandidateResponse(m.getId(), m.displayName(), online.contains(m.getId()), busy.contains(m.getId())))
                 .sorted(Comparator.comparing(HandoverCandidateResponse::isBusy)
                         .thenComparing(c -> !c.isOnline())
                         .thenComparing(HandoverCandidateResponse::getFullName, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
     }
 
-    private void closeClaim(IncidentClaim claim, LocalDateTime now, ClaimEndReason reason, Account handedTo, String note) {
+    private void closeClaim(IncidentClaim claim, LocalDateTime now, ClaimEndReason reason,
+                            com.sosvietnam.model.entity.UnitMember handedTo, String note) {
         if (claim == null) return;
         claim.setReleasedAt(now);
         claim.setEndReason(reason);
@@ -713,17 +714,7 @@ public class IncidentServiceImpl implements IncidentService {
     }
 
     private OfficerPrincipal currentOfficer() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new SosException(HttpStatus.UNAUTHORIZED, "Chưa đăng nhập");
-        }
-        Account account = accountRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
-        OfficerPrincipal officer = OfficerPrincipal.of(account);
-        if (!officer.isStaff()) {
-            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ mới xem được hàng đợi sự cố");
-        }
-        return officer;
+        return currentOfficer.require();
     }
 
     @Transactional
@@ -805,10 +796,10 @@ public class IncidentServiceImpl implements IncidentService {
     public IncidentQueueResponse requestDispatch(String id) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        if (incidentRepository.startResolving(id, me.accountId(), LocalDateTime.now()) == 0) {
+        if (incidentRepository.startResolving(id, me.memberId(), LocalDateTime.now()) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước xác minh, tải lại hàng đợi");
         }
         log.info("🚓 [RESOLVING] Incident {} verified by {}, dispatch requested", id, me.email());
@@ -849,7 +840,7 @@ public class IncidentServiceImpl implements IncidentService {
             who = "citizen";
         } else {
             OfficerPrincipal me = currentOfficer();
-            if (!me.accountId().equals(incident.getHandlerId())) {
+            if (!me.memberId().equals(incident.getHandlerId())) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
             }
             if (reason == null || reason.trim().length() < 5) {
@@ -867,7 +858,7 @@ public class IncidentServiceImpl implements IncidentService {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại để xem trạng thái mới");
         }
         String note = byCitizen ? "Người báo tin yêu cầu chuyển lên cấp tỉnh" : reason.trim();
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, handlerId)
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, handlerId)
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.ESCALATED, null, note));
         Incident moved = findIncident(id);
         moved.setEscalationReason(byCitizen ? com.sosvietnam.model.payload.enums.EscalationReason.CITIZEN_REQUEST
@@ -964,14 +955,14 @@ public class IncidentServiceImpl implements IncidentService {
     public void cancelByOfficer(String id, String reason) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới huỷ ca được");
         }
         LocalDateTime now = LocalDateTime.now();
         if (incidentRepository.cancel(id, CancelReason.OFFICER_CANCELLED, IncidentStatus.HELD, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
         }
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, me.accountId())
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, "Cán bộ huỷ ca: " + reason.trim()));
         log.info("🗑️ [OFFICER CANCEL] Incident {} by {}: {}", id, me.email(), reason.trim());
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
@@ -984,7 +975,7 @@ public class IncidentServiceImpl implements IncidentService {
         if (cancelled.getHandlerId() != null) {
             String note = "Ca bị huỷ" + (reason == null ? "" : ": " + reason.getLabel());
             incidentClaimRepository
-                    .findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(id, cancelled.getHandlerId())
+                    .findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, cancelled.getHandlerId())
                     .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, note));
         }
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
@@ -993,7 +984,7 @@ public class IncidentServiceImpl implements IncidentService {
 
     private IncidentTrackingResponse tracking(Incident incident) {
         String handlerName = incident.getHandlerId() == null ? null
-                : accountRepository.findById(incident.getHandlerId()).map(Account::fullName).orElse(null);
+                : unitMemberRepository.findById(incident.getHandlerId()).map(com.sosvietnam.model.entity.UnitMember::displayName).orElse(null);
         return IncidentTrackingResponse.from(incident, handlerName, com.sosvietnam.model.entity.IncidentDocument
                 .statusOf(incidentDocumentRepository.findById(incident.getId()).orElse(null)));
     }

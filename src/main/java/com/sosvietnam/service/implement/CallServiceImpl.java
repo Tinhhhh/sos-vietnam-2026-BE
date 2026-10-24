@@ -2,14 +2,12 @@ package com.sosvietnam.service.implement;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.request.CallSignalMessage;
 import com.sosvietnam.model.payload.response.IceServersResponse;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.security.CitizenPrincipal;
 import com.sosvietnam.security.OfficerPrincipal;
@@ -58,7 +56,6 @@ public class CallServiceImpl implements CallService {
             "https://rtc.live.cloudflare.com/v1/turn/keys/%s/credentials/generate-ice-servers";
 
     private final IncidentRepository incidentRepository;
-    private final AccountRepository accountRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
     // Tạo lúc gọi Cloudflare lần đầu: không cấu hình TURN thì không mở kết nối nào
@@ -160,9 +157,7 @@ public class CallServiceImpl implements CallService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean loggedIn = auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
         if (loggedIn) {
-            boolean staff = accountRepository.findByEmail(auth.getName())
-                    .map(OfficerPrincipal::of).map(OfficerPrincipal::isStaff).orElse(false);
-            if (staff) return;
+            if (auth.getPrincipal() instanceof OfficerPrincipal officer && officer.isStaff()) return;
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ hoặc người báo tin mới gọi được");
         }
         if (!StringUtils.hasText(incidentId) || !StringUtils.hasText(citizenAccessToken)) {
@@ -192,7 +187,7 @@ public class CallServiceImpl implements CallService {
         }
 
         if (sender instanceof OfficerPrincipal officer) {
-            if (!officer.accountId().equals(incident.getHandlerId())) {
+            if (!officer.memberId().equals(incident.getHandlerId())) {
                 bounce(sender, signal, "not_handler");
                 return;
             }
@@ -202,13 +197,12 @@ public class CallServiceImpl implements CallService {
             if (!citizen.incidentId().equals(incident.getId())) {
                 return; // chỉ được gọi trong ca của chính mình
             }
-            Account handler = incident.getHandlerId() == null ? null
-                    : accountRepository.findById(incident.getHandlerId()).orElse(null);
-            if (handler == null) {
+            if (incident.getHandlerId() == null) {
                 bounce(sender, signal, "no_handler");
                 return;
             }
-            send(handler.getEmail(), signal.toBuilder()
+            // tên phiên STOMP của cán bộ = member id (OfficerPrincipal.getName)
+            send(incident.getHandlerId().toString(), signal.toBuilder()
                     .from("citizen").peerName(incident.getCitizenName()).unitName(null).build());
         }
         if ("ring".equals(action) || "end".equals(action) || "reject".equals(action)) {
