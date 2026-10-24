@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 /**
  * Lượt điều động: một trạm / lực lượng (rescue_stations) được cử tới xử lý một ca.
  * Mỗi ca có tối đa 1 lượt PRIMARY đang hoạt động (index ux_incident_dispatches_primary), thêm lượt SUPPORT nếu cần.
- * Tuyến đường của lượt ở incident_routes, vị trí xe ở incident_route_positions.
+ * Tuyến đường của lượt ở incident_routes (vị trí xe sẽ lấy từ Traccar, không lưu ở DB).
  */
 @Entity
 @Table(name = "incident_dispatches")
