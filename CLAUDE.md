@@ -6,7 +6,7 @@
 ## Cách làm việc
 - BE chỉ làm khi user đã duyệt danh sách việc (FE làm trước, báo BE cần gì).
 - Style code theo `C:\Users\TINH KHUNG\IdeaProjects\HIV-TMSS`: controller → service (interface) → `service/implement/*ServiceImpl` → repository; DTO trong `model/payload/request|response`, enum trong `model/payload/enums` (kiểu HIV có field mô tả).
-- **Không tự commit**: làm xong để nguyên working tree, user test xong bảo mới commit (`type(scope): ...`), commit xong dán nguyên commit message. Không push nếu không được bảo. Chạy `mvn test` trước khi commit.
+- **Làm xong thì tự commit** (từ 24/10/2026): test qua (`mvn test` trong bản sao) rồi commit đúng file của mình (`type(scope): ...`), dán nguyên commit message. Không push nếu không được bảo.
 
 ## Stack
 Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=update`), JWT, AWS SDK S3 (Cloudflare R2), Apache POI, springdoc. Git: nhánh làm việc `develop` (đã push tới 1ff8697, user tự merge sang `main`), deploy từ `main`.
