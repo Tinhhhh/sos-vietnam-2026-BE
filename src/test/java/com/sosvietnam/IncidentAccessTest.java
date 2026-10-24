@@ -53,6 +53,17 @@ class IncidentAccessTest {
     }
 
     @Test
+    void routedToProvinceAtCreation_noWardOfficerOnline_wardStillWatches() {
+        Incident inc = wardPolice();
+        inc.setRoutedLevel(UnitLevel.PROVINCE);
+        inc.setEscalateAt(null);
+        assertThat(IncidentAccess.canView(CA_TAN_AN, inc)).isTrue();
+        assertThat(IncidentAccess.canHandle(CA_TAN_AN, inc)).isFalse();
+        assertThat(IncidentAccess.canHandle(CA_CAN_THO, inc)).isTrue();
+        assertThat(IncidentAccess.canView(officer(AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Cái Khế"), inc)).isFalse();
+    }
+
+    @Test
     void otherAgenciesNeverSeeEachOther_andFireTeamsDoNotStandDuty() {
         Incident police = wardPolice();
         assertThat(IncidentAccess.canView(PCCC_CAN_THO, police)).isFalse();
@@ -60,7 +71,7 @@ class IncidentAccessTest {
         Incident fire = Incident.builder().id("SOS-2").routedAgency(AgencyType.FIRE).routedLevel(UnitLevel.PROVINCE)
                 .province(TestGeo.province("TP. Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).build();
         assertThat(IncidentAccess.canHandle(PCCC_CAN_THO, fire)).isTrue();
-        // Đội PCCC không trực: ca vào thẳng phòng (không có hạn leo thang) nên đội không thấy
+        // Đội PCCC không trực (PCCC nhận ca từ cấp phòng) nên đội không thấy
         assertThat(IncidentAccess.canView(PCCC_DOI_TAN_AN, fire)).isFalse();
         assertThat(IncidentAccess.canView(CA_TAN_AN, fire)).isFalse();
     }

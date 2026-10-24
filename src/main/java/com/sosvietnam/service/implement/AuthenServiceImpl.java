@@ -17,6 +17,7 @@ import com.sosvietnam.repository.WardRepository;
 import com.sosvietnam.repository.RefreshTokenRepository;
 import com.sosvietnam.repository.RoleRepository;
 import com.sosvietnam.security.JwtTokenProvider;
+import com.sosvietnam.security.StompSessionRegistry;
 import com.sosvietnam.service.AuthenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -57,6 +58,7 @@ public class AuthenServiceImpl implements AuthenService {
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final StompSessionRegistry stompSessionRegistry;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsService userDetailsService;
 
@@ -206,7 +208,9 @@ public class AuthenServiceImpl implements AuthenService {
         accountRepository.save(account);
         // Như HIV-TMSS: đổi mật khẩu thì mọi phiên đang đăng nhập (mọi thiết bị, kể cả máy này) phải đăng nhập lại
         jwtTokenProvider.disableOldTokens(account.getId());
-        log.info("[CHANGE PASSWORD] {} (đã đá văng mọi phiên)", account.getEmail());
+        // màn hình trực ban đang mở trên máy khác mất kết nối ngay, kết nối lại thì bị chặn ở CONNECT
+        int closed = stompSessionRegistry.closeAll(account.getEmail());
+        log.info("[CHANGE PASSWORD] {} (đã đá văng mọi phiên, đóng {} kết nối STOMP)", account.getEmail(), closed);
     }
 
     /** Lưu refresh token, gắn với jwtId của access token đi cùng (dùng khi logout). */

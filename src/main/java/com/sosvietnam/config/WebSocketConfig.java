@@ -1,6 +1,7 @@
 package com.sosvietnam.config;
 
 import com.sosvietnam.security.StompAuthChannelInterceptor;
+import com.sosvietnam.security.StompSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
@@ -22,6 +23,7 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
+    private final StompSessionRegistry stompSessionRegistry;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -43,6 +45,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
         registration.setMessageSizeLimit(256 * 1024);
+        registration.addDecoratorFactory(stompSessionRegistry);
     }
 
     @Override

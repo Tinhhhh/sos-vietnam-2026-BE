@@ -83,6 +83,7 @@ class ApiContractTest {
     @MockitoBean IncidentService incidentService;
     @MockitoBean WeatherService weatherService;
     @MockitoBean DashboardService dashboardService;
+    @MockitoBean com.sosvietnam.security.StompSessionRegistry stompSessionRegistry;
 
     // "DB" giả cho refresh token: nếu code lưu trùng thì list sẽ có 2 phần tử
     final List<RefreshToken> refreshTable = Collections.synchronizedList(new ArrayList<>());

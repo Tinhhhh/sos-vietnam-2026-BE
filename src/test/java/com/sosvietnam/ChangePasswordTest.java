@@ -5,6 +5,7 @@ import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.payload.request.ChangePasswordRequest;
 import com.sosvietnam.repository.*;
 import com.sosvietnam.security.JwtTokenProvider;
+import com.sosvietnam.security.StompSessionRegistry;
 import com.sosvietnam.service.implement.AuthenServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +28,10 @@ class ChangePasswordTest {
     final AccountRepository accounts = mock(AccountRepository.class);
     final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
     final JwtTokenProvider jwt = mock(JwtTokenProvider.class);
+    final StompSessionRegistry stomp = mock(StompSessionRegistry.class);
     final AuthenServiceImpl service = new AuthenServiceImpl(mock(AuthenticationManager.class), accounts,
             mock(ProvinceRepository.class), mock(WardRepository.class), mock(RoleRepository.class),
-            mock(RefreshTokenRepository.class), encoder, jwt, mock(UserDetailsService.class));
+            mock(RefreshTokenRepository.class), encoder, stomp, jwt, mock(UserDetailsService.class));
     Account me;
 
     @BeforeEach
@@ -51,6 +53,8 @@ class ChangePasswordTest {
         verify(accounts).save(me);
         // mọi phiên đang đăng nhập của tài khoản bị đá văng
         verify(jwt).disableOldTokens(me.getId());
+        // màn hình đang mở trên các máy khác mất kết nối STOMP ngay
+        verify(stomp).closeAll("me@sos.vn");
     }
 
     @Test
