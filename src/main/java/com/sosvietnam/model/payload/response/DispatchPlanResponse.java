@@ -197,6 +197,9 @@ public class DispatchPlanResponse {
         private String polyline;
         @JsonProperty("provider")
         private RouteProvider provider;
+        /** STATION / CUSTOM; VEHICLE = tính lại từ vị trí xe vì đi lệch tuyến */
+        @JsonProperty("origin_source")
+        private RouteOriginSource originSource;
         @JsonProperty("computed_at")
         private OffsetDateTime computedAt;
     }
@@ -234,6 +237,7 @@ public class DispatchPlanResponse {
                         .durationTrafficS(route.getDurationTrafficS())
                         .polyline(route.getPolyline())
                         .provider(route.getProvider())
+                        .originSource(route.getOriginSource())
                         .computedAt(withZone(route.getComputedAt()))
                         .build())
                 .dispatchedAt(withZone(d.getDispatchedAt()))

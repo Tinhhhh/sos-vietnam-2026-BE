@@ -39,11 +39,14 @@ class DispatchPlanTest {
     final com.sosvietnam.service.OfficerService officers = mock(com.sosvietnam.service.OfficerService.class);
     final IncidentClaimRepository claims = mock(IncidentClaimRepository.class);
     final IncidentReportRepository reports = mock(IncidentReportRepository.class);
+    final com.sosvietnam.service.RoutingService routing = mock(com.sosvietnam.service.RoutingService.class);
+    final com.sosvietnam.service.implement.DispatchTrackingServiceImpl tracking =
+            new com.sosvietnam.service.implement.DispatchTrackingServiceImpl(dispatches, mock(com.sosvietnam.service.RouteRecalcService.class));
     final com.sosvietnam.service.DispatchSimulationService simulation = mock(com.sosvietnam.service.DispatchSimulationService.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes, stations, members,
             new com.sosvietnam.security.CurrentOfficer(), notifier,
-            officers, claims, reports, new com.sosvietnam.service.implement.DispatchTrackingServiceImpl(dispatches),
-            simulation);
+            officers, claims, reports, tracking,
+            simulation, routing);
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     Account me;
@@ -257,6 +260,43 @@ class DispatchPlanTest {
         assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         assertThat(plan.getStep()).isEqualTo(4);
         assertThat(d.getArrivedAt()).isNotNull();
+    }
+
+    @Test
+    void arrive_keepsTheLastGpsPoint_andStopsTheSimulation() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        when(dispatches.findEnRouteByTrackerBadge("123")).thenReturn(List.of(d));
+        tracking.accept(com.sosvietnam.model.payload.request.TraccarPositionRequest.builder()
+                .device(com.sosvietnam.model.payload.request.TraccarPositionRequest.Device.builder().uniqueId("123").build())
+                .position(com.sosvietnam.model.payload.request.TraccarPositionRequest.Position.builder()
+                        .latitude(10.0281).longitude(105.7579).build())
+                .build());
+
+        DispatchPlanResponse plan = service.arrive("SOS-1", null);
+        assertThat(plan.getLastPosition()).isNotNull(); // chấm xe vẫn ở điểm cuối sau khi "Đã đến"
+        assertThat(plan.getLastPosition().getLatitude()).isEqualTo(10.0281);
+        verify(simulation).stop(11L);
+        assertThat(service.getPlan("SOS-1", null).getLastPosition()).isNotNull();
+    }
+
+    @Test
+    void requestDispatch_fieldMemberChosen_isUsedWhenMyUnitGoes() {
+        incident.setStatus(IncidentStatus.VERIFYING);
+        service.checkFieldMember("SOS-1", me.getId()); // cán bộ đơn vị mình, có số hiệu: hợp lệ
+        incident.setHandlerId(UUID.randomUUID());
+        assertThatThrownBy(() -> service.checkFieldMember("SOS-1", me.getId()))
+                .isInstanceOf(SosException.class).hasMessageContaining("không giữ ca");
+
+        incident.setHandlerId(me.getId());
+        incident.setStatus(IncidentStatus.RESOLVING);
+        incident.setFieldMemberId(me.getId()); // chọn lúc "Yêu cầu điều động"
+        when(dispatches.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(any(), any(), any()))
+                .thenReturn(Optional.empty());
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
+        DispatchPlanRequest noPick = request(false);
+        noPick.setFieldMemberId(null);
+        assertThat(service.savePlan("SOS-1", noPick).getTracker().getMemberId()).isEqualTo(me.getId());
     }
 
     @Test

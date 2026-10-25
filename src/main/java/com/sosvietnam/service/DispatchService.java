@@ -53,6 +53,12 @@ public interface DispatchService {
      */
     List<FieldCandidateResponse> getFieldCandidates(String incidentId);
 
+    /**
+     * "Yêu cầu điều động": người giữ ca chọn người phụ trách hiện trường của đơn vị mình (cùng điều kiện như lúc
+     * chọn ở bước điều động). Sai -> 400 / 403 / 409.
+     */
+    void checkFieldMember(String incidentId, UUID fieldMemberId);
+
     /** Đổi người phụ trách hiện trường khi lực lượng đang trên đường (cùng người được chọn như trên). */
     DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);
 
@@ -70,6 +76,12 @@ public interface DispatchService {
     DispatchPlanResponse startSimulation(String incidentId);
 
     DispatchPlanResponse stopSimulation(String incidentId);
+
+    /**
+     * CHỈ ĐỂ DEMO "Rẽ đường khác": xe giả rẽ phải khỏi tuyến từ vị trí hiện tại (hoặc trạm), đi vòng một đoạn rồi
+     * mới tới hiện trường, để thử BE tự tính lại tuyến khi xe lệch đường. Cùng điều kiện như startSimulation.
+     */
+    DispatchPlanResponse detourSimulation(String incidentId);
 
     /**
      * Bước 4 "Đã xử lý xong" (lực lượng đã ở hiện trường). Một bên bấm là đủ: người dân (citizenAccessToken) bấm thì

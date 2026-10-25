@@ -27,6 +27,7 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
     private static final Duration KEEP = Duration.ofHours(2);
 
     private final IncidentDispatchRepository incidentDispatchRepository;
+    private final com.sosvietnam.service.RouteRecalcService routeRecalcService;
 
     /** dispatch id -> điểm mới nhất. */
     private final Map<Long, DispatchPlanResponse.LivePosition> positions = new ConcurrentHashMap<>();
@@ -60,6 +61,8 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
                 .receivedAt(now)
                 .build());
         positions.values().removeIf(old -> old.getReceivedAt().isBefore(now.minus(KEEP)));
+        // lệch tuyến thì tính lại tuyến từ vị trí xe (chạy nền)
+        routeRecalcService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
         return true;
     }
 

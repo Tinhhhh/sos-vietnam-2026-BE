@@ -43,6 +43,7 @@ public class IncidentController {
     public static final String CITIZEN_TOKEN_HEADER = "X-SOS-Access-Token";
 
     private final IncidentService incidentService;
+    private final com.sosvietnam.service.DispatchService dispatchService;
 
     @Operation(summary = "Report a new SOS incident",
             description = "Returns the incident and a citizen_access_token (shown only once). Role required: none")
@@ -138,11 +139,16 @@ public class IncidentController {
     }
 
     @Operation(summary = "Officer: verification done, request dispatch of forces (VERIFYING -> RESOLVING)",
-            description = "Only the officer holding the incident. 409 if it is no longer VERIFYING. Role required: OFFICER, ADMIN")
+            description = "Body { field_member_id }: the field officer of my unit (GET dispatch-plan/field-candidates; "
+                    + "badge number, not on another open trip, online not required), used when my unit goes. "
+                    + "Only the officer holding the incident. 409 if it is no longer VERIFYING. Role required: OFFICER, ADMIN")
     @PostMapping("/{id}/request-dispatch")
-    public ResponseEntity<Object> requestDispatch(@PathVariable("id") String id) {
+    public ResponseEntity<Object> requestDispatch(@PathVariable("id") String id,
+                                                  @RequestBody @jakarta.validation.Valid
+                                                  com.sosvietnam.model.payload.request.RequestDispatchRequest request) {
+        dispatchService.checkFieldMember(id, request.getFieldMemberId());
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã gửi yêu cầu điều động lực lượng",
-                incidentService.requestDispatch(id));
+                incidentService.requestDispatch(id, request.getFieldMemberId()));
     }
 
     @Operation(summary = "Move a ward incident up to the province right now",

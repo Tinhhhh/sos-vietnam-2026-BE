@@ -801,13 +801,13 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Transactional
     @Override
-    public IncidentQueueResponse requestDispatch(String id) {
+    public IncidentQueueResponse requestDispatch(String id, UUID fieldMemberId) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        if (incidentRepository.startResolving(id, me.memberId(), LocalDateTime.now()) == 0) {
+        if (incidentRepository.startResolving(id, me.memberId(), fieldMemberId, LocalDateTime.now()) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước xác minh, tải lại hàng đợi");
         }
         log.info("🚓 [RESOLVING] Incident {} verified by {}, dispatch requested", id, me.email());

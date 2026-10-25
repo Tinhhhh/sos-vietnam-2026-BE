@@ -121,6 +121,15 @@ public class DispatchController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Simulation started", dispatchService.startSimulation(id));
     }
 
+    @Operation(summary = "DEMO ONLY: the simulated vehicle turns off the route (\"Rẽ đường khác\")",
+            description = "From the vehicle's last point (or the start of the route) it drives 150 m on, turns right "
+                    + "350 m and only then heads to the scene (OSRM), to test the automatic route recalculation. "
+                    + "Same rules as /simulate; 503 when the routing server fails. Role required: OFFICER, ADMIN")
+    @PostMapping("/simulate/detour")
+    public ResponseEntity<Object> detourSimulation(@PathVariable String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Simulation detour started", dispatchService.detourSimulation(id));
+    }
+
     @Operation(summary = "DEMO ONLY: stop the movement simulation", description = "Role required: OFFICER, ADMIN")
     @PostMapping("/simulate/stop")
     public ResponseEntity<Object> stopSimulation(@PathVariable String id) {

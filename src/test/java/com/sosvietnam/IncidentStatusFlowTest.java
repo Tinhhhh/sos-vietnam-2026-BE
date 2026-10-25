@@ -148,11 +148,12 @@ class IncidentStatusFlowTest {
     @Test
     void requestDispatch_movesVerifyingToResolving() {
         loginAsOfficer();
-        when(incidentRepo.startResolving(eq("SOS-1"), eq(officer.getId()), any())).thenReturn(1);
+        when(incidentRepo.startResolving(eq("SOS-1"), eq(officer.getId()), any(), any())).thenReturn(1);
 
-        service.requestDispatch("SOS-1");
+        UUID field = UUID.randomUUID();
+        service.requestDispatch("SOS-1", field);
 
-        verify(incidentRepo).startResolving(eq("SOS-1"), eq(officer.getId()), any());
+        verify(incidentRepo).startResolving(eq("SOS-1"), eq(officer.getId()), eq(field), any());
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
     }
 
@@ -160,7 +161,7 @@ class IncidentStatusFlowTest {
     void requestDispatch_notHolder_isForbidden() {
         loginAsOfficer();
         incident.setHandlerId(UUID.randomUUID());
-        assertThatThrownBy(() -> service.requestDispatch("SOS-1"))
+        assertThatThrownBy(() -> service.requestDispatch("SOS-1", UUID.randomUUID()))
                 .isInstanceOf(SosException.class).extracting("httpStatus").isEqualTo(HttpStatus.FORBIDDEN);
     }
 

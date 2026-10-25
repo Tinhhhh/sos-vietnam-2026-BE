@@ -23,6 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -33,11 +34,13 @@ class DispatchSimulationTest {
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
     final IncidentRouteRepository routes = mock(IncidentRouteRepository.class);
     final DispatchSimulationService simulation = mock(DispatchSimulationService.class);
+    final com.sosvietnam.service.RoutingService routing = mock(com.sosvietnam.service.RoutingService.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes,
             mock(RescueStationRepository.class), mock(UnitMemberRepository.class),
             new com.sosvietnam.security.CurrentOfficer(), mock(IncidentNotifier.class),
             mock(com.sosvietnam.service.OfficerService.class), mock(IncidentClaimRepository.class),
-            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches), simulation);
+            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches, mock(com.sosvietnam.service.RouteRecalcService.class)),
+            simulation, routing);
 
     Incident incident;
     IncidentDispatch trip;
@@ -97,6 +100,24 @@ class DispatchSimulationTest {
 
         service.stopSimulation("SOS-1");
         verify(simulation).stop(11L);
+    }
+
+    @Test
+    void detour_turnsOffTheRoute_thenHeadsToTheScene() {
+        List<double[]> path = List.of(new double[]{10.03, 105.76}, new double[]{10.031, 105.765}, new double[]{10.0276, 105.7574});
+        when(routing.route(any())).thenReturn(new com.sosvietnam.service.RoutingService.RoadRoute("x", path, 900, 120));
+
+        service.detourSimulation("SOS-1");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<double[]>> via = ArgumentCaptor.forClass(List.class);
+        verify(routing).route(via.capture());
+        assertThat(via.getValue()).hasSize(3); // vị trí xe -> điểm rẽ -> hiện trường
+        assertThat(via.getValue().get(0)[0]).isEqualTo(10.03); // chưa có GPS: từ đầu tuyến (trạm)
+        verify(simulation).start(eq(11L), eq("594288"), any());
+
+        when(routing.route(any())).thenReturn(null);
+        assertThatThrownBy(() -> service.detourSimulation("SOS-1")).isInstanceOf(SosException.class)
+                .hasMessageContaining("đường rẽ");
     }
 
     @Test

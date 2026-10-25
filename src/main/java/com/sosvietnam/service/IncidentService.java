@@ -68,7 +68,8 @@ public interface IncidentService {
     IncidentTrackingResponse cancelByCitizen(String id, String citizenAccessToken, CancelIncidentRequest request);
 
     /** Cán bộ giữ ca xác minh xong, gửi yêu cầu điều động lực lượng (VERIFYING -> RESOLVING). */
-    IncidentQueueResponse requestDispatch(String id);
+    /** VERIFYING -> RESOLVING kèm người phụ trách hiện trường (đã kiểm ở DispatchService.checkFieldMember). */
+    IncidentQueueResponse requestDispatch(String id, java.util.UUID fieldMemberId);
 
     /**
      * Chuyển ca cấp xã lên cấp tỉnh ngay. Cán bộ đang giữ ca: lúc VERIFYING hoặc RESOLVING (không xử lý được).

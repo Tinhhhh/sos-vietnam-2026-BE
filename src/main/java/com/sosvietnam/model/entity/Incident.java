@@ -115,6 +115,10 @@ public class Incident {
     @Column(name = "handler_id")
     private UUID handlerId;
 
+    // Người phụ trách hiện trường chọn lúc "Yêu cầu điều động" (cán bộ đơn vị người giữ ca); null với ca cũ
+    @Column(name = "field_member_id")
+    private UUID fieldMemberId;
+
     @Column(name = "claimed_at")
     private LocalDateTime claimedAt;
 
