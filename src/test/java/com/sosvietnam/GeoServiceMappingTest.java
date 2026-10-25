@@ -47,7 +47,8 @@ class GeoServiceMappingTest {
     final SeedVersionRepository seedRepo = mock(SeedVersionRepository.class);
     final com.sosvietnam.util.AreaNameCache areaNames = mock(com.sosvietnam.util.AreaNameCache.class);
     final StationContactRepository contacts = mock(StationContactRepository.class);
-    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper(), areaNames, contacts);
+    final com.sosvietnam.security.CurrentOfficer officer = mock(com.sosvietnam.security.CurrentOfficer.class);
+    final GeoServiceImpl service = new GeoServiceImpl(provinceRepo, wardRepo, stationRepo, seedRepo, new ModelMapper(), areaNames, contacts, officer);
     final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     final GeometryFactory gf = new GeometryFactory();
@@ -69,6 +70,7 @@ class GeoServiceMappingTest {
 
     @Test
     void stations_takeCommanderFromUnit_fillMissingPhoneAndEmail() {
+        when(officer.orNull()).thenReturn(mock(com.sosvietnam.security.OfficerPrincipal.class));
         when(stationRepo.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of(
                 RescueStation.builder().id(7L).name("CA Xã Vĩnh Lộc").agencyType(AgencyType.POLICE).officer("Trực ban CAX").build(),
                 RescueStation.builder().id(8L).name("CA Phường Ba Đình").agencyType(AgencyType.POLICE).phone("0243")
@@ -83,6 +85,15 @@ class GeoServiceMappingTest {
         assertThat(list.get(1)).extracting("officer", "phone", "email")
                 .containsExactly("Trung tá Lê Minh An", "0243", "badinh@ca.vn");
         assertThat(list.get(2).getOfficer()).isEqualTo("Ông A");
+    }
+
+    @Test
+    void stations_withoutOfficer_keepOnlyStationData() {
+        when(stationRepo.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of(
+                RescueStation.builder().id(7L).name("CA Xã Vĩnh Lộc").agencyType(AgencyType.POLICE).build()));
+        var list = service.findNearestStations(9, 105, AgencyType.POLICE, 1000, 5);
+        assertThat(list.get(0)).extracting("officer", "phone", "email").containsExactly(null, null, null);
+        verifyNoInteractions(contacts);
     }
 
     @Test

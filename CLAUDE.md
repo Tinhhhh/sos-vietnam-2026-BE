@@ -148,7 +148,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Đã test: 167 unit test; API thật 8081 (lọc, 400, 401, đếm SQL, mở file kiểm nội dung); e2e Playwright 16/16 (admin / chỉ huy / cán bộ, desktop + 375).
 
 ## Liên hệ trạm từ đơn vị + nút Lịch sử (24/10/2026, CHƯA commit)
-- `GET /stations` và `/stations/nearest`: `officer` = cấp bậc + họ tên chỉ huy (COMMANDER) của tài khoản đơn vị cùng lực lượng / cấp / địa bàn (`repository/StationContactRepository`, 1 câu SQL / trang), không có đơn vị thì giữ dữ liệu file; `phone` / `email` trống thì lấy SĐT trực ban / email đơn vị. Trạm ENTERPRISE / NATIONAL / y tế không đổi.
+- `GET /stations` và `/stations/nearest`: `officer` = cấp bậc + họ tên chỉ huy (COMMANDER) của tài khoản đơn vị cùng lực lượng / cấp / địa bàn (`repository/StationContactRepository`, 1 câu SQL / trang), không có đơn vị thì giữ dữ liệu file; `phone` / `email` trống thì lấy SĐT trực ban / email đơn vị. Trạm ENTERPRISE / NATIONAL / y tế không đổi. **Chỉ khi gửi token cán bộ** (25/10/2026: email đơn vị = tên đăng nhập, SĐT trực ban là của cán bộ); không token / token hỏng thì chỉ dữ liệu file trạm.
 - FE: tab trạm của công an đổi chữ "Công An" -> "Cơ quan"; nút "Lịch sử" ngay dưới "Sự cố" (cửa sổ `IncidentHistoryPanel`), chấm đỏ = số ca đóng trong 24h sau lần mở gần nhất (`features/incident-queue/hooks/use-history-unseen.js`, mốc localStorage theo member_id, đếm lại mỗi phút + khi hàng đợi đổi). Mục Lịch sử trong Cài đặt vẫn còn.
 
 ## Lọc cán bộ theo đơn vị (24/10/2026 tối, CHƯA commit) — ĐỔI API

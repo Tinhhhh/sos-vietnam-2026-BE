@@ -57,6 +57,7 @@ public class GeoServiceImpl implements GeoService {
     private final ModelMapper modelMapper;
     private final AreaNameCache areaNameCache;
     private final StationContactRepository stationContactRepository;
+    private final com.sosvietnam.security.CurrentOfficer currentOfficer;
     // Field của RescueStation được phép sort (tên field Java, không phải tên cột)
     private static final List<String> STATION_SORT_FIELDS = List.of("id", "name", "province", "ward", "agencyType", "level");
 
@@ -140,8 +141,10 @@ public class GeoServiceImpl implements GeoService {
     /**
      * Chỉ huy lấy từ tài khoản đơn vị (cùng nguồn với danh sách cán bộ trong Cài đặt), không có đơn vị thì giữ dữ liệu
      * file trạm. SĐT trực / email: giữ của trạm, trạm trống thì lấy SĐT trực ban / email đơn vị.
+     * CHỈ cho cán bộ đã đăng nhập: API trạm là công khai, email đơn vị = tên đăng nhập, SĐT trực ban là của cán bộ.
      */
     private List<StationResponse> withUnitContacts(List<StationResponse> stations) {
+        if (currentOfficer.orNull() == null) return stations;
         Map<Long, StationContactRepository.Contact> contacts =
                 stationContactRepository.findByStationIds(stations.stream().map(StationResponse::getId).toList());
         for (StationResponse s : stations) {
