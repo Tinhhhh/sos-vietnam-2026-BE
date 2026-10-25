@@ -50,6 +50,7 @@ import com.sosvietnam.service.MediaAccess;
 import com.sosvietnam.service.MediaStorageService;
 import com.sosvietnam.util.AreaNames;
 import com.sosvietnam.util.CitizenTokens;
+import com.sosvietnam.util.DemoIncidents;
 import com.sosvietnam.util.LookupCodes;
 import com.sosvietnam.util.IncidentAccess;
 import com.sosvietnam.util.MediaKeys;
@@ -152,6 +153,7 @@ public class IncidentServiceImpl implements IncidentService {
     private final IncidentReportRepository incidentReportRepository;
     private final IncidentRouteRepository incidentRouteRepository;
     private final com.sosvietnam.repository.IncidentDocumentRepository incidentDocumentRepository;
+    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     // Ca Công an cấp xã quá số phút này chưa ai nhận thì lên cấp tỉnh
     @Value("${app.incident.escalation-minutes:15}")
@@ -483,6 +485,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .map(IncidentDispatch::getIncident)
                 .filter(i -> !seen.contains(i.getId()))
                 .filter(i -> since == null || !i.getCreatedAt().isBefore(since))
+                .filter(this::shown)
                 .toList();
         if (extra.isEmpty()) return visible;
         return Stream.concat(visible.stream(), extra.stream())
@@ -498,7 +501,12 @@ public class IncidentServiceImpl implements IncidentService {
                 ? incidentRepository.findByStatusInAndRoutedAgencyInOrderByCreatedAtDesc(statuses, agencies)
                 : incidentRepository.findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
                         statuses, agencies, since);
-        return rows.stream().filter(i -> IncidentAccess.canView(me, i));
+        return rows.stream().filter(i -> IncidentAccess.canView(me, i)).filter(this::shown);
+    }
+
+    /** Công tắc "ẩn ca demo" (Cài đặt): ca [DEMO] không vào hàng đợi / lịch sử. */
+    private boolean shown(Incident incident) {
+        return !demoModeService.hidden() || !DemoIncidents.isDemo(incident);
     }
 
     private static boolean matches(Incident i, String q) {

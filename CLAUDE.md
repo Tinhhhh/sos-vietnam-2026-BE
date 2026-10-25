@@ -157,6 +157,12 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Cán bộ cấp TỈNH được thêm `level=WARD&ward_id` để xem đơn vị cấp xã cùng lực lượng của một xã trong tỉnh mình (xã ngoài tỉnh / thiếu xã -> 400); FE: ô "Đơn vị" + "Xã / phường" trong cửa sổ Thành viên. 171 unit test, e2e 21/21.
 - Đã test: 170 unit test (`OfficerStatusTest` viết lại); API thật 8081 (CA tỉnh Cần Thơ 5, xã Tân An 14 / CA 8, 5–8 câu SQL / lần).
 
+## Công tắc ca demo (25/10/2026)
+- V13 `app_settings` (setting_key PK, value, updated_at, updated_by -> unit_members), enum `AppSettingKey` DEMO_GENERATE / DEMO_HIDDEN, `DemoModeService` (bản sao RAM, chỉ đúng khi 1 instance BE). Chưa có dòng: tự sinh = `DEMO_INCIDENTS` của .env, ẩn = tắt; đã đổi ở giao diện thì thắng .env.
+- `GET/PUT /api/v1/settings/demo` (OFFICER + ADMIN, mọi tài khoản) body `{ generate?, hidden? }`, trả `{ generate, hidden, open_count, updated_at, updated_by_name }`.
+- `DemoIncidentSeeder` luôn chạy (bỏ `@ConditionalOnProperty`): tắt tự sinh thì chỉ còn đóng ca test kẹt RESOLVING. Ẩn: `IncidentServiceImpl` bỏ ca `[DEMO]` (`util/DemoIncidents`, tên bắt đầu "[DEMO] " hoặc 3 tên cũ) khỏi queue / history; `IncidentNotifierImpl` đổi mọi tin của ca demo thành `INCIDENT_REMOVED` cho cán bộ (dân vẫn nhận bình thường); đổi công tắc ẩn thì đẩy lại các ca demo đang mở (`findDemoIds`) để hàng đợi đang mở ở mọi máy gỡ / hiện thẻ ngay. Không xoá dữ liệu demo. Thống kê vẫn đếm ca demo.
+- FE: Cài đặt > Hệ thống > "Ca demo" (`features/demo-mode`). 175 unit test, e2e 12/12.
+
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
 2. ~~Dashboard "Thống Kê"~~ (xong 15/10/2026, CHƯA commit): `GET /api/v1/dashboard/summary?from&to` (ADMIN thêm `province`, `agency`), phạm vi giống quyền xem hàng đợi. SQL gộp nhóm trong `repository/DashboardRepository` (NamedParameterJdbcTemplate; so tỉnh/xã bằng unaccent + bỏ "TP."; đổi giờ server → giờ VN qua `:serverZone`). `fake_alarm_count`/`resolved_count` = null tới khi có module đóng ca. `by_day` có `accepted` + `within_sla_rate` (biểu đồ tỷ lệ nhận 15' theo ngày, admin). `by_agency` (cấp tỉnh + toàn quốc) đếm MỌI lực lượng trong địa bàn cho biểu đồ tròn "Tỷ trọng" (tỉnh: Lực lượng / Xã-phường; admin: Tỉnh / Lực lượng; cấp xã không có). Không làm `/dashboard/escalating` (FE lấy từ `/incidents/queue`). FE: trang `/officer/statistics`, mở bằng nút "Thống kê" trên bản đồ (bỏ thanh thống kê cũ). Xuất Excel làm sau.

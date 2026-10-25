@@ -53,10 +53,11 @@ class IncidentRoutingTest {
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(), geo,
             mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
-            mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     final Account caTanAn = officerAccount("congan.tanan@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Tân An");
@@ -336,6 +337,25 @@ class IncidentRoutingTest {
                         && since.isAfter(LocalDateTime.now().minusDays(7).minusMinutes(1))));
         assertThatThrownBy(() -> service.getQueue(0, 4, 0)).isInstanceOf(SosException.class);
         assertThatThrownBy(() -> service.getQueue(0, 4, 91)).isInstanceOf(SosException.class);
+    }
+
+    @Test
+    void demoIncidents_hiddenFromQueueAndHistory_whenTheSwitchIsOn() {
+        loginAs(caTanAn);
+        Incident real = pendingWardIncident();
+        real.setId("SOS-REAL");
+        Incident demo = pendingWardIncident();
+        demo.setId("SOS-DEMO");
+        demo.setCitizenName("[DEMO] Nguyễn Thị Demo (xã)");
+        when(incidentRepo.findByStatusInAndRoutedAgencyInOrderByCreatedAtDesc(any(), any())).thenReturn(List.of(real, demo));
+        when(incidentRepo.findByStatusInAndRoutedAgencyInAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(any(), any(), any()))
+                .thenReturn(List.of(real, demo));
+        when(notifier.toQueueViews(any(), any())).thenReturn(List.of());
+
+        assertThat(service.getQueue(0, 10, null).getTotalElements()).isEqualTo(2);
+        when(demoMode.hidden()).thenReturn(true);
+        assertThat(service.getQueue(0, 10, null).getTotalElements()).isEqualTo(1);
+        assertThat(service.getHistory(7, null, null, 0, 10).getTotalElements()).isEqualTo(1);
     }
 
     @Test

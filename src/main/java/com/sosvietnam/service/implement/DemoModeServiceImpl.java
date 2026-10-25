@@ -1,0 +1,125 @@
+package com.sosvietnam.service.implement;
+
+import com.sosvietnam.model.entity.AppSetting;
+import com.sosvietnam.model.payload.enums.AppSettingKey;
+import com.sosvietnam.model.payload.enums.IncidentEvent;
+import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.request.DemoSettingsRequest;
+import com.sosvietnam.model.payload.response.DemoSettingsResponse;
+import com.sosvietnam.repository.AppSettingRepository;
+import com.sosvietnam.repository.IncidentRepository;
+import com.sosvietnam.repository.UnitMemberRepository;
+import com.sosvietnam.security.CurrentOfficer;
+import com.sosvietnam.security.OfficerPrincipal;
+import com.sosvietnam.service.DemoModeService;
+import com.sosvietnam.service.IncidentNotifier;
+import com.sosvietnam.util.DemoIncidents;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Công tắc ca demo, dùng chung cho mọi tài khoản. Lưu ở app_settings (đổi có hiệu lực ngay, restart vẫn giữ);
+ * chưa có dòng thì: tự sinh = DEMO_INCIDENTS của .env, ẩn = tắt. Đọc nhiều (mỗi lần gọi hàng đợi, mỗi tin STOMP)
+ * nên giữ bản sao trong RAM, chỉ đúng khi 1 instance BE.
+ */
+@Slf4j
+@Service
+public class DemoModeServiceImpl implements DemoModeService {
+
+    private final AppSettingRepository appSettingRepository;
+    private final IncidentRepository incidentRepository;
+    private final UnitMemberRepository unitMemberRepository;
+    private final CurrentOfficer currentOfficer;
+    private final IncidentNotifier notifier;
+    private final boolean generateDefault;
+
+    private volatile Map<AppSettingKey, AppSetting> cache;
+
+    // @Lazy: IncidentNotifierImpl cũng hỏi service này (ẩn ca demo khỏi tin STOMP)
+    public DemoModeServiceImpl(AppSettingRepository appSettingRepository, IncidentRepository incidentRepository,
+                               UnitMemberRepository unitMemberRepository, CurrentOfficer currentOfficer,
+                               @Lazy IncidentNotifier notifier,
+                               @Value("${app.demo.incidents.enabled:false}") boolean generateDefault) {
+        this.appSettingRepository = appSettingRepository;
+        this.incidentRepository = incidentRepository;
+        this.unitMemberRepository = unitMemberRepository;
+        this.currentOfficer = currentOfficer;
+        this.notifier = notifier;
+        this.generateDefault = generateDefault;
+    }
+
+    @Override
+    public boolean generateEnabled() {
+        return flag(AppSettingKey.DEMO_GENERATE, generateDefault);
+    }
+
+    @Override
+    public boolean hidden() {
+        return flag(AppSettingKey.DEMO_HIDDEN, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DemoSettingsResponse get() {
+        AppSetting last = settings().values().stream()
+                .max(Comparator.comparing(AppSetting::getUpdatedAt)).orElse(null);
+        String by = last == null || last.getUpdatedBy() == null ? null
+                : unitMemberRepository.findById(last.getUpdatedBy()).map(m -> m.displayName()).orElse(null);
+        return DemoSettingsResponse.builder()
+                .generate(generateEnabled())
+                .hidden(hidden())
+                .openCount(incidentRepository.findDemoIds(IncidentStatus.ACTIVE, DemoIncidents.LEGACY_NAMES).size())
+                .updatedAt(last == null ? null : last.getUpdatedAt())
+                .updatedByName(by)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public DemoSettingsResponse update(DemoSettingsRequest request) {
+        OfficerPrincipal me = currentOfficer.require();
+        boolean wasHidden = hidden();
+        if (request.getGenerate() != null) save(AppSettingKey.DEMO_GENERATE, request.getGenerate(), me);
+        if (request.getHidden() != null) save(AppSettingKey.DEMO_HIDDEN, request.getHidden(), me);
+        cache = null;
+        log.info("🧪 [DEMO] {} đổi: tự sinh = {}, ẩn = {}", me.email(), generateEnabled(), hidden());
+        // Hàng đợi đang mở ở mọi máy: ẩn -> tin STOMP thành INCIDENT_REMOVED, hiện lại -> thẻ quay về
+        if (wasHidden != hidden()) {
+            incidentRepository.findDemoIds(IncidentStatus.ACTIVE, DemoIncidents.LEGACY_NAMES)
+                    .forEach(id -> notifier.notify(id, IncidentEvent.INCIDENT_UPDATED));
+        }
+        return get();
+    }
+
+    private void save(AppSettingKey key, boolean value, OfficerPrincipal me) {
+        appSettingRepository.save(AppSetting.builder()
+                .key(key)
+                .value(Boolean.toString(value))
+                .updatedAt(LocalDateTime.now())
+                .updatedBy(me.memberId())
+                .build());
+    }
+
+    private boolean flag(AppSettingKey key, boolean fallback) {
+        AppSetting row = settings().get(key);
+        return row == null ? fallback : Boolean.parseBoolean(row.getValue());
+    }
+
+    private Map<AppSettingKey, AppSetting> settings() {
+        Map<AppSettingKey, AppSetting> c = cache;
+        if (c == null) {
+            c = appSettingRepository.findAll().stream()
+                    .collect(Collectors.toMap(AppSetting::getKey, s -> s));
+            cache = c;
+        }
+        return c;
+    }
+}

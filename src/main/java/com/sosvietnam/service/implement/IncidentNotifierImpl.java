@@ -47,6 +47,7 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     private final IncidentMediaRepository incidentMediaRepository;
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final com.sosvietnam.repository.IncidentDocumentRepository incidentDocumentRepository;
+    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     @Override
     public void notify(String incidentId, IncidentEvent event) {
@@ -71,13 +72,16 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                     .getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
             IncidentDispatch dispatch = incidentDispatchRepository
                     .findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(incidentId, DispatchRole.PRIMARY).orElse(null);
+            // Công tắc "ẩn ca demo": cán bộ chỉ nhận lệnh gỡ thẻ (người báo tin vẫn nhận bình thường)
+            IncidentEvent officerEvent = demoModeService.hidden() && com.sosvietnam.util.DemoIncidents.isDemo(incident)
+                    ? IncidentEvent.INCIDENT_REMOVED : event;
             for (SimpUser user : userRegistry.getUsers()) {
                 if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
                 IncidentQueueResponse view;
                 if (IncidentAccess.canView(viewer, incident) || IncidentAccess.isDelegatedUnit(viewer, dispatch)) {
                     view = toView(incident, viewer, handlerName, mediaCount, dispatch);
                     messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
-                            new IncidentEventMessage(event, view));
+                            new IncidentEventMessage(officerEvent, view));
                 } else if (IncidentAccess.isStationUnit(viewer, dispatch)) {
                     // Đơn vị vừa từ chối uỷ quyền: gỡ thẻ ca khỏi hàng đợi của họ
                     view = toView(incident, viewer, handlerName, mediaCount, dispatch);

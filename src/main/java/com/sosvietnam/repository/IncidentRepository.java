@@ -42,6 +42,12 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     /** Ca còn mở theo tên người báo (ca test [DEMO] của DemoIncidentSeeder). */
     List<Incident> findByCitizenNameInAndStatusIn(Collection<String> names, Collection<IncidentStatus> statuses);
 
+    /** Mã các ca test [DEMO] (util/DemoIncidents) theo trạng thái: công tắc ẩn ca demo đẩy lại các ca này qua STOMP. */
+    @Query("SELECT i.id FROM Incident i WHERE i.status IN :statuses "
+            + "AND (i.citizenName LIKE '[DEMO] %' OR i.citizenName IN :legacyNames)")
+    List<String> findDemoIds(@Param("statuses") Collection<IncidentStatus> statuses,
+                             @Param("legacyNames") Collection<String> legacyNames);
+
     /** Ca Công an cấp xã còn chờ, chưa leo thang: hẹn giờ lại khi BE khởi động. */
     @Query("""
         SELECT i FROM Incident i
