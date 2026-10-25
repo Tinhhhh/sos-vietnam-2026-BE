@@ -1,9 +1,7 @@
 package com.sosvietnam.config;
 
-import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Incident;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.service.IncidentNotifier;
 import com.sosvietnam.service.IncidentService;
@@ -32,7 +30,6 @@ import java.util.stream.Collectors;
 public class HeldIncidentWatchdog {
 
     private final IncidentRepository incidentRepository;
-    private final AccountRepository accountRepository;
     private final IncidentNotifier notifier;
     private final IncidentService incidentService;
 
@@ -57,12 +54,10 @@ public class HeldIncidentWatchdog {
         offlineSince.keySet().retainAll(holders);
         if (held.isEmpty()) return;
 
-        Set<String> online = notifier.onlineEmails();
-        Map<UUID, String> emails = accountRepository.findAllById(holders).stream()
-                .collect(Collectors.toMap(Account::getId, Account::getEmail));
+        Set<UUID> online = notifier.onlineMemberIds();
         for (Incident incident : held) {
             UUID holder = incident.getHandlerId();
-            if (online.contains(emails.get(holder))) {
+            if (online.contains(holder)) {
                 offlineSince.remove(holder);
                 continue;
             }

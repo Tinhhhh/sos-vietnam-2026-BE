@@ -2,6 +2,9 @@ package com.sosvietnam;
 
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
+import com.sosvietnam.model.entity.UnitMember;
+import com.sosvietnam.model.payload.enums.PoliceRank;
+import com.sosvietnam.model.payload.enums.UnitRole;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.util.AccountExcelExporter;
@@ -14,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,6 +60,41 @@ class AccountExcelExporterTest {
             assertThat(cells(sheet.getRow(2))).contains("Công An", "Cấp Xã/Phường", AccountExcelExporter.UNKNOWN_PASSWORD);
 
             sheet.forEach(row -> row.forEach(c -> assertThat(c.getStringCellValue()).doesNotContain("$2a$")));
+        }
+    }
+
+    @Test
+    void export_withMembers_addsOfficerSheet_commanderDutyAndOnlySeedPins() throws Exception {
+        Role officer = Role.builder().roleName("OFFICER").build();
+        Account unit = Account.builder().id(UUID.randomUUID())
+                .email("congan.tanan.cantho@sos.vn").password("$2a$10$unit")
+                .lastName("").firstName("Công An Phường Tân An")
+                .agencyType(AgencyType.POLICE).unitLevel(UnitLevel.WARD).unitAccount(true)
+                .province(TestGeo.province("Cần Thơ")).ward(TestGeo.ward("Phường Tân An")).role(officer).build();
+        UnitMember commander = UnitMember.builder().id(UUID.randomUUID()).account(unit).fullName("Nguyễn Văn An")
+                .badgeNumber("123456").rank(PoliceRank.TRUNG_TA).position("Trưởng Công an phường")
+                .unitRole(UnitRole.COMMANDER).pinHash("$2a$10$seedpin").build();
+        UnitMember duty = UnitMember.builder().id(UUID.randomUUID()).account(unit).fullName("Trần Thị Bình")
+                .rank(PoliceRank.DAI_UY).unitRole(UnitRole.MEMBER).pinHash("$2a$10$changed").build();
+        UnitMember fresh = UnitMember.builder().id(UUID.randomUUID()).account(unit).fullName("Lê Văn Cường")
+                .unitRole(UnitRole.MEMBER).build(); // chưa kích hoạt PIN
+
+        byte[] xlsx = exporter.export(List.of(unit), a -> null, List.of(commander, duty, fresh),
+                Map.of(unit.getId(), duty.getId()), m -> m == commander ? "246810" : null);
+
+        try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            assertThat(wb.getNumberOfSheets()).isEqualTo(2);
+            List<String> unitRow = cells(wb.getSheetAt(0).getRow(1));
+            assertThat(unitRow).contains("Trung tá Nguyễn Văn An", "Đại uý Trần Thị Bình", "3");
+
+            Sheet members = wb.getSheet("Cán bộ");
+            assertThat(members.getLastRowNum()).isEqualTo(3);
+            assertThat(cells(members.getRow(1))).contains("congan.tanan.cantho@sos.vn", "Nguyễn Văn An", "123456",
+                    "Trung tá", "Chỉ huy", "246810", "Hoạt động");
+            assertThat(cells(members.getRow(2))).contains("Có", AccountExcelExporter.UNKNOWN_PIN);
+            assertThat(cells(members.getRow(3))).contains("Chưa kích hoạt");
+            wb.forEach(sheet -> sheet.forEach(row -> row.forEach(
+                    c -> assertThat(c.getStringCellValue()).doesNotContain("$2a$"))));
         }
     }
 

@@ -51,7 +51,7 @@ public class DispatchController {
                     + "The incident shows in that ward unit's queue. Role required: OFFICER, ADMIN")
     @PostMapping("/delegate")
     public ResponseEntity<Object> delegate(@PathVariable String id, @RequestBody @Valid DelegateRequest request) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Delegated", dispatchService.delegate(id, request.getAccountId()));
+        return ResponseBuilder.returnData(HttpStatus.OK, "Delegated", dispatchService.delegate(id, request.getMemberId()));
     }
 
     @Operation(summary = "Withdraw a delegation that has not been answered yet (back to choosing in step 2)",
@@ -87,6 +87,22 @@ public class DispatchController {
     @PostMapping("/arrive")
     public ResponseEntity<Object> arrive(@PathVariable String id) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.arrive(id));
+    }
+
+    @Operation(summary = "DEMO ONLY: simulate the field officer's phone driving along the route",
+            description = "Sends a GPS point every 5 s along the route (through Traccar when app.traccar.osmand-url is set), "
+                    + "stops 30 m before the scene or when the trip is no longer EN_ROUTE; the trip status never changes. "
+                    + "Only while the 'Ca demo' switch is on (or for [DEMO] incidents), the trip is EN_ROUTE and the field "
+                    + "officer has a badge number; 403 / 409 otherwise. Role required: OFFICER, ADMIN (can view the incident)")
+    @PostMapping("/simulate")
+    public ResponseEntity<Object> startSimulation(@PathVariable String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Simulation started", dispatchService.startSimulation(id));
+    }
+
+    @Operation(summary = "DEMO ONLY: stop the movement simulation", description = "Role required: OFFICER, ADMIN")
+    @PostMapping("/simulate/stop")
+    public ResponseEntity<Object> stopSimulation(@PathVariable String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Simulation stopped", dispatchService.stopSimulation(id));
     }
 
     @Operation(summary = "Step 4: confirm the incident is handled (both sides must confirm)",

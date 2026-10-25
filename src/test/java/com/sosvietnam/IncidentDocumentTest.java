@@ -59,9 +59,10 @@ class IncidentDocumentTest {
     final IncidentDispatchRepository dispatchRepo = mock(IncidentDispatchRepository.class);
     final IncidentReportRepository reportRepo = mock(IncidentReportRepository.class);
     final IncidentDocumentRepository docRepo = mock(IncidentDocumentRepository.class);
-    final AccountRepository accountRepo = mock(AccountRepository.class);
-    final IncidentDocumentServiceImpl service = new IncidentDocumentServiceImpl(incidentRepo, claimRepo, dispatchRepo,
-            reportRepo, docRepo, accountRepo, mock(com.sosvietnam.service.IncidentNotifier.class));
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    final IncidentDocumentServiceImpl service = new IncidentDocumentServiceImpl(incidentRepo,
+            new com.sosvietnam.security.CurrentOfficer(), claimRepo, dispatchRepo, reportRepo, docRepo, members,
+            mock(com.sosvietnam.service.IncidentNotifier.class));
 
     final Map<String, IncidentDocument> store = new HashMap<>();
     Account officer;
@@ -85,10 +86,9 @@ class IncidentDocumentTest {
         when(incidentRepo.findById(incident.getId())).thenReturn(Optional.of(incident));
         when(incidentRepo.findByLookupCode(anyString())).thenReturn(Optional.empty());
         when(incidentRepo.findByLookupCode("K7M2QX9P")).thenReturn(Optional.of(incident));
-        when(accountRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
-        when(accountRepo.findById(officer.getId())).thenReturn(Optional.of(officer));
+        when(members.findById(officer.getId())).thenReturn(Optional.of(TestGeo.member(officer)));
         when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc(anyString())).thenReturn(Optional.of(
-                IncidentClaim.builder().incident(incident).account(officer).claimedAt(incident.getCreatedAt()).build()));
+                IncidentClaim.builder().incident(incident).member(TestGeo.member(officer)).claimedAt(incident.getCreatedAt()).build()));
         when(dispatchRepo.findByIncident_IdOrderByDispatchedAtAsc(anyString())).thenReturn(List.of());
         when(reportRepo.findById(anyString())).thenReturn(Optional.of(IncidentReport.builder()
                 .incidentId(incident.getId()).result(ReportResult.RESOLVED).summary("Đã bắt giữ đối tượng")
@@ -99,8 +99,7 @@ class IncidentDocumentTest {
             store.put(d.getIncidentId(), d);
             return d;
         });
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken(officer.getEmail(), null, "OFFICER"));
+        TestGeo.signIn(officer);
     }
 
     @AfterEach

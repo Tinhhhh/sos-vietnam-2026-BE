@@ -49,10 +49,12 @@ class IncidentStatusFlowTest {
     final AccountRepository accountRepo = mock(AccountRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo,
+    final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
+    final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
             mock(GeoService.class), mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
-            mock(com.sosvietnam.repository.IncidentDocumentRepository.class));
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
 
     final Account officer = Account.builder().id(UUID.randomUUID()).email("congan.tanan@sos.vn").firstName("Cán")
             .lastName("Bộ").role(Role.builder().id(2L).roleName("OFFICER").build()).agencyType(AgencyType.POLICE)
@@ -77,9 +79,7 @@ class IncidentStatusFlowTest {
     }
 
     void loginAsOfficer() {
-        when(accountRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken(officer.getEmail(), null, "OFFICER"));
+        TestGeo.signIn(officer);
     }
 
     @Test
@@ -87,7 +87,7 @@ class IncidentStatusFlowTest {
         loginAsOfficer();
         when(incidentRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         IncidentClaim claim = IncidentClaim.builder().claimedAt(LocalDateTime.now().minusMinutes(2)).build();
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
                 .thenReturn(Optional.of(claim));
         var req = com.sosvietnam.model.payload.request.TransferIncidentRequest.builder()
                 .agency(AgencyType.FIRE).reason("Xác minh là cháy nhà, không phải trộm").build();
@@ -123,7 +123,7 @@ class IncidentStatusFlowTest {
     void autoRelease_putsCaseBackAndClosesClaim() {
         when(incidentRepo.release(eq("SOS-1"), eq(officer.getId()), any())).thenReturn(1);
         IncidentClaim claim = IncidentClaim.builder().claimedAt(LocalDateTime.now().minusMinutes(9)).build();
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
                 .thenReturn(Optional.of(claim));
         assertThat(service.autoRelease("SOS-1", officer.getId(), "mất kết nối")).isTrue();
         assertThat(claim.getEndReason()).isEqualTo(ClaimEndReason.AUTO_RELEASED);
@@ -168,7 +168,7 @@ class IncidentStatusFlowTest {
     void officerEscalates_heldWardIncident_goesToProvinceAndClosesClaim() {
         loginAsOfficer();
         IncidentClaim claim = IncidentClaim.builder().claimedAt(LocalDateTime.now().minusMinutes(3)).build();
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
                 .thenReturn(Optional.of(claim));
         when(incidentRepo.escalateHeld(eq("SOS-1"), eq(officer.getId()), eq(IncidentStatus.HELD), any())).thenReturn(1);
 
@@ -236,7 +236,7 @@ class IncidentStatusFlowTest {
     void officerCancels_heldIncident_anyStep_closesClaimWithReason() {
         loginAsOfficer();
         IncidentClaim claim = IncidentClaim.builder().claimedAt(LocalDateTime.now().minusMinutes(3)).build();
-        when(claimRepo.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
+        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", officer.getId()))
                 .thenReturn(Optional.of(claim));
         when(incidentRepo.cancel(eq("SOS-1"), eq(CancelReason.OFFICER_CANCELLED), eq(IncidentStatus.HELD), any())).thenReturn(1);
 

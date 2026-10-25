@@ -55,6 +55,20 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
             @org.springframework.data.repository.query.Param("statuses") java.util.Collection<DispatchStatus> statuses,
             @org.springframework.data.repository.query.Param("incidentStatuses") java.util.Collection<com.sosvietnam.model.payload.enums.IncidentStatus> incidentStatuses);
 
+    /**
+     * Lượt chủ trì đang trên đường (EN_ROUTE) mà người đi hiện trường có số hiệu này: cán bộ được uỷ quyền,
+     * không có thì người điều động (đơn vị tự đi). Mới cập nhật nhất trước (số hiệu trùng ở 2 lượt: lấy lượt đầu).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT d FROM IncidentDispatch d LEFT JOIN d.assignedTo a LEFT JOIN d.dispatchedBy b
+            WHERE d.role = com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY
+              AND d.status = com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
+              AND ((a IS NOT NULL AND a.badgeNumber = :badge) OR (a IS NULL AND b.badgeNumber = :badge))
+            ORDER BY d.departedAt DESC, d.id DESC
+            """)
+    List<IncidentDispatch> findEnRouteByTrackerBadge(
+            @org.springframework.data.repository.query.Param("badge") String badge);
+
     /** Lượt chủ trì đang hoạt động của ca (không tính lượt đã bị từ chối). */
     Optional<IncidentDispatch> findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(
             String incidentId, DispatchRole role, DispatchStatus status);

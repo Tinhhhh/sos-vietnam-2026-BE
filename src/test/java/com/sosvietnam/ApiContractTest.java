@@ -65,7 +65,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         WeatherController.class, DashboardController.class})
 @Import({SecurityConfig.class, BeanConfiguration.class, JwtAuthenticationFilter.class, JwtTokenProvider.class,
         TokenRevocationStore.class, JwtAuthenticationEntryPoint.class, CustomLogoutHandler.class,
-        CustomUserDetailService.class, AuthenServiceImpl.class})
+        CustomUserDetailService.class, AuthenServiceImpl.class, OfficerPrincipalLoader.class, CurrentOfficer.class})
 @TestPropertySource(properties = "app.jwt.secret-key=q83vEi7pZf2mR1tYw9LkXc4N6bHs0aJdUe5gVo8iTzQyP3rKfW2xCnMbLh7sDjA1")
 class ApiContractTest {
 
@@ -83,11 +83,16 @@ class ApiContractTest {
     @MockitoBean IncidentService incidentService;
     @MockitoBean WeatherService weatherService;
     @MockitoBean DashboardService dashboardService;
+    @MockitoBean com.sosvietnam.security.StompSessionRegistry stompSessionRegistry;
+    @MockitoBean com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
+    @MockitoBean com.sosvietnam.repository.UnitDutyAssignmentRepository dutyRepository;
 
     // "DB" giả cho refresh token: nếu code lưu trùng thì list sẽ có 2 phần tử
     final List<RefreshToken> refreshTable = Collections.synchronizedList(new ArrayList<>());
     final Map<String, Account> accounts = new ConcurrentHashMap<>();
     final Map<String, Role> roles = new HashMap<>();
+    final Map<UUID, com.sosvietnam.model.entity.UnitMember> members = new ConcurrentHashMap<>();
+    static final String PIN = "2468";
 
     @BeforeEach
     void setUp() {
@@ -97,7 +102,23 @@ class ApiContractTest {
         }
         accounts.put("officer@sos.vn", Account.builder().id(UUID.randomUUID()).firstName("An").lastName("Nguyễn")
                 .email("officer@sos.vn").password(passwordEncoder.encode("Officer@123")).role(roles.get("OFFICER"))
-                .agencyType(AgencyType.POLICE).province(TestGeo.province("TP. Hà Nội")).isActive(true).build());
+                .agencyType(AgencyType.POLICE).province(TestGeo.province("TP. Hà Nội")).isActive(true).unitAccount(true).build());
+        // tài khoản đơn vị có 2 cán bộ: chỉ huy (đổi được mật khẩu đơn vị) và cán bộ thường
+        Account unit = accounts.get("officer@sos.vn");
+        for (var role : List.of(com.sosvietnam.model.payload.enums.UnitRole.COMMANDER, com.sosvietnam.model.payload.enums.UnitRole.MEMBER)) {
+            var m = com.sosvietnam.model.entity.UnitMember.builder().id(UUID.randomUUID()).account(unit)
+                    .fullName(role == com.sosvietnam.model.payload.enums.UnitRole.COMMANDER ? "Nguyễn An" : "Trần Bình")
+                    .unitRole(role).pinHash(passwordEncoder.encode(PIN)).createdAt(LocalDateTime.now()).build();
+            members.put(m.getId(), m);
+        }
+        when(unitMemberRepository.findById(any())).thenAnswer(i -> Optional.ofNullable(members.get((UUID) i.getArgument(0))));
+        when(unitMemberRepository.findByAccount_IdAndActiveTrueOrderByFullNameAsc(any())).thenAnswer(i -> members.values().stream()
+                .filter(m -> m.isActive() && m.getAccount().getId().equals(i.getArgument(0)))
+                .sorted(Comparator.comparing(com.sosvietnam.model.entity.UnitMember::getFullName)).toList());
+        when(unitMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(accountRepository.findById(any())).thenAnswer(i -> accounts.values().stream()
+                .filter(a -> a.getId().equals(i.getArgument(0))).findFirst());
+        when(dutyRepository.findFirstByAccount_IdAndEndedAtIsNull(any())).thenReturn(Optional.empty());
 
         when(roleRepository.findByRoleName(anyString())).thenAnswer(i -> Optional.ofNullable(roles.get((String) i.getArgument(0))));
         when(accountRepository.findByEmail(anyString())).thenAnswer(i -> Optional.ofNullable(accounts.get((String) i.getArgument(0))));
@@ -127,13 +148,73 @@ class ApiContractTest {
         return objectMapper.readTree(r.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
     }
 
-    private JsonNode login(String email, String password) throws Exception {
+    private JsonNode loginUnit(String email, String password) throws Exception {
         return json(mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk()).andReturn());
     }
 
+    private UUID memberNamed(String fullName) {
+        return members.values().stream().filter(m -> m.getFullName().equals(fullName)).findFirst().orElseThrow().getId();
+    }
+
+    /** Đăng nhập 2 bước như FE: email + mật khẩu đơn vị -> unit_token -> chỉ huy "Nguyễn An" nhập PIN. */
+    private JsonNode login(String email, String password) throws Exception {
+        return pin(loginUnit(email, password).get("data").get("unit_token").asText(), memberNamed("Nguyễn An"), PIN);
+    }
+
+    private JsonNode pin(String unitToken, UUID memberId, String pin) throws Exception {
+        return json(mvc.perform(pinRequest(unitToken, memberId, pin)).andExpect(status().isOk()).andReturn());
+    }
+
+    private org.springframework.test.web.servlet.RequestBuilder pinRequest(String unitToken, UUID memberId, String pin) {
+        return post("/api/v1/auth/unit/pin").header("Authorization", "Bearer " + unitToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"member_id\":\"" + memberId + "\",\"pin\":\"" + pin + "\"}");
+    }
+
     // ── Auth ──────────────────────────────────────────────────────────
+
+    @Test
+    void unitLogin_givesOnlyAUnitToken_thatOpensNothingButTheMemberStep() throws Exception {
+        JsonNode data = loginUnit("officer@sos.vn", "Officer@123").get("data");
+        String unitToken = data.get("unit_token").asText();
+        assertThat(data.size()).isEqualTo(1);
+        assertThat(refreshTable).isEmpty();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + unitToken)).andExpect(status().isUnauthorized());
+
+        JsonNode list = json(mvc.perform(get("/api/v1/auth/unit/members").header("Authorization", "Bearer " + unitToken))
+                .andExpect(status().isOk()).andReturn()).get("data");
+        assertThat(list).hasSize(2);
+        assertThat(list.get(0).get("unit_role").asText()).isEqualTo("COMMANDER"); // chỉ huy đứng đầu
+        assertThat(list.get(0).has("pin_hash")).isFalse();
+        assertThat(list.get(0).get("phone").isNull()).isTrue();
+
+        // sai PIN: 401 kèm số lần còn lại, tới lần thứ 5 thì khoá (423), khoá rồi đúng PIN cũng không vào được
+        UUID binh = memberNamed("Trần Bình");
+        for (int i = 1; i <= 4; i++) {
+            mvc.perform(pinRequest(unitToken, binh, "0000")).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(pinRequest(unitToken, binh, "0000")).andExpect(status().isLocked());
+        mvc.perform(pinRequest(unitToken, binh, PIN)).andExpect(status().isLocked());
+
+        // đúng PIN của chỉ huy: cặp token của chỉ huy, /me có khối member
+        String access = pin(unitToken, memberNamed("Nguyễn An"), PIN).get("data").get("access_token").asText();
+        JsonNode me = json(mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + access))
+                .andExpect(status().isOk()).andReturn()).get("data");
+        assertThat(me.get("member").get("full_name").asText()).isEqualTo("Nguyễn An");
+        assertThat(me.get("member").get("unit_role").asText()).isEqualTo("COMMANDER");
+    }
+
+    @Test
+    void memberCannotChangeTheUnitPassword() throws Exception {
+        String unitToken = loginUnit("officer@sos.vn", "Officer@123").get("data").get("unit_token").asText();
+        String access = pin(unitToken, memberNamed("Trần Bình"), PIN).get("data").get("access_token").asText();
+        mvc.perform(post("/api/v1/auth/change-password").contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + access)
+                        .content("{\"current_password\":\"Officer@123\",\"new_password\":\"Officer@456\"}"))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     void login_returnsResponseBuilderEnvelope_withSnakeCaseTokens() throws Exception {
@@ -173,6 +254,21 @@ class ApiContractTest {
     void me_withoutToken_returns401() throws Exception {
         mvc.perform(get("/api/v1/auth/me")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.http_status").value(401));
+    }
+
+    /** API công khai mà màn dân không dùng: khoá lại (chống cào danh bạ trạm, tắt đăng ký tài khoản). */
+    @Test
+    void officerOnlyDirectories_andRegister_areClosedToThePublic() throws Exception {
+        for (String path : List.of("/api/v1/stations", "/api/v1/stations/nearest?lat=10&lng=105",
+                "/api/v1/geo/provinces", "/api/v1/geo/provinces/92/wards")) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        String officer = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        mvc.perform(post("/api/v1/auth/register").header("Authorization", "Bearer " + officer)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -243,34 +339,7 @@ class ApiContractTest {
         mvc.perform(post("/api/v1/auth/logout").header("Authorization", "Bearer abc.def.ghi")).andExpect(status().isOk());
     }
 
-    @Test
-    void register_rejectsRoleField_with400() throws Exception {
-        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"hacker@x.vn\",\"password\":\"Password1\",\"roleName\":\"ADMIN\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Dữ liệu gửi lên không hợp lệ"));
-        assertThat(accounts).doesNotContainKey("hacker@x.vn");
-    }
-
-    @Test
-    void register_alwaysCreatesCitizen_andNeverCreatesRoles() throws Exception {
-        JsonNode body = json(mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"dan@x.vn\",\"password\":\"Password1\",\"first_name\":\"Bình\",\"last_name\":\"Trần\"}"))
-                .andExpect(status().isOk()).andReturn());
-        // Đăng ký chỉ trả message, không tự đăng nhập
-        assertThat(body.has("data")).isFalse();
-        assertThat(accounts.get("dan@x.vn").fullName()).isEqualTo("Trần Bình");
-        assertThat(accounts.get("dan@x.vn").getRole().getRoleName()).isEqualTo("CITIZEN");
-        verify(roleRepository, never()).save(any());
-    }
-
-    @Test
-    void register_weakPassword_returnsFieldErrors() throws Exception {
-        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"x@x.vn\",\"password\":\"123\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.data.password").exists());
-    }
+    // Đăng ký công khai đã tắt (25/10/2026): xem officerOnlyDirectories_andRegister_areClosedToThePublic
 
     // ── Geo / Station ────────────────────────────────────────────────
 
@@ -299,21 +368,25 @@ class ApiContractTest {
         verify(bandoSyncService, never()).syncFromNationalDatabase();
     }
 
+    private String officerBearer() throws Exception {
+        return "Bearer " + login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+    }
+
     @Test
-    void stationsNearest_isPublic() throws Exception {
+    void stationsNearest_forOfficers() throws Exception {
         when(geoService.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of());
-        mvc.perform(get("/api/v1/stations/nearest").param("lat", "21").param("lng", "105").param("agency", "POLICE"))
+        mvc.perform(get("/api/v1/stations/nearest").header("Authorization", officerBearer()).param("lat", "21").param("lng", "105").param("agency", "POLICE"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
-    void stationsList_isPublic_andPassesFilters() throws Exception {
+    void stationsList_forOfficers_andPassesFilters() throws Exception {
         StationResponse station = StationResponse.builder()
                 .id(1L).name("Công An TP. Cần Thơ").agencyType(AgencyType.POLICE).level(StationLevel.PROVINCE)
                 .facilityType("Trụ sở chính").build();
         when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new ListResponse(List.of(station), 1, 5, 6, 2, true));
-        mvc.perform(get("/api/v1/stations").param("pageNo", "1").param("pageSize", "5").param("province", "c")
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("pageNo", "1").param("pageSize", "5").param("province", "c")
                         .param("agency", "POLICE").param("level", "PROVINCE").param("sortBy", "name").param("sortDir", "desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].agency_type").value("POLICE"))
@@ -331,14 +404,14 @@ class ApiContractTest {
     void stationsList_defaultsLikeHivTmss() throws Exception {
         when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new ListResponse(List.of(), 0, 10, 0, 0, true));
-        mvc.perform(get("/api/v1/stations")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer())).andExpect(status().isOk());
         verify(geoService).getStations(0, 10, null, null, null, "id", "asc");
     }
 
     @Test
     void stationsList_removedEnumValues_return400() throws Exception {
-        mvc.perform(get("/api/v1/stations").param("level", "DISTRICT")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/stations").param("agency", "MOBILE_POLICE")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("level", "DISTRICT")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("agency", "MOBILE_POLICE")).andExpect(status().isBadRequest());
     }
 
     @Test
@@ -488,9 +561,9 @@ class ApiContractTest {
         UUID to = UUID.randomUUID();
         when(incidentService.releaseIncident(eq("SOS-1"), any())).thenReturn(IncidentQueueResponse.builder().id("SOS-1").build());
         mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"to_account_id\":\"" + to + "\",\"note\":\"Hết ca\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"to_member_id\":\"" + to + "\",\"note\":\"Hết ca\"}"))
                 .andExpect(status().isOk());
-        verify(incidentService).releaseIncident(eq("SOS-1"), argThat(r -> to.equals(r.getToAccountId()) && "Hết ca".equals(r.getNote())));
+        verify(incidentService).releaseIncident(eq("SOS-1"), argThat(r -> to.equals(r.getToMemberId()) && "Hết ca".equals(r.getNote())));
 
         // Nhả về hàng đợi chung: không cần body
         mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access))

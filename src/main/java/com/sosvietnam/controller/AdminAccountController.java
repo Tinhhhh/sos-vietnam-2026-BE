@@ -1,5 +1,7 @@
 package com.sosvietnam.controller;
 
+import com.sosvietnam.model.payload.enums.AgencyType;
+import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.NewAccountRequest;
 import com.sosvietnam.service.AccountService;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -42,15 +45,21 @@ public class AdminAccountController {
                 accountService.createAccountByAdmin(request));
     }
 
-    @Operation(summary = "Export all accounts to Excel (.xlsx)", description = "Password column shows only seed passwords still in use (DB keeps bcrypt hashes only). Role required: ADMIN")
+    @Operation(summary = "Export accounts + unit officers to Excel (.xlsx)",
+            description = "Optional filters province_id, agency, level. Sheet 1 = accounts (commander, duty officer), sheet 2 = "
+                    + "officers of the units. Password / PIN columns show only seed values still in use (DB keeps bcrypt "
+                    + "hashes only). Role required: ADMIN")
     @GetMapping("/export")
-    public ResponseEntity<byte[]> exportAccounts() throws IOException {
+    public ResponseEntity<byte[]> exportAccounts(
+            @RequestParam(name = "province_id", required = false) String provinceId,
+            @RequestParam(name = "agency", required = false) AgencyType agency,
+            @RequestParam(name = "level", required = false) UnitLevel level) throws IOException {
         String fileName = "danh-sach-tai-khoan-"
                 + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) + ".xlsx";
         return ResponseEntity.ok()
                 .contentType(XLSX)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build().toString())
-                .body(accountService.exportAccountsToExcel());
+                .body(accountService.exportAccountsToExcel(provinceId, agency, level));
     }
 }

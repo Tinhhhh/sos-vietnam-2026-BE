@@ -166,8 +166,8 @@ public class IncidentQueueResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Handler {
-        @JsonProperty("account_id")
-        private UUID accountId;
+        @JsonProperty("member_id")
+        private UUID memberId;
         @JsonProperty("full_name")
         private String fullName;
     }

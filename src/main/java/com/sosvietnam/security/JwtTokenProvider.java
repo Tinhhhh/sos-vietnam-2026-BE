@@ -3,6 +3,7 @@ package com.sosvietnam.security;
 import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.entity.Role;
+import com.sosvietnam.model.entity.UnitMember;
 import com.sosvietnam.model.payload.enums.RoleName;
 import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.RoleRepository;
@@ -24,8 +25,11 @@ import java.util.Date;
 import java.util.UUID;
 
 /**
- * Sinh và đọc JWT (access token + refresh token). Không ghi DB.
- * Token đã thu hồi và mốc "đá văng mọi phiên" nằm ở TokenRevocationStore (RAM + Redis).
+ * Sinh và đọc JWT. Không ghi DB. Token đã thu hồi và mốc "đá văng mọi phiên" nằm ở TokenRevocationStore (RAM + Redis).
+ * Loại token (claim "type"):
+ * - "unit": token tạm sau khi đăng nhập email + mật khẩu đơn vị (vài phút), chỉ dùng để chọn cán bộ + nhập PIN.
+ * - "access" / "refresh": của một cán bộ, claim "id" = tài khoản đơn vị, "mid" = cán bộ (unit_members).
+ *   Tài khoản không có cán bộ (người dân) thì không có "mid".
  */
 @Component
 @Slf4j
@@ -47,6 +51,9 @@ public class JwtTokenProvider {
 
     @Value("${app.jwt-access-expiration-milliseconds:${app.jwt.expiration-ms:86400000}}")
     private long jwtAccessExpiration;
+
+    @Value("${app.jwt.unit-expiration-ms:300000}")
+    private long jwtUnitExpiration;
 
     @Value("${app.jwt-refresh-expiration-milliseconds:${app.jwt.refresh-expiration-ms:604800000}}")
     private long jwtRefreshExpiration;
@@ -129,6 +136,77 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    /** Access token của một cán bộ (sau khi nhập PIN; admin: cán bộ ẩn của tài khoản). */
+    public String generateMemberAccessToken(UnitMember member) {
+        return memberToken(member, "access", jwtAccessExpiration);
+    }
+
+    public String generateMemberRefreshToken(UnitMember member) {
+        return memberToken(member, "refresh", jwtRefreshExpiration);
+    }
+
+    private String memberToken(UnitMember member, String type, long expiration) {
+        Account account = member.getAccount();
+        Date now = new Date();
+        JwtBuilder builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(account.getEmail())
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + expiration))
+                .claim("type", type)
+                .claim("id", account.getId().toString())
+                .claim("mid", member.getId().toString());
+        if ("access".equals(type)) {
+            builder.claim("role", account.getRole() == null ? RoleName.CITIZEN.getRole() : account.getRole().getRoleName())
+                    .claim("fullName", member.displayName());
+        }
+        return builder.signWith(getSigningKey()).compact();
+    }
+
+    /** Token tạm của tài khoản đơn vị: chỉ để gọi /auth/unit/members, /auth/unit/pin, /auth/unit/activate. */
+    public String generateUnitToken(Account account) {
+        Date now = new Date();
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(account.getEmail())
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + jwtUnitExpiration))
+                .claim("type", "unit")
+                .claim("id", account.getId().toString())
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    /** id tài khoản đơn vị trong token tạm còn hạn, chưa bị đá văng; null nếu không phải token tạm hợp lệ. */
+    public UUID unitAccountIdFrom(String jwt) {
+        Claims claims = claimsOrNull(jwt);
+        if (claims == null || !"unit".equals(claims.get("type", String.class)) || claims.get("id") == null) return null;
+        UUID accountId = UUID.fromString(claims.get("id").toString());
+        return revocations.issuedBeforeLogoutAll(accountId, claims.getIssuedAt()) ? null : accountId;
+    }
+
+    /** Loại token ("access" / "refresh" / "unit"), null nếu token hỏng hoặc hết hạn. */
+    public String tokenType(String jwt) {
+        Claims claims = claimsOrNull(jwt);
+        return claims == null ? null : claims.get("type", String.class);
+    }
+
+    /** Cán bộ của token (claim "mid"), null nếu token không gắn cán bộ. */
+    public UUID memberIdOf(String jwt) {
+        Claims claims = claimsOrNull(jwt);
+        Object mid = claims == null ? null : claims.get("mid");
+        return mid == null ? null : UUID.fromString(mid.toString());
+    }
+
+    private Claims claimsOrNull(String jwt) {
+        if (!StringUtils.hasText(jwt)) return null;
+        try {
+            return Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(jwt).getPayload();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public String generateTokenFromEmail(String email, String role) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtAccessExpiration);
@@ -204,16 +282,22 @@ public class JwtTokenProvider {
                     .build()
                     .parseSignedClaims(jwt)
                     .getPayload();
+            // mốc của tài khoản đơn vị (đổi mật khẩu đơn vị: mọi cán bộ) hoặc của riêng cán bộ (đổi PIN, bị khoá, bị xoá)
             Object id = claims.get("id");
-            return id != null && revocations.issuedBeforeLogoutAll(UUID.fromString(id.toString()), claims.getIssuedAt());
+            Object mid = claims.get("mid");
+            return (id != null && revocations.issuedBeforeLogoutAll(UUID.fromString(id.toString()), claims.getIssuedAt()))
+                    || (mid != null && revocations.issuedBeforeLogoutAll(UUID.fromString(mid.toString()), claims.getIssuedAt()));
         } catch (Exception e) {
             return true;
         }
     }
 
-    /** Đá văng mọi phiên đang đăng nhập của tài khoản (mọi thiết bị). Nhớ đủ lâu để chặn cả refresh token. */
-    public void disableOldTokens(UUID accountId) {
-        revocations.logoutEverywhere(accountId, Math.max(jwtAccessExpiration, jwtRefreshExpiration));
+    /**
+     * Đá văng mọi phiên đang đăng nhập (mọi thiết bị). id = tài khoản đơn vị (mọi cán bộ của đơn vị) hoặc
+     * id cán bộ (chỉ người đó). Nhớ đủ lâu để chặn cả refresh token.
+     */
+    public void disableOldTokens(UUID accountOrMemberId) {
+        revocations.logoutEverywhere(accountOrMemberId, Math.max(jwtAccessExpiration, jwtRefreshExpiration));
     }
 
     public boolean isTokenExpired(String jwt) {

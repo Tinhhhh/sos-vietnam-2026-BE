@@ -16,11 +16,14 @@ import com.sosvietnam.service.OfficerService;
 import com.sosvietnam.model.entity.IncidentReport;
 import com.sosvietnam.model.payload.request.FinishIncidentRequest;
 import com.sosvietnam.model.entity.Account;
+import com.sosvietnam.model.entity.UnitMember;
 import com.sosvietnam.model.payload.response.OfficerStatusResponse;
 import java.util.List;
 import java.util.UUID;
 import com.sosvietnam.util.CitizenTokens;
 import com.sosvietnam.util.IncidentAccess;
+import com.sosvietnam.util.Polylines;
+import com.sosvietnam.util.RouteSimulation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -40,11 +43,15 @@ public class DispatchServiceImpl implements DispatchService {
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final IncidentRouteRepository incidentRouteRepository;
     private final RescueStationRepository rescueStationRepository;
-    private final AccountRepository accountRepository;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
+    private final com.sosvietnam.security.CurrentOfficer currentOfficer;
     private final IncidentNotifier notifier;
     private final OfficerService officerService;
     private final IncidentClaimRepository incidentClaimRepository;
     private final IncidentReportRepository incidentReportRepository;
+    private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
+    private final com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
+    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     // CHỈ ĐỂ TEST: chế độ ca demo đang bật thì cho "Kết thúc ngay" bỏ qua xác nhận của người dân
     @org.springframework.beans.factory.annotation.Value("${app.demo.incidents.enabled:false}")
@@ -54,18 +61,105 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse getPlan(String incidentId, String citizenAccessToken) {
         Incident incident = findIncident(incidentId);
-        if (citizenAccessToken != null && !citizenAccessToken.isBlank()) {
+        boolean citizen = citizenAccessToken != null && !citizenAccessToken.isBlank();
+        if (citizen) {
             if (!CitizenTokens.matches(incident, citizenAccessToken)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
             }
         } else {
-            OfficerPrincipal me = currentOfficer();
-            if (!IncidentAccess.canView(me, incident) && !IncidentAccess.isDelegatedUnit(me, latestPrimary(incidentId))) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Ca này không thuộc phạm vi của bạn");
-            }
+            requireViewer(incident);
         }
-        IncidentDispatch latest = latestPrimary(incidentId);
-        return latest == null ? null : DispatchPlanResponse.of(latest, currentRoute(latest));
+        return planView(incident, latestPrimary(incidentId), !citizen);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public DispatchPlanResponse startSimulation(String incidentId) {
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = requireViewer(incident);
+        if (!simulationAllowed(incident)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Mô phỏng di chuyển chỉ dùng khi bật \"Ca demo\" trong Cài đặt");
+        }
+        if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
+            throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa trên đường tới hiện trường");
+        }
+        String badge = badgeOfTracker(d);
+        if (badge == null) {
+            throw new SosException(HttpStatus.CONFLICT, "Người đi hiện trường chưa có số hiệu (mã thiết bị GPS)");
+        }
+        List<double[]> path = simulationPath(incident, d);
+        if (path.size() < 2) {
+            throw new SosException(HttpStatus.CONFLICT, "Chưa có toạ độ điểm xuất phát / điểm đến");
+        }
+        dispatchSimulationService.start(d.getId(), badge,
+                RouteSimulation.steps(path, dispatchSimulationService.stepMeters(), SIMULATION_STOP_BEFORE_M));
+        log.info("🧪 [SIMULATE] {} bắt đầu mô phỏng ca {}", currentOfficer().email(), incidentId);
+        return planView(incident, d, true);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public DispatchPlanResponse stopSimulation(String incidentId) {
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = requireViewer(incident);
+        if (d != null) dispatchSimulationService.stop(d.getId());
+        return planView(incident, d, true);
+    }
+
+    /** Xe giả dừng cách hiện trường 30 m: người vẫn phải bấm "Tới nơi". */
+    private static final double SIMULATION_STOP_BEFORE_M = 30;
+
+    /** Cán bộ xem được ca (hoặc đơn vị được uỷ quyền); trả lượt chủ trì mới nhất. */
+    private IncidentDispatch requireViewer(Incident incident) {
+        OfficerPrincipal me = currentOfficer();
+        IncidentDispatch latest = latestPrimary(incident.getId());
+        if (!IncidentAccess.canView(me, incident) && !IncidentAccess.isDelegatedUnit(me, latest)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Ca này không thuộc phạm vi của bạn");
+        }
+        return latest;
+    }
+
+    private DispatchPlanResponse planView(Incident incident, IncidentDispatch latest, boolean officer) {
+        if (latest == null) return null;
+        DispatchPlanResponse plan = DispatchPlanResponse.of(latest, currentRoute(latest));
+        boolean enRoute = latest.getStatus() == DispatchStatus.EN_ROUTE;
+        // vị trí GPS người đi (Traccar, RAM): chỉ khi đang trên đường; FE hỏi lại mỗi 5 giây trong lúc này
+        if (enRoute) {
+            plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
+        }
+        if (officer) {
+            plan.setSimulation(DispatchPlanResponse.Simulation.builder()
+                    .available(enRoute && simulationAllowed(incident) && badgeOfTracker(latest) != null)
+                    .running(dispatchSimulationService.running(latest.getId()))
+                    .build());
+        }
+        return plan;
+    }
+
+    private boolean simulationAllowed(Incident incident) {
+        return demoModeService.generateEnabled() || com.sosvietnam.util.DemoIncidents.isDemo(incident);
+    }
+
+    /** Số hiệu người đi hiện trường (được uỷ quyền, không có thì người điều động); null nếu chưa có. */
+    private static String badgeOfTracker(IncidentDispatch d) {
+        com.sosvietnam.model.entity.UnitMember m = d.getAssignedTo() != null ? d.getAssignedTo() : d.getDispatchedBy();
+        String badge = m == null ? null : m.getBadgeNumber();
+        return badge == null || badge.isBlank() ? null : badge.trim();
+    }
+
+    /** Tuyến đã tính (polyline); không có thì đường thẳng trạm -> điểm đến. */
+    private List<double[]> simulationPath(Incident incident, IncidentDispatch d) {
+        IncidentRoute route = currentRoute(d);
+        List<double[]> path = route == null ? List.of() : Polylines.decode(route.getPolyline());
+        if (path.size() >= 2) return path;
+        Double fromLat = route != null && route.getOriginLat() != null ? route.getOriginLat() : d.getStation().getLatitude();
+        Double fromLng = route != null && route.getOriginLng() != null ? route.getOriginLng() : d.getStation().getLongitude();
+        Double toLat = route != null && route.getDestLat() != null ? route.getDestLat()
+                : incident.getDestLatitude() != null ? incident.getDestLatitude() : incident.getLatitude();
+        Double toLng = route != null && route.getDestLng() != null ? route.getDestLng()
+                : incident.getDestLongitude() != null ? incident.getDestLongitude() : incident.getLongitude();
+        if (fromLat == null || fromLng == null || toLat == null || toLng == null) return List.of();
+        return List.of(new double[]{fromLat, fromLng}, new double[]{toLat, toLng});
     }
 
     @Transactional
@@ -73,7 +167,7 @@ public class DispatchServiceImpl implements DispatchService {
     public DispatchPlanResponse savePlan(String incidentId, DispatchPlanRequest request) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(incidentId);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới điều động được");
         }
         if (incident.getStatus() != IncidentStatus.RESOLVING) {
@@ -97,7 +191,7 @@ public class DispatchServiceImpl implements DispatchService {
                 .build());
         dispatch.setStation(station);
         dispatch.setStatus(status);
-        dispatch.setDispatchedBy(accountRepository.getReferenceById(me.accountId()));
+        dispatch.setDispatchedBy(unitMemberRepository.getReferenceById(me.memberId()));
         dispatch.setUnitLevel(me.level());
         dispatch.setDispatchedAt(now);
         dispatch.setDepartedAt(status == DispatchStatus.EN_ROUTE ? now : null);
@@ -133,7 +227,7 @@ public class DispatchServiceImpl implements DispatchService {
                 .durationTrafficS(route.getDurationTrafficS())
                 .polyline(route.getPolyline())
                 .provider(route.getProvider() == null ? RouteProvider.ESTIMATE : route.getProvider())
-                .computedBy(me.accountId())
+                .computedBy(me.memberId())
                 .computedAt(now)
                 .build());
 
@@ -141,7 +235,7 @@ public class DispatchServiceImpl implements DispatchService {
         incident.setDestLongitude(dest.getLongitude());
         incident.setDestAddress(dest.getAddress());
         incident.setDestSource(dest.getSource());
-        incident.setDestUpdatedBy(dest.getSource() == DestinationSource.OFFICER_EDIT ? me.accountId() : null);
+        incident.setDestUpdatedBy(dest.getSource() == DestinationSource.OFFICER_EDIT ? me.memberId() : null);
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);
 
@@ -157,17 +251,17 @@ public class DispatchServiceImpl implements DispatchService {
         IncidentDispatch d = heldPlan(incidentId);
         RescueStation st = d.getStation();
         if (st.getLevel() != StationLevel.WARD || st.wardId() == null) return List.of();
-        List<Account> officers = accountRepository.findActiveOfficers(st.getAgencyType(), UnitLevel.WARD).stream()
-                .filter(a -> st.wardId().equals(a.wardId()))
+        List<UnitMember> officers = unitMemberRepository.findActiveOfficers(st.getAgencyType(), UnitLevel.WARD).stream()
+                .filter(m -> st.wardId().equals(m.getAccount().wardId()) && !m.isLocked())
                 .toList();
         List<OfficerStatusResponse> list = officerService.describe(officers);
         // Đang được uỷ quyền một ca khác còn mở cũng là bận (giống lúc giao: delegate() trả 409)
         java.util.Map<UUID, IncidentDispatch> assigned = new java.util.HashMap<>();
-        activeAssignments(officers.stream().map(Account::getId).toList()).stream()
+        activeAssignments(officers.stream().map(UnitMember::getId).toList()).stream()
                 .filter(a -> !a.getIncident().getId().equals(incidentId))
                 .forEach(a -> assigned.putIfAbsent(a.getAssignedTo().getId(), a));
         for (OfficerStatusResponse o : list) {
-            IncidentDispatch other = assigned.get(o.getAccountId());
+            IncidentDispatch other = assigned.get(o.getMemberId());
             if (other == null || o.isBusy()) continue;
             o.setBusy(true);
             o.setHeldIncident(OfficerStatusResponse.HeldIncident.builder()
@@ -182,23 +276,24 @@ public class DispatchServiceImpl implements DispatchService {
 
     @Transactional
     @Override
-    public DispatchPlanResponse delegate(String incidentId, UUID accountId) {
+    public DispatchPlanResponse delegate(String incidentId, UUID memberId) {
         IncidentDispatch d = heldPlan(incidentId);
         if (d.getStatus() != DispatchStatus.PENDING_ACCEPT) {
             throw new SosException(HttpStatus.CONFLICT, "Đơn vị đã nhận ca, không đổi người nhận được nữa");
         }
         requireAnswered(d);
-        Account target = accountRepository.findById(accountId)
+        UnitMember target = unitMemberRepository.findById(memberId)
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy cán bộ"));
+        Account unit = target.getAccount();
         RescueStation st = d.getStation();
-        if (!target.isActive() || target.getUnitLevel() != UnitLevel.WARD || target.getAgencyType() != st.getAgencyType()
-                || st.wardId() == null || !st.wardId().equals(target.wardId())) {
+        if (!target.isActive() || target.isLocked() || !unit.isActive() || unit.getUnitLevel() != UnitLevel.WARD
+                || unit.getAgencyType() != st.getAgencyType() || st.wardId() == null || !st.wardId().equals(unit.wardId())) {
             throw new SosException(HttpStatus.BAD_REQUEST, "Cán bộ không thuộc đơn vị của trạm đã chọn");
         }
         if (incidentRepository.existsByHandlerIdAndStatusIn(target.getId(), IncidentStatus.ACTIVE)
                 || activeAssignments(List.of(target.getId())).stream()
                         .anyMatch(a -> !a.getIncident().getId().equals(incidentId))) {
-            throw new SosException(HttpStatus.CONFLICT, target.fullName() + " đang trong ca khác, chọn cán bộ khác");
+            throw new SosException(HttpStatus.CONFLICT, target.displayName() + " đang trong ca khác, chọn cán bộ khác");
         }
         LocalDateTime now = LocalDateTime.now();
         d.setAssignedTo(target);
@@ -206,7 +301,7 @@ public class DispatchServiceImpl implements DispatchService {
         d.setRejectReason(null);
         d.setUpdatedAt(now);
         IncidentDispatch saved = incidentDispatchRepository.save(d);
-        log.info("📨 [DELEGATE] Incident {} -> {} ({})", incidentId, target.getEmail(), st.getName());
+        log.info("📨 [DELEGATE] Incident {} -> {} of {} ({})", incidentId, target.getFullName(), unit.getEmail(), st.getName());
         notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
         return DispatchPlanResponse.of(saved, currentRoute(saved));
     }
@@ -218,7 +313,7 @@ public class DispatchServiceImpl implements DispatchService {
         if (d.getStatus() != DispatchStatus.PENDING_ACCEPT || d.getAssignedTo() == null) {
             throw new SosException(HttpStatus.CONFLICT, "Không có lượt uỷ quyền nào đang chờ trả lời để thu hồi");
         }
-        String from = d.getAssignedTo().getEmail();
+        String from = d.getAssignedTo().getFullName();
         d.setAssignedTo(null);
         d.setRespondedAt(null);
         d.setUpdatedAt(LocalDateTime.now());
@@ -261,7 +356,7 @@ public class DispatchServiceImpl implements DispatchService {
         IncidentDispatch d = latestPrimary(incidentId);
         boolean allowed = d != null && (d.getAssignedTo() != null
                 ? IncidentAccess.isAssignee(me, d)
-                : me.accountId().equals(incident.getHandlerId()));
+                : me.memberId().equals(incident.getHandlerId()));
         if (!allowed) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi xử lý mới báo tới hiện trường được");
         }
@@ -300,7 +395,7 @@ public class DispatchServiceImpl implements DispatchService {
             }
             requireAtScene(incident, d);
             incident.setOfficerConfirmedAt(now);
-            incident.setOfficerConfirmedBy(me.accountId());
+            incident.setOfficerConfirmedBy(me.memberId());
             who = me.email();
         }
         incident.setUpdatedAt(now);
@@ -316,7 +411,7 @@ public class DispatchServiceImpl implements DispatchService {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
-        boolean holder = me.accountId().equals(incident.getHandlerId());
+        boolean holder = me.memberId().equals(incident.getHandlerId());
         ReportResult result;
         if (request.isForce()) {
             if (!holder) {
@@ -358,7 +453,7 @@ public class DispatchServiceImpl implements DispatchService {
                 .summary(trim(request.getSummary()))
                 .forces(trim(request.getForces()))
                 .note(trim(request.getNote()))
-                .createdBy(me.accountId())
+                .createdBy(me.memberId())
                 .createdAt(now)
                 .build());
         incident.setStatus(IncidentStatus.RESOLVED);
@@ -370,7 +465,7 @@ public class DispatchServiceImpl implements DispatchService {
             incidentDispatchRepository.save(d);
         }
         if (incident.getHandlerId() != null) {
-            incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(incidentId, incident.getHandlerId())
+            incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(incidentId, incident.getHandlerId())
                     .ifPresent(claim -> {
                         claim.setReleasedAt(now);
                         claim.setEndReason(ClaimEndReason.CLOSED);
@@ -385,7 +480,7 @@ public class DispatchServiceImpl implements DispatchService {
     /** Đơn vị đang có mặt xử lý: cán bộ được giao, hoặc người giữ ca khi không uỷ quyền cho ai. */
     private static boolean isOnSite(OfficerPrincipal me, Incident incident, IncidentDispatch d) {
         if (d == null) return false;
-        return d.getAssignedTo() != null ? IncidentAccess.isAssignee(me, d) : me.accountId().equals(incident.getHandlerId());
+        return d.getAssignedTo() != null ? IncidentAccess.isAssignee(me, d) : me.memberId().equals(incident.getHandlerId());
     }
 
     private static void requireAtScene(Incident incident, IncidentDispatch d) {
@@ -405,7 +500,7 @@ public class DispatchServiceImpl implements DispatchService {
     /** Đã giao cho một cán bộ mà người đó chưa trả lời: khoá kế hoạch (không đổi trạm / người nhận). */
     private static void requireAnswered(IncidentDispatch d) {
         if (d.getStatus() == DispatchStatus.PENDING_ACCEPT && d.getAssignedTo() != null) {
-            throw new SosException(HttpStatus.CONFLICT, "Đang chờ " + d.getAssignedTo().fullName()
+            throw new SosException(HttpStatus.CONFLICT, "Đang chờ " + d.getAssignedTo().displayName()
                     + " chấp nhận hoặc từ chối, chưa thay đổi được điều động");
         }
     }
@@ -436,7 +531,7 @@ public class DispatchServiceImpl implements DispatchService {
     private IncidentDispatch heldPlan(String incidentId) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(incidentId);
-        if (!me.accountId().equals(incident.getHandlerId())) {
+        if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới uỷ quyền được");
         }
         return currentPrimary(incidentId)
@@ -469,16 +564,6 @@ public class DispatchServiceImpl implements DispatchService {
     }
 
     private OfficerPrincipal currentOfficer() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new SosException(HttpStatus.UNAUTHORIZED, "Chưa đăng nhập");
-        }
-        OfficerPrincipal officer = accountRepository.findByEmail(authentication.getName())
-                .map(OfficerPrincipal::of)
-                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
-        if (!officer.isStaff()) {
-            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ mới điều động được");
-        }
-        return officer;
+        return currentOfficer.require();
     }
 }

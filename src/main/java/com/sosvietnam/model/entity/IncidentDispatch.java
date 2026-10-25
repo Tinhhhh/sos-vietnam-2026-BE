@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 /**
  * Lượt điều động: một trạm / lực lượng (rescue_stations) được cử tới xử lý một ca.
  * Mỗi ca có tối đa 1 lượt PRIMARY đang hoạt động (index ux_incident_dispatches_primary), thêm lượt SUPPORT nếu cần.
- * Tuyến đường của lượt ở incident_routes, vị trí xe ở incident_route_positions.
+ * Tuyến đường của lượt ở incident_routes (vị trí xe sẽ lấy từ Traccar, không lưu ở DB).
  */
 @Entity
 @Table(name = "incident_dispatches")
@@ -38,7 +38,7 @@ public class IncidentDispatch {
     // EAGER: thẻ hàng đợi (đẩy qua STOMP ngoài transaction) cần tên người giao / người nhận
     @ManyToOne
     @JoinColumn(name = "dispatched_by")
-    private Account dispatchedBy;
+    private UnitMember dispatchedBy;
 
     // Cấp của người ra lệnh (bên giao việc)
     @Enumerated(EnumType.STRING)
@@ -56,7 +56,7 @@ public class IncidentDispatch {
     // Cán bộ của đơn vị được uỷ quyền (bên nhận việc); null = chính đơn vị ra lệnh đi
     @ManyToOne
     @JoinColumn(name = "assigned_to")
-    private Account assignedTo;
+    private UnitMember assignedTo;
 
     @Column(length = 500)
     private String note;

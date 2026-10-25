@@ -1,6 +1,12 @@
 package com.sosvietnam.service.implement;
 
 import com.sosvietnam.model.entity.Account;
+import com.sosvietnam.model.entity.UnitDutyAssignment;
+import com.sosvietnam.model.entity.UnitMember;
+import com.sosvietnam.model.payload.enums.UnitRole;
+import com.sosvietnam.util.LookupCodes;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import com.sosvietnam.model.entity.Province;
 import com.sosvietnam.model.entity.Role;
 import com.sosvietnam.model.entity.Ward;
@@ -42,6 +48,8 @@ public class AccountServiceImpl implements AccountService {
     private final RoleRepository roleRepository;
     private final ProvinceRepository provinceRepository;
     private final WardRepository wardRepository;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
+    private final com.sosvietnam.repository.UnitDutyAssignmentRepository dutyRepository;
 
     // Mật khẩu seed trong .env: chỉ những mật khẩu này mới ghi được ra file (DB chỉ có bcrypt)
     @Value("${app.seed.admin-password:}")
@@ -50,17 +58,51 @@ public class AccountServiceImpl implements AccountService {
     @Value("${app.seed.test-account-password:}")
     private String testAccountPassword;
 
+    @Value("${app.seed.member-pin:}")
+    private String memberPin;
+
+    // 1 phiên Hibernate cho cả lần xuất: tài khoản (đã fetch role/tỉnh/xã) được dùng lại khi nạp cán bộ, không N+1
+    @Transactional(readOnly = true)
     @Override
-    public byte[] exportAccountsToExcel() throws IOException {
+    public byte[] exportAccountsToExcel(String provinceId, AgencyType agency, UnitLevel level) throws IOException {
+        if (StringUtils.hasText(provinceId) && !provinceRepository.existsById(provinceId)) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Mã tỉnh/thành phố không hợp lệ");
+        }
+        String province = StringUtils.hasText(provinceId) ? provinceId : null;
         Comparator<Account> order = Comparator
                 .comparing((Account a) -> roleOf(a).map(Enum::ordinal).orElse(Integer.MAX_VALUE))
                 .thenComparing(Account::provinceName, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Account::getAgencyType, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Account::getUnitLevel, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Account::getEmail);
-        List<Account> accounts = accountRepository.findAll().stream().sorted(order).toList();
+        List<Account> accounts = accountRepository.findForExport(province, agency, level).stream().sorted(order).toList();
+
+        // cán bộ theo đúng thứ tự đơn vị ở sheet tài khoản, trong đơn vị: chỉ huy trước, rồi theo tên
+        java.util.Map<UUID, Integer> position = new java.util.HashMap<>();
+        for (int i = 0; i < accounts.size(); i++) position.put(accounts.get(i).getId(), i);
+        List<UnitMember> members = unitMemberRepository.findForExport(province, agency, level).stream()
+                .filter(m -> position.containsKey(m.getAccount().getId()))
+                .sorted(Comparator.comparing((UnitMember m) -> position.get(m.getAccount().getId()))
+                        .thenComparing(UnitMember::getUnitRole)
+                        .thenComparing(UnitMember::getFullName))
+                .toList();
+        java.util.Map<UUID, UUID> dutyByAccount = new java.util.HashMap<>();
+        for (Object[] row : dutyRepository.findOpenDutyIds()) dutyByAccount.put((UUID) row[0], (UUID) row[1]);
+
         List<String> seedPasswords = Stream.of(adminPassword, testAccountPassword).filter(StringUtils::hasText).toList();
-        return accountExcelExporter.export(accounts, account -> seedPasswordOf(account, seedPasswords));
+        // hàng nghìn tài khoản đơn vị seed dùng chung 1 bản băm: so bcrypt 1 lần cho mỗi bản băm khác nhau
+        java.util.Map<String, Optional<String>> byHash = new java.util.HashMap<>();
+        java.util.Map<String, Optional<String>> pinByHash = new java.util.HashMap<>();
+        return accountExcelExporter.export(accounts,
+                account -> byHash
+                        .computeIfAbsent(account.getPassword() + "|" + roleOf(account).map(Enum::name).orElse(""),
+                                k -> Optional.ofNullable(seedPasswordOf(account, seedPasswords)))
+                        .orElse(null),
+                members, dutyByAccount,
+                member -> member.getPinHash() == null || !StringUtils.hasText(memberPin) ? null : pinByHash
+                        .computeIfAbsent(member.getPinHash(),
+                                hash -> Optional.of(memberPin).filter(pin -> passwordEncoder.matches(pin, hash)))
+                        .orElse(null));
     }
 
     @Transactional
@@ -113,11 +155,35 @@ public class AccountServiceImpl implements AccountService {
                 .ward(ward)
                 .isActive(true)
                 .isLocked(false)
+                .unitAccount(request.getRoleName() == RoleName.OFFICER)
                 .build();
 
         Account saved = accountRepository.save(account);
+        AccountInfoResponse response = AccountInfoResponse.from(saved);
+        LocalDateTime now = LocalDateTime.now();
+        if (request.getRoleName() == RoleName.OFFICER) {
+            // Tài khoản đơn vị: người được tạo là chỉ huy đầu tiên (kiêm trực ban), tự đặt PIN bằng mã kích hoạt
+            String code = LookupCodes.generate();
+            UnitMember commander = unitMemberRepository.save(UnitMember.builder()
+                    .id(UUID.randomUUID())
+                    .account(saved)
+                    .fullName(saved.fullName())
+                    .unitRole(UnitRole.COMMANDER)
+                    .phone(saved.getPhone())
+                    .activationCodeHash(passwordEncoder.encode(code))
+                    .activationExpiresAt(now.plusHours(72))
+                    .createdAt(now)
+                    .build());
+            dutyRepository.save(UnitDutyAssignment.builder().account(saved).member(commander).startedAt(now).build());
+            response.setActivationCode(code);
+        } else {
+            // Quản trị: cán bộ ẩn cùng id, đăng nhập không qua PIN
+            unitMemberRepository.save(UnitMember.builder()
+                    .id(saved.getId()).account(saved).fullName(saved.fullName()).unitRole(UnitRole.COMMANDER)
+                    .createdAt(now).build());
+        }
         log.info("[ADMIN CREATE ACCOUNT] {} ({}, {} {})", saved.getEmail(), role.getRoleName(), agency, level);
-        return AccountInfoResponse.from(saved);
+        return response;
     }
 
     private static Optional<RoleName> roleOf(Account account) {

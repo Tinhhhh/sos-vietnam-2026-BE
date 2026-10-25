@@ -23,7 +23,9 @@ public class StationController {
     private final GeoService geoService;
 
     @Operation(summary = "Get all stations (paged)",
-            description = "pageNo from 0, pageSize 1-1000. province: part of the province name, case-insensitive "
+            description = "Officer token (optional): officer, phone and email are filled from the matching unit account "
+                    + "(commander, duty officer phone, unit email); without it only the station's own data. "
+                    + "pageNo from 0, pageSize 1-1000. province: part of the province name, case-insensitive "
                     + "(\"c\" matches Cần Thơ, Cà Mau...). agency: POLICE | CSGT | FIRE | HOSPITAL. "
                     + "level: NATIONAL | PROVINCE | WARD | ENTERPRISE. sortBy: id | name | province | ward | agencyType | level, "
                     + "sortDir: asc | desc. Role required: none")
@@ -41,7 +43,8 @@ public class StationController {
     }
 
     @Operation(summary = "Find nearest stations",
-            description = "agency: POLICE | CSGT | FIRE | HOSPITAL (optional). radius in meters. Role required: none")
+            description = "agency: POLICE | CSGT | FIRE | HOSPITAL (optional). radius in meters. Unit contacts only with "
+                    + "an officer token, like GET /stations. Role required: none")
     @GetMapping("/nearest")
     public ResponseEntity<Object> getNearestStations(
             @RequestParam("lat") double lat,

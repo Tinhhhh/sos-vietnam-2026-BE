@@ -26,7 +26,7 @@ public interface DispatchService {
     List<OfficerStatusResponse> getCandidates(String incidentId);
 
     /** Bước 2 "Lập tức liên hệ": giao lượt cho một cán bộ của đơn vị đó; ca vào hàng đợi của đơn vị, chờ nhận. */
-    DispatchPlanResponse delegate(String incidentId, UUID accountId);
+    DispatchPlanResponse delegate(String incidentId, UUID memberId);
 
     /**
      * Bên giao thu hồi lượt đã gửi mà người kia chưa trả lời (không nhận / không liên lạc được):
@@ -48,6 +48,15 @@ public interface DispatchService {
      * Cán bộ được giao (đơn vị được uỷ quyền), hoặc người giữ ca khi chính đơn vị mình đi.
      */
     DispatchPlanResponse arrive(String incidentId);
+
+    /**
+     * CHỈ ĐỂ DEMO ("Mô phỏng di chuyển"): giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường.
+     * Cán bộ xem được ca; chỉ khi công tắc ca demo đang bật hoặc ca là ca [DEMO]; lượt phải EN_ROUTE và người đi
+     * phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
+     */
+    DispatchPlanResponse startSimulation(String incidentId);
+
+    DispatchPlanResponse stopSimulation(String incidentId);
 
     /**
      * Bước 4 "Xác nhận đã xử lý xong" (lực lượng đã ở hiện trường): đơn vị đi xử lý (cán bộ được giao, hoặc

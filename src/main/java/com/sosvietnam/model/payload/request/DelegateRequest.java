@@ -14,6 +14,6 @@ import java.util.UUID;
 public class DelegateRequest {
 
     @NotNull(message = "Chưa chọn cán bộ nhận")
-    @JsonProperty("account_id")
-    private UUID accountId;
+    @JsonProperty("member_id")
+    private UUID memberId;
 }

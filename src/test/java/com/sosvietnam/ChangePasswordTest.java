@@ -5,6 +5,7 @@ import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.payload.request.ChangePasswordRequest;
 import com.sosvietnam.repository.*;
 import com.sosvietnam.security.JwtTokenProvider;
+import com.sosvietnam.security.StompSessionRegistry;
 import com.sosvietnam.service.implement.AuthenServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,16 +28,20 @@ class ChangePasswordTest {
     final AccountRepository accounts = mock(AccountRepository.class);
     final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
     final JwtTokenProvider jwt = mock(JwtTokenProvider.class);
+    final StompSessionRegistry stomp = mock(StompSessionRegistry.class);
     final AuthenServiceImpl service = new AuthenServiceImpl(mock(AuthenticationManager.class), accounts,
             mock(ProvinceRepository.class), mock(WardRepository.class), mock(RoleRepository.class),
-            mock(RefreshTokenRepository.class), encoder, jwt, mock(UserDetailsService.class));
+            mock(RefreshTokenRepository.class), encoder, stomp, jwt, mock(UserDetailsService.class),
+            mock(com.sosvietnam.repository.UnitMemberRepository.class),
+            mock(com.sosvietnam.repository.UnitDutyAssignmentRepository.class), new com.sosvietnam.security.CurrentOfficer());
     Account me;
 
     @BeforeEach
     void setUp() {
-        me = Account.builder().id(java.util.UUID.randomUUID()).email("me@sos.vn").password(encoder.encode("old-pass-1")).build();
-        when(accounts.findByEmail("me@sos.vn")).thenReturn(Optional.of(me));
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("me@sos.vn", null, "OFFICER"));
+        me = Account.builder().id(java.util.UUID.randomUUID()).email("me@sos.vn").password(encoder.encode("old-pass-1"))
+                .role(com.sosvietnam.model.entity.Role.builder().roleName("ADMIN").build()).build();
+        when(accounts.findById(me.getId())).thenReturn(Optional.of(me));
+        TestGeo.signIn(me);
     }
 
     @AfterEach
@@ -51,6 +56,17 @@ class ChangePasswordTest {
         verify(accounts).save(me);
         // mọi phiên đang đăng nhập của tài khoản bị đá văng
         verify(jwt).disableOldTokens(me.getId());
+        // màn hình đang mở trên các máy khác mất kết nối STOMP ngay
+        verify(stomp).closeWhere(any());
+    }
+
+    @Test
+    void unitAccount_onlyTheCommanderMayChangeIt() {
+        me.setRole(com.sosvietnam.model.entity.Role.builder().roleName("OFFICER").build());
+        TestGeo.signIn(me); // cán bộ thường (MEMBER)
+        assertThatThrownBy(() -> service.changePassword(new ChangePasswordRequest("old-pass-1", "new-pass-2")))
+                .isInstanceOf(SosException.class).hasMessageContaining("chỉ huy");
+        verify(accounts, never()).save(any());
     }
 
     @Test

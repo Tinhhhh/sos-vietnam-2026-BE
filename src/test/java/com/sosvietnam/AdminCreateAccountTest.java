@@ -36,7 +36,8 @@ class AdminCreateAccountTest {
     final WardRepository wards = mock(WardRepository.class);
     final PasswordEncoder encoder = mock(PasswordEncoder.class);
     final AccountServiceImpl service = new AccountServiceImpl(accounts, mock(AccountExcelExporter.class), encoder,
-            roles, provinces, wards);
+            roles, provinces, wards, mock(com.sosvietnam.repository.UnitMemberRepository.class),
+            mock(com.sosvietnam.repository.UnitDutyAssignmentRepository.class));
 
     @BeforeEach
     void setUp() {

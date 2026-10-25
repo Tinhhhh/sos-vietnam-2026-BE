@@ -1,13 +1,11 @@
 package com.sosvietnam.service.implement;
 
-import com.sosvietnam.model.entity.Account;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.UnitLevel;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.response.DashboardSummaryResponse;
 import com.sosvietnam.model.payload.response.DashboardSummaryResponse.*;
 import com.sosvietnam.model.entity.Province;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.ProvinceRepository;
 import com.sosvietnam.util.AreaNames;
 import com.sosvietnam.repository.DashboardRepository;
@@ -45,7 +43,7 @@ public class DashboardServiceImpl implements DashboardService {
     private static final String UNKNOWN_AREA = "Chưa xác định";
 
     private final DashboardRepository dashboardRepository;
-    private final AccountRepository accountRepository;
+    private final com.sosvietnam.security.CurrentOfficer currentOfficer;
     private final ProvinceRepository provinceRepository;
 
     @Value("${app.incident.escalation-minutes:15}")
@@ -218,17 +216,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private OfficerPrincipal currentOfficer() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new SosException(HttpStatus.UNAUTHORIZED, "Chưa đăng nhập");
-        }
-        Account account = accountRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED, "Không tìm thấy tài khoản"));
-        OfficerPrincipal officer = OfficerPrincipal.of(account);
-        if (!officer.isStaff()) {
-            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ mới xem được thống kê");
-        }
-        return officer;
+        return currentOfficer.require();
     }
 
     private static long asLong(Object v) {

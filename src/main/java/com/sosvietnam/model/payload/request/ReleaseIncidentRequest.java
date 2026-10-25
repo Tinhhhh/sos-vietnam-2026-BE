@@ -8,13 +8,13 @@ import java.util.UUID;
 
 /**
  * Body của POST /api/v1/incidents/{id}/release (body có thể bỏ trống).
- * to_account_id trống = trả ca về hàng đợi chung; có giá trị = giao thẳng cho cán bộ đó (cùng đơn vị, đang rảnh).
+ * to_member_id trống = trả ca về hàng đợi chung; có giá trị = giao thẳng cho cán bộ đó (unit_members, cùng đơn vị, đang rảnh).
  * note: lý do (bắt buộc khi giao ca), lưu vào incident_claims.note của lượt giữ ca vừa kết thúc.
  */
 @Data
 public class ReleaseIncidentRequest {
-    @JsonProperty("to_account_id")
-    private UUID toAccountId;
+    @JsonProperty("to_member_id")
+    private UUID toMemberId;
 
     @Size(max = 255, message = "Lý do tối đa 255 ký tự")
     @JsonProperty("note")

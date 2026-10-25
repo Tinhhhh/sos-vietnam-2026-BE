@@ -10,11 +10,12 @@ import com.sosvietnam.model.payload.request.CreateIncidentRequest;
 import com.sosvietnam.model.payload.response.CreateIncidentResponse;
 import com.sosvietnam.repository.IncidentClaimRepository;
 import com.sosvietnam.repository.IncidentRepository;
+import com.sosvietnam.service.DemoModeService;
 import com.sosvietnam.service.IncidentService;
+import com.sosvietnam.util.DemoIncidents;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,10 +23,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 /**
- * CHỈ ĐỂ TEST module điều động (bật bằng DEMO_INCIDENTS=true, mặc định tắt; test xong thì tắt hoặc xoá class này).
+ * CHỈ ĐỂ TEST module điều động. Bật / tắt lúc chạy bằng công tắc "Ca demo" trong Cài đặt (mọi tài khoản,
+ * DemoModeService, bảng app_settings); chưa ai bật / tắt thì theo DEMO_INCIDENTS của .env (mặc định tắt).
  *
  * Mỗi phút: mỗi loại ca test bên dưới luôn có 1 ca "[DEMO]" đang chờ nhận (PENDING, đúng cấp nhận ca) trong
  * hàng đợi; KHÔNG tự nhận ca, cán bộ tự bấm "Tiếp nhận". Ai nhận rồi thì phút sau có ca chờ mới.
@@ -35,13 +36,9 @@ import java.util.Set;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.demo.incidents.enabled", havingValue = "true")
 public class DemoIncidentSeeder {
 
-    public static final String MARK = "[DEMO] ";
-    // Tên các ca test do script local-db/demo-incidents.mjs cũ tạo (không có MARK)
-    private static final Set<String> LEGACY_NAMES =
-            Set.of("Trần Văn Demo (tỉnh)", "Nguyễn Thị Demo (xã)", "Lê Văn Demo (CSGT)");
+    public static final String MARK = DemoIncidents.MARK;
 
     /** @param level cấp nhận ca mong đợi (ca cấp xã quá 15' tự lên tỉnh thì không còn tính là ca chờ của xã) */
     private record DemoCase(UnitLevel level, String name, String phone, EmergencyType type, String tag,
@@ -65,28 +62,33 @@ public class DemoIncidentSeeder {
     private final IncidentRepository incidentRepository;
     private final IncidentClaimRepository incidentClaimRepository;
     private final IncidentService incidentService;
+    private final DemoModeService demoModeService;
 
     @Value("${app.demo.incidents.resolving-minutes:30}")
     private long resolvingMinutes;
 
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
-        log.warn("🧪 [DEMO INCIDENTS] bật: luôn có ca test chờ nhận cho công an xã / tỉnh / CSGT Cần Thơ (tắt bằng DEMO_INCIDENTS=false)");
+        if (demoModeService.generateEnabled()) {
+            log.warn("🧪 [DEMO INCIDENTS] bật: luôn có ca test chờ nhận cho công an xã / tỉnh / CSGT Cần Thơ (tắt ở Cài đặt > Ca demo)");
+        }
         topUp();
     }
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void topUp() {
+        boolean generate = demoModeService.generateEnabled();
         for (DemoCase demo : CASES) {
             try {
-                ensureCase(demo);
+                ensureCase(demo, generate);
             } catch (RuntimeException e) {
                 log.warn("🧪 [DEMO INCIDENTS] {}: {}", demo.name(), e.getMessage());
             }
         }
     }
 
-    private void ensureCase(DemoCase demo) {
+    /** Luôn đóng ca test kẹt quá lâu; chỉ sinh ca mới khi công tắc tự sinh đang bật. */
+    private void ensureCase(DemoCase demo, boolean generate) {
         List<Incident> open = new java.util.ArrayList<>(incidentRepository.findByCitizenNameInAndStatusIn(
                 List.of(MARK + demo.name(), demo.name()), IncidentStatus.ACTIVE));
         for (Incident stale : open.stream().filter(this::isStaleDemo).toList()) {
@@ -96,7 +98,7 @@ public class DemoIncidentSeeder {
         // Đã có ca chờ nhận đúng cấp thì thôi (ca đang có người giữ không tính: cần ca mới để nhận tiếp)
         boolean waiting = open.stream().anyMatch(i -> i.getStatus() == IncidentStatus.PENDING
                 && i.getHandlerId() == null && i.getRoutedLevel() == demo.level());
-        if (waiting) return;
+        if (waiting || !generate) return;
 
         CreateIncidentRequest request = new CreateIncidentRequest();
         request.setCitizenName(MARK + demo.name());
@@ -113,13 +115,8 @@ public class DemoIncidentSeeder {
         log.info("🧪 [DEMO INCIDENTS] ca test chờ nhận {} ({})", created.getIncident().getId(), demo.name());
     }
 
-    private boolean isDemo(Incident incident) {
-        String name = incident.getCitizenName();
-        return name != null && (name.startsWith(MARK) || LEGACY_NAMES.contains(name));
-    }
-
     private boolean isStaleDemo(Incident incident) {
-        if (!isDemo(incident) || incident.getStatus() != IncidentStatus.RESOLVING) return false;
+        if (!DemoIncidents.isDemo(incident) || incident.getStatus() != IncidentStatus.RESOLVING) return false;
         LocalDateTime since = incident.getUpdatedAt() != null ? incident.getUpdatedAt() : incident.getCreatedAt();
         return since.isBefore(LocalDateTime.now().minusMinutes(resolvingMinutes));
     }
@@ -136,7 +133,7 @@ public class DemoIncidentSeeder {
         incidentRepository.save(incident);
         log.info("🧪 [DEMO INCIDENTS] đóng ca test {} (RESOLVING quá {} phút)", incident.getId(), resolvingMinutes);
         if (handlerId == null) return;
-        incidentClaimRepository.findFirstByIncident_IdAndAccount_IdAndReleasedAtIsNull(incident.getId(), handlerId)
+        incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(incident.getId(), handlerId)
                 .ifPresent(claim -> {
                     claim.setReleasedAt(now);
                     claim.setEndReason(ClaimEndReason.CLOSED);

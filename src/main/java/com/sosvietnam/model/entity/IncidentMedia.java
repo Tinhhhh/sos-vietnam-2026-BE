@@ -70,8 +70,8 @@ public class IncidentMedia {
 
     // Cán bộ tải lên; null khi người báo tin tải
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by_account_id")
-    private Account uploadedByAccount;
+    @JoinColumn(name = "uploaded_by_member_id")
+    private UnitMember uploadedByMember;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

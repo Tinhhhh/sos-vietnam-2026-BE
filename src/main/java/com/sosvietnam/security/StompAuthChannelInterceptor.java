@@ -2,7 +2,6 @@ package com.sosvietnam.security;
 
 import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Incident;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.util.CitizenTokens;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +19,7 @@ import org.springframework.util.StringUtils;
  * Bảo vệ kênh STOMP (/ws, /ws-raw):
  * - CONNECT của cán bộ: header "Authorization: Bearer <access token>" (OFFICER/ADMIN);
  *   trình duyệt không gắn được header vào bước bắt tay WebSocket nên token đi trong frame CONNECT.
- *   Phiên được gắn OfficerPrincipal (email + lực lượng + cấp + địa bàn) để gửi tin theo người.
+ *   Phiên được gắn OfficerPrincipal của cán bộ trong token (tên phiên = member id) để gửi tin theo người.
  * - CONNECT của người báo tin: header "X-SOS-Incident-Id" + "X-SOS-Access-Token" (mã trả về lúc gửi SOS);
  *   phiên gắn CitizenPrincipal, chỉ nhận tin của đúng ca đó.
  * - Chỉ được SUBSCRIBE kênh riêng /user/queue/... ; không nghe được topic chung của người khác.
@@ -35,7 +34,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     public static final String CALLS_SEND_DESTINATION = "/app/calls";
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final AccountRepository accountRepository;
+    private final OfficerPrincipalLoader officerPrincipalLoader;
     private final IncidentRepository incidentRepository;
 
     @Override
@@ -75,8 +74,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new MessageDeliveryException("Thiếu token đăng nhập");
         }
         String jwt = header.substring(7);
-        if (!jwtTokenProvider.validateToken(jwt) || jwtTokenProvider.isRefreshToken(jwt)
-                || jwtTokenProvider.isTokenExpired(jwt)) {
+        if (!"access".equals(jwtTokenProvider.tokenType(jwt))) {
             throw new MessageDeliveryException("Token không hợp lệ hoặc đã hết hạn");
         }
         AccessToken token = jwtTokenProvider.getTokenFromJwt(jwt);
@@ -84,10 +82,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 || jwtTokenProvider.isIssuedBeforeLogoutAll(jwt)) {
             throw new MessageDeliveryException("Token đã bị thu hồi");
         }
-        OfficerPrincipal officer = accountRepository.findByEmail(jwtTokenProvider.getUsernameFromJwt(jwt))
-                .filter(a -> a.isActive() && !a.isLocked())
-                .map(OfficerPrincipal::of)
-                .orElseThrow(() -> new MessageDeliveryException("Tài khoản không hoạt động"));
+        OfficerPrincipal officer = officerPrincipalLoader.load(jwtTokenProvider.memberIdOf(jwt))
+                .filter(o -> o.unitAccountId().equals(token.getUserId()))
+                .orElseThrow(() -> new MessageDeliveryException("Cán bộ hoặc tài khoản không hoạt động"));
         if (!officer.isStaff()) {
             throw new MessageDeliveryException("Chỉ cán bộ mới được nhận tin sự cố");
         }

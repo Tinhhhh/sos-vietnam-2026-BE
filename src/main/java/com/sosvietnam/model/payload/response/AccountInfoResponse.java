@@ -75,6 +75,15 @@ public class AccountInfoResponse {
     @JsonProperty(value = "full_address", index = 18)
     private String fullAddress;
 
+    // Cán bộ đang trực (đã nhập PIN) của tài khoản đơn vị; null với admin và người dân
+    @JsonProperty(value = "member", index = 19)
+    private UnitMemberResponse member;
+
+    // Chỉ khi admin vừa tạo tài khoản đơn vị: mã kích hoạt 1 lần cho chỉ huy đầu tiên tự đặt PIN
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @JsonProperty(value = "activation_code", index = 20)
+    private String activationCode;
+
     public static AccountInfoResponse from(Account account) {
         return AccountInfoResponse.builder()
                 .accountId(account.getId())

@@ -40,9 +40,8 @@ import static org.mockito.Mockito.*;
 class CallServiceTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
-    final AccountRepository accounts = mock(AccountRepository.class);
     final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    final CallServiceImpl service = new CallServiceImpl(incidents, accounts, messaging, new ObjectMapper());
+    final CallServiceImpl service = new CallServiceImpl(incidents, messaging, new ObjectMapper());
 
     final UUID handlerId = UUID.randomUUID();
     final OfficerPrincipal handler = TestGeo.officer(handlerId, "congan.tanan@sos.vn", "Cán Bộ A",
@@ -54,8 +53,6 @@ class CallServiceTest {
         incident = Incident.builder().id("SOS-1").status(IncidentStatus.VERIFYING).handlerId(handlerId)
                 .citizenName("Nguyễn Văn B").citizenTokenHash(CitizenTokens.sha256("tok")).build();
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
-        when(accounts.findById(handlerId)).thenReturn(Optional.of(Account.builder().id(handlerId)
-                .email("congan.tanan@sos.vn").build()));
     }
 
     @AfterEach
@@ -88,7 +85,7 @@ class CallServiceTest {
     void citizenSignal_goesToTheHandlerOnly() {
         service.relay(new CitizenPrincipal("SOS-1"), signal("offer"));
 
-        CallSignalMessage out = sentTo("congan.tanan@sos.vn");
+        CallSignalMessage out = sentTo(handlerId.toString());
         assertThat(out.getFrom()).isEqualTo("citizen");
         assertThat(out.getPeerName()).isEqualTo("Nguyễn Văn B");
     }
@@ -99,7 +96,7 @@ class CallServiceTest {
                 AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
         service.relay(other, signal("ring"));
 
-        CallSignalMessage out = sentTo("other@sos.vn");
+        CallSignalMessage out = sentTo(other.getName()); // phiên STOMP của cán bộ = member id
         assertThat(out.getAction()).isEqualTo("reject");
         assertThat(out.getReason()).isEqualTo("not_handler");
         verify(messaging, never()).convertAndSendToUser(eq("citizen:SOS-1"), anyString(), any());
@@ -123,7 +120,7 @@ class CallServiceTest {
     void closedIncident_endsTheCall_andJunkIsDropped() {
         incident.setStatus(IncidentStatus.CANCELLED);
         service.relay(handler, signal("offer"));
-        CallSignalMessage out = sentTo("congan.tanan@sos.vn");
+        CallSignalMessage out = sentTo(handlerId.toString());
         assertThat(out.getAction()).isEqualTo("end");
         assertThat(out.getReason()).isEqualTo("closed");
 

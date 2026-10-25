@@ -228,7 +228,7 @@ public class IncidentLookupResponse {
                 .description(i.getDescription())
                 .fullAddress(joinAddress(i.getAddress(), i.wardName(), i.provinceName()))
                 .destinationAddress(dedupeParts(i.getDestAddress()))
-                .handler(lastClaim == null ? null : officer(lastClaim.getAccount(), lastClaim.getClaimedAt()))
+                .handler(lastClaim == null ? null : officer(lastClaim.getMember(), lastClaim.getClaimedAt()))
                 .report(report == null ? null : Report.builder()
                         .resultLabel(report.getResult() == null ? null : report.getResult().getLabel())
                         .summary(report.getSummary())
@@ -273,8 +273,9 @@ public class IncidentLookupResponse {
                 .build();
     }
 
-    private static Officer officer(Account a, LocalDateTime at) {
-        if (a == null) return null;
+    private static Officer officer(com.sosvietnam.model.entity.UnitMember m, LocalDateTime at) {
+        if (m == null) return null;
+        Account a = m.getAccount();
         String unit = null;
         if (a.getAgencyType() != null) {
             String area = a.getUnitLevel() == UnitLevel.WARD ? a.wardName()
@@ -283,7 +284,7 @@ public class IncidentLookupResponse {
                             a.getUnitLevel() == null ? null : a.getAgencyType().levelLabel(a.getUnitLevel()), area)
                     .filter(s -> s != null && !s.isBlank()).collect(Collectors.joining(" · "));
         }
-        return Officer.builder().name(a.fullName()).unit(unit).at(withZone(at)).build();
+        return Officer.builder().name(m.displayName()).unit(unit).at(withZone(at)).build();
     }
 
     /** "0912345678" -> "091****678" */

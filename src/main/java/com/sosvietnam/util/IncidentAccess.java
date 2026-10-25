@@ -29,8 +29,10 @@ public class IncidentAccess {
             return same(officer.provinceId(), incident.provinceId());
         }
         if (officer.level() == UnitLevel.WARD) {
-            // Ca xuất phát ở cấp xã thì có hạn leo thang; ca vào thẳng tỉnh không hiện ở xã
-            return incident.getEscalateAt() != null && same(officer.wardId(), incident.wardId());
+            // Lực lượng nhận ca từ cấp xã (công an): xã theo dõi mọi ca trong xã, kể cả ca vào thẳng tỉnh
+            // lúc tạo vì không có cán bộ xã trực tuyến. CSGT / PCCC cấp đội không trực nên không thấy.
+            return incident.getRoutedAgency().getIntakeLevel() == UnitLevel.WARD
+                    && same(officer.wardId(), incident.wardId());
         }
         return false;
     }
@@ -64,7 +66,7 @@ public class IncidentAccess {
     /** Cán bộ đang được giao lượt điều động này (người bấm nhận / từ chối / xuất phát). */
     public boolean isAssignee(OfficerPrincipal officer, IncidentDispatch dispatch) {
         return dispatch != null && dispatch.getAssignedTo() != null
-                && officer.accountId().equals(dispatch.getAssignedTo().getId());
+                && officer.memberId().equals(dispatch.getAssignedTo().getId());
     }
 
     /** Hai cán bộ cùng đơn vị (cùng lực lượng, cấp, tỉnh; cấp xã thì cùng xã): được giao ca cho nhau. */

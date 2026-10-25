@@ -10,7 +10,6 @@ import com.sosvietnam.model.payload.response.IncidentEventMessage;
 import com.sosvietnam.model.payload.response.IncidentQueueResponse;
 import com.sosvietnam.model.payload.response.IncidentTrackingResponse;
 import com.sosvietnam.security.CitizenPrincipal;
-import com.sosvietnam.repository.AccountRepository;
 import com.sosvietnam.repository.IncidentMediaRepository;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.security.OfficerPrincipal;
@@ -44,10 +43,11 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     private final SimpMessagingTemplate messagingTemplate;
     private final SimpUserRegistry userRegistry;
     private final IncidentRepository incidentRepository;
-    private final AccountRepository accountRepository;
+    private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
     private final IncidentMediaRepository incidentMediaRepository;
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final com.sosvietnam.repository.IncidentDocumentRepository incidentDocumentRepository;
+    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     @Override
     public void notify(String incidentId, IncidentEvent event) {
@@ -72,13 +72,16 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                     .getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
             IncidentDispatch dispatch = incidentDispatchRepository
                     .findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(incidentId, DispatchRole.PRIMARY).orElse(null);
+            // Công tắc "ẩn ca demo": cán bộ chỉ nhận lệnh gỡ thẻ (người báo tin vẫn nhận bình thường)
+            IncidentEvent officerEvent = demoModeService.hidden() && com.sosvietnam.util.DemoIncidents.isDemo(incident)
+                    ? IncidentEvent.INCIDENT_REMOVED : event;
             for (SimpUser user : userRegistry.getUsers()) {
                 if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
                 IncidentQueueResponse view;
                 if (IncidentAccess.canView(viewer, incident) || IncidentAccess.isDelegatedUnit(viewer, dispatch)) {
                     view = toView(incident, viewer, handlerName, mediaCount, dispatch);
                     messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION,
-                            new IncidentEventMessage(event, view));
+                            new IncidentEventMessage(officerEvent, view));
                 } else if (IncidentAccess.isStationUnit(viewer, dispatch)) {
                     // Đơn vị vừa từ chối uỷ quyền: gỡ thẻ ca khỏi hàng đợi của họ
                     view = toView(incident, viewer, handlerName, mediaCount, dispatch);
@@ -157,8 +160,17 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     }
 
     @Override
-    public Set<String> onlineEmails() {
-        return userRegistry.getUsers().stream().map(SimpUser::getName).collect(Collectors.toSet());
+    public List<OfficerPrincipal> onlineOfficers() {
+        return userRegistry.getUsers().stream()
+                .map(SimpUser::getPrincipal)
+                .filter(OfficerPrincipal.class::isInstance)
+                .map(OfficerPrincipal.class::cast)
+                .toList();
+    }
+
+    @Override
+    public Set<UUID> onlineMemberIds() {
+        return onlineOfficers().stream().map(OfficerPrincipal::memberId).collect(Collectors.toSet());
     }
 
     @Override
@@ -181,7 +193,7 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                                                 IncidentQueueResponse.MediaCounts mediaCount, IncidentDispatch dispatch) {
         IncidentQueueResponse.Handler handler = incident.getHandlerId() == null ? null
                 : new IncidentQueueResponse.Handler(incident.getHandlerId(), handlerName);
-        boolean heldByMe = incident.getHandlerId() != null && incident.getHandlerId().equals(viewer.accountId());
+        boolean heldByMe = incident.getHandlerId() != null && incident.getHandlerId().equals(viewer.memberId());
         IncidentQueueResponse view = IncidentQueueResponse.from(incident, handler, heldByMe,
                 IncidentAccess.canHandle(viewer, incident), mediaCount);
         view.setDelegation(delegationOf(dispatch, viewer));
@@ -193,7 +205,8 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     /** Khối "uỷ quyền" của thẻ ca: chỉ khi trạm chủ trì là đơn vị khác đã được giao cho một cán bộ. */
     private static IncidentQueueResponse.Delegation delegationOf(IncidentDispatch d, OfficerPrincipal viewer) {
         if (d == null || d.getAssignedTo() == null) return null;
-        Account by = d.getDispatchedBy();
+        com.sosvietnam.model.entity.UnitMember byMember = d.getDispatchedBy();
+        Account by = byMember == null ? null : byMember.getAccount();
         return IncidentQueueResponse.Delegation.builder()
                 .dispatchId(d.getId())
                 .status(d.getStatus())
@@ -203,8 +216,8 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                 .fromUnit(by == null || by.getAgencyType() == null ? null
                         : by.getAgencyType().getLabel() + (by.getUnitLevel() == null ? ""
                         : " · " + by.getAgencyType().levelLabel(by.getUnitLevel())))
-                .fromOfficer(by == null ? null : by.fullName())
-                .assignedTo(new IncidentQueueResponse.Handler(d.getAssignedTo().getId(), d.getAssignedTo().fullName()))
+                .fromOfficer(byMember == null ? null : byMember.displayName())
+                .assignedTo(new IncidentQueueResponse.Handler(d.getAssignedTo().getId(), d.getAssignedTo().displayName()))
                 .assignedToMe(IncidentAccess.isAssignee(viewer, d))
                 .delegatedToMyUnit(IncidentAccess.isDelegatedUnit(viewer, d))
                 .rejectReason(d.getRejectReason())
@@ -232,7 +245,8 @@ public class IncidentNotifierImpl implements IncidentNotifier {
         Set<UUID> ids = incidents.stream().map(Incident::getHandlerId).filter(Objects::nonNull).collect(Collectors.toSet());
         // HashMap (không dùng Map.of()): get(null) với ca chưa ai giữ phải trả null chứ không ném lỗi
         if (ids.isEmpty()) return new HashMap<>();
-        return accountRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(Account::getId, Account::fullName, (a, b) -> a, HashMap::new));
+        return unitMemberRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(com.sosvietnam.model.entity.UnitMember::getId,
+                        com.sosvietnam.model.entity.UnitMember::displayName, (a, b) -> a, HashMap::new));
     }
 }

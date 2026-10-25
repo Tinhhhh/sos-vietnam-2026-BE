@@ -13,7 +13,8 @@ import java.time.ZoneId;
 
 /**
  * Kế hoạch điều động hiện hành của một ca (lượt chủ trì + tuyến đang dùng), cho cửa sổ điều động của cán bộ
- * và màn theo dõi của người báo tin. Không có tên / tài khoản cán bộ.
+ * và màn theo dõi của người báo tin. Người báo tin thấy người đi hiện trường (`tracker`: họ tên, số hiệu,
+ * SĐT để gọi) và vị trí GPS của họ trong suốt lượt điều động (thiết kế Traccar 24/10/2026); không có email.
  */
 @Data
 @Builder
@@ -23,6 +24,31 @@ public class DispatchPlanResponse {
 
     @JsonProperty("dispatch_id")
     private Long dispatchId;
+
+    /** Người đi hiện trường: cán bộ được uỷ quyền, không có thì người điều động (đơn vị tự đi). */
+    @JsonProperty("tracker")
+    private Officer tracker;
+
+    /** Điểm GPS mới nhất của người đi, chỉ khi lượt đang EN_ROUTE và đã có điểm. */
+    @JsonProperty("last_position")
+    private LivePosition lastPosition;
+
+    /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
+    @JsonProperty("simulation")
+    private Simulation simulation;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Simulation {
+        /** Bấm được: lượt EN_ROUTE, người đi có số hiệu, công tắc ca demo bật (hoặc ca [DEMO]). */
+        @JsonProperty("available")
+        private boolean available;
+        /** Đang chạy. */
+        @JsonProperty("running")
+        private boolean running;
+    }
 
     @JsonProperty("status")
     private DispatchStatus status;
@@ -100,12 +126,39 @@ public class DispatchPlanResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Officer {
-        @JsonProperty("account_id")
-        private java.util.UUID accountId;
+        @JsonProperty("member_id")
+        private java.util.UUID memberId;
         @JsonProperty("full_name")
         private String fullName;
         @JsonProperty("phone")
         private String phone;
+        /** Số hiệu = mã thiết bị Traccar Client của người này. */
+        @JsonProperty("badge_number")
+        private String badgeNumber;
+    }
+
+    /** Vị trí mới nhất của người đi hiện trường (Traccar, chỉ giữ trong RAM của BE). */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LivePosition {
+        @JsonProperty("latitude")
+        private double latitude;
+        @JsonProperty("longitude")
+        private double longitude;
+        @JsonProperty("speed_kmh")
+        private Double speedKmh;
+        @JsonProperty("heading")
+        private Double heading;
+        @JsonProperty("accuracy_m")
+        private Double accuracyM;
+        /** Lúc điện thoại lấy vị trí (null nếu Traccar không gửi). */
+        @JsonProperty("fix_time")
+        private OffsetDateTime fixTime;
+        /** Lúc BE nhận điểm: FE tính "mất tín hiệu" theo mốc này. */
+        @JsonProperty("received_at")
+        private OffsetDateTime receivedAt;
     }
 
     @Data
@@ -156,11 +209,8 @@ public class DispatchPlanResponse {
                 .statusLabel(d.getStatus().getLabel())
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
-                .assignedTo(d.getAssignedTo() == null ? null : Officer.builder()
-                        .accountId(d.getAssignedTo().getId())
-                        .fullName(d.getAssignedTo().fullName())
-                        .phone(d.getAssignedTo().getPhone())
-                        .build())
+                .assignedTo(officer(d.getAssignedTo()))
+                .tracker(officer(d.getAssignedTo() != null ? d.getAssignedTo() : d.getDispatchedBy()))
                 .rejectReason(d.getRejectReason())
                 .respondedAt(withZone(d.getRespondedAt()))
                 .officerConfirmedAt(withZone(d.getIncident().getOfficerConfirmedAt()))
@@ -183,6 +233,15 @@ public class DispatchPlanResponse {
                 .dispatchedAt(withZone(d.getDispatchedAt()))
                 .departedAt(withZone(d.getDepartedAt()))
                 .arrivedAt(withZone(d.getArrivedAt()))
+                .build();
+    }
+
+    private static Officer officer(com.sosvietnam.model.entity.UnitMember m) {
+        return m == null ? null : Officer.builder()
+                .memberId(m.getId())
+                .fullName(m.displayName())
+                .phone(m.getPhone())
+                .badgeNumber(m.getBadgeNumber())
                 .build();
     }
 
