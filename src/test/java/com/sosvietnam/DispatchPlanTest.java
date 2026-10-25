@@ -40,11 +40,10 @@ class DispatchPlanTest {
     final IncidentClaimRepository claims = mock(IncidentClaimRepository.class);
     final IncidentReportRepository reports = mock(IncidentReportRepository.class);
     final com.sosvietnam.service.DispatchSimulationService simulation = mock(com.sosvietnam.service.DispatchSimulationService.class);
-    final com.sosvietnam.service.DemoModeService demo = mock(com.sosvietnam.service.DemoModeService.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes, stations, members,
             new com.sosvietnam.security.CurrentOfficer(), notifier,
             officers, claims, reports, new com.sosvietnam.service.implement.DispatchTrackingServiceImpl(dispatches),
-            simulation, demo);
+            simulation);
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     Account me;

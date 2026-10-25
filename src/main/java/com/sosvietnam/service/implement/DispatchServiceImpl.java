@@ -51,7 +51,6 @@ public class DispatchServiceImpl implements DispatchService {
     private final IncidentReportRepository incidentReportRepository;
     private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
     private final com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
-    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     // CHỈ ĐỂ TEST: chế độ ca demo đang bật thì cho "Kết thúc ngay" bỏ qua xác nhận của người dân
     @org.springframework.beans.factory.annotation.Value("${app.demo.incidents.enabled:false}")
@@ -77,9 +76,6 @@ public class DispatchServiceImpl implements DispatchService {
     public DispatchPlanResponse startSimulation(String incidentId) {
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = requireViewer(incident);
-        if (!simulationAllowed(incident)) {
-            throw new SosException(HttpStatus.FORBIDDEN, "Mô phỏng di chuyển chỉ dùng khi bật \"Ca demo\" trong Cài đặt");
-        }
         if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa trên đường tới hiện trường");
         }
@@ -129,16 +125,13 @@ public class DispatchServiceImpl implements DispatchService {
         }
         if (officer) {
             plan.setSimulation(DispatchPlanResponse.Simulation.builder()
-                    .available(enRoute && simulationAllowed(incident) && badgeOfTracker(latest) != null)
+                    .available(enRoute && badgeOfTracker(latest) != null)
                     .running(dispatchSimulationService.running(latest.getId()))
                     .build());
         }
         return plan;
     }
 
-    private boolean simulationAllowed(Incident incident) {
-        return demoModeService.generateEnabled() || com.sosvietnam.util.DemoIncidents.isDemo(incident);
-    }
 
     /** Số hiệu người đi hiện trường (được uỷ quyền, không có thì người điều động); null nếu chưa có. */
     private static String badgeOfTracker(IncidentDispatch d) {

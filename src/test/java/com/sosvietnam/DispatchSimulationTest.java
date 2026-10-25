@@ -4,7 +4,6 @@ import com.sosvietnam.model.entity.*;
 import com.sosvietnam.model.payload.enums.*;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.repository.*;
-import com.sosvietnam.service.DemoModeService;
 import com.sosvietnam.service.DispatchSimulationService;
 import com.sosvietnam.service.IncidentNotifier;
 import com.sosvietnam.service.implement.DispatchServiceImpl;
@@ -27,19 +26,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-/** "Mô phỏng di chuyển" (ca demo): công tắc demo, lượt EN_ROUTE, số hiệu; tuyến giải mã + chia bước đều. */
+/** "Mô phỏng" di chuyển (mọi ca, 25/10/2026): lượt EN_ROUTE, số hiệu; tuyến giải mã + chia bước đều. */
 class DispatchSimulationTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
     final IncidentRouteRepository routes = mock(IncidentRouteRepository.class);
     final DispatchSimulationService simulation = mock(DispatchSimulationService.class);
-    final DemoModeService demo = mock(DemoModeService.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes,
             mock(RescueStationRepository.class), mock(UnitMemberRepository.class),
             new com.sosvietnam.security.CurrentOfficer(), mock(IncidentNotifier.class),
             mock(com.sosvietnam.service.OfficerService.class), mock(IncidentClaimRepository.class),
-            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches), simulation, demo);
+            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches), simulation);
 
     Incident incident;
     IncidentDispatch trip;
@@ -76,18 +74,15 @@ class DispatchSimulationTest {
     }
 
     @Test
-    void refusedWhileTheDemoSwitchIsOff() {
-        when(demo.generateEnabled()).thenReturn(false);
-        assertThatThrownBy(() -> service.startSimulation("SOS-1")).isInstanceOf(SosException.class)
-                .hasMessageContaining("Ca demo");
-        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isFalse();
-        verify(simulation, never()).start(any(), any(), any());
+    void realIncident_allowed_noDemoSwitchNeeded() {
+        service.startSimulation("SOS-1");
+        verify(simulation).start(eq(11L), eq("594288"), any());
+        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isTrue();
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void demoOn_drivesTheStraightLineFromTheStation_officersOnly() {
-        when(demo.generateEnabled()).thenReturn(true);
+    void drivesTheStraightLineFromTheStation_officersOnly() {
 
         service.startSimulation("SOS-1");
 
@@ -105,16 +100,7 @@ class DispatchSimulationTest {
     }
 
     @Test
-    void demoIncident_allowedEvenWithTheSwitchOff() {
-        when(demo.generateEnabled()).thenReturn(false);
-        incident.setCitizenName("[DEMO] Người báo tin");
-        service.startSimulation("SOS-1");
-        verify(simulation).start(eq(11L), eq("594288"), any());
-    }
-
-    @Test
     void needsAnEnRouteTripAndABadge() {
-        when(demo.generateEnabled()).thenReturn(true);
         goer.setBadgeNumber(" ");
         assertThatThrownBy(() -> service.startSimulation("SOS-1")).isInstanceOf(SosException.class)
                 .hasMessageContaining("số hiệu");
