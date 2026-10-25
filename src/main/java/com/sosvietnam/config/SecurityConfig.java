@@ -46,6 +46,8 @@ public class SecurityConfig {
                         // ── Swagger, WebSocket, error ────────────────────────────────
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
                                 "/ws/**", "/ws-raw/**", "/error").permitAll()
+                        // ── Traccar đẩy điểm GPS (chỉ trong mạng Docker, controller kiểm X-Traccar-Secret) ──
+                        .requestMatchers(HttpMethod.POST, "/internal/traccar/positions").permitAll()
 
                         // ── Auth: /me cần đăng nhập, còn lại công khai ──────────────
                         // (phải khai báo /me TRƯỚC "/api/v1/auth/**", rule nào khớp trước thắng)

@@ -47,6 +47,7 @@ public class DispatchServiceImpl implements DispatchService {
     private final OfficerService officerService;
     private final IncidentClaimRepository incidentClaimRepository;
     private final IncidentReportRepository incidentReportRepository;
+    private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
 
     // CHỈ ĐỂ TEST: chế độ ca demo đang bật thì cho "Kết thúc ngay" bỏ qua xác nhận của người dân
     @org.springframework.beans.factory.annotation.Value("${app.demo.incidents.enabled:false}")
@@ -67,7 +68,13 @@ public class DispatchServiceImpl implements DispatchService {
             }
         }
         IncidentDispatch latest = latestPrimary(incidentId);
-        return latest == null ? null : DispatchPlanResponse.of(latest, currentRoute(latest));
+        if (latest == null) return null;
+        DispatchPlanResponse plan = DispatchPlanResponse.of(latest, currentRoute(latest));
+        // vị trí GPS người đi (Traccar, RAM): chỉ khi đang trên đường; FE hỏi lại mỗi 5 giây trong lúc này
+        if (latest.getStatus() == DispatchStatus.EN_ROUTE) {
+            plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
+        }
+        return plan;
     }
 
     @Transactional

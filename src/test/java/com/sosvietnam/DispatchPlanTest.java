@@ -41,7 +41,7 @@ class DispatchPlanTest {
     final IncidentReportRepository reports = mock(IncidentReportRepository.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes, stations, members,
             new com.sosvietnam.security.CurrentOfficer(), notifier,
-            officers, claims, reports);
+            officers, claims, reports, new com.sosvietnam.service.implement.DispatchTrackingServiceImpl(dispatches));
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     Account me;
