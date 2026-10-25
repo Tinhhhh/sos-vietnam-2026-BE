@@ -53,9 +53,6 @@ public class DispatchServiceImpl implements DispatchService {
     private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
     private final com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
 
-    // CHỈ ĐỂ TEST: chế độ ca demo đang bật thì cho "Kết thúc ngay" bỏ qua xác nhận của người dân
-    @org.springframework.beans.factory.annotation.Value("${app.demo.incidents.enabled:false}")
-    private boolean demoMode;
 
     @Transactional(readOnly = true)
     @Override
@@ -240,7 +237,7 @@ public class DispatchServiceImpl implements DispatchService {
         incident.setDestLongitude(dest.getLongitude());
         incident.setDestAddress(dest.getAddress());
         incident.setDestSource(dest.getSource());
-        incident.setDestUpdatedBy(dest.getSource() == DestinationSource.OFFICER_EDIT ? me.memberId() : null);
+        incident.setDestUpdatedBy(dest.getSource() == DestinationSource.CITIZEN_GPS ? null : me.memberId());
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);
 
@@ -447,17 +444,26 @@ public class DispatchServiceImpl implements DispatchService {
 
     @Transactional
     @Override
-    public DispatchPlanResponse arrive(String incidentId) {
-        OfficerPrincipal me = currentOfficer();
+    public DispatchPlanResponse arrive(String incidentId, String citizenAccessToken) {
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
-        boolean allowed = d != null && (d.getAssignedTo() != null
-                ? IncidentAccess.isAssignee(me, d)
-                : me.memberId().equals(incident.getHandlerId()));
-        if (!allowed) {
-            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi xử lý mới báo tới hiện trường được");
+        String who;
+        if (citizenAccessToken != null && !citizenAccessToken.isBlank()) {
+            if (!CitizenTokens.matches(incident, citizenAccessToken)) {
+                throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
+            }
+            who = "citizen";
+        } else {
+            OfficerPrincipal me = currentOfficer();
+            // một bên bấm "Đã đến" là đủ: đơn vị đi xử lý hoặc chính người phụ trách hiện trường
+            boolean allowed = d != null && (isOnSite(me, incident, d)
+                    || (d.getFieldMember() != null && me.memberId().equals(d.getFieldMember().getId())));
+            if (!allowed) {
+                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi xử lý mới báo tới hiện trường được");
+            }
+            who = me.email();
         }
-        if (incident.getStatus() != IncidentStatus.RESOLVING || d.getStatus() != DispatchStatus.EN_ROUTE) {
+        if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa ở bước đang di chuyển");
         }
         LocalDateTime now = LocalDateTime.now();
@@ -465,7 +471,7 @@ public class DispatchServiceImpl implements DispatchService {
         d.setArrivedAt(now);
         d.setUpdatedAt(now);
         IncidentDispatch saved = incidentDispatchRepository.save(d);
-        log.info("📍 [ARRIVED] Incident {} by {}", incidentId, me.email());
+        log.info("📍 [ARRIVED] Incident {} by {}", incidentId, who);
         notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
         return DispatchPlanResponse.of(saved, currentRoute(saved));
     }
@@ -484,7 +490,10 @@ public class DispatchServiceImpl implements DispatchService {
             }
             requireAtScene(incident, d);
             incident.setCitizenConfirmedAt(now);
-            who = "citizen";
+            // một bên bấm "Đã xử lý xong" là đủ: dân xác nhận thì đóng ca luôn, cán bộ vẫn lập văn bản sau được
+            close(incident, d, ReportResult.RESOLVED, CITIZEN_CLOSED_SUMMARY, null, null, fieldOrHandler(incident, d), now);
+            log.info("🤝 [CONFIRM DONE] Incident {} closed by the citizen", incidentId);
+            return DispatchPlanResponse.of(d, currentRoute(d));
         } else {
             OfficerPrincipal me = currentOfficer();
             if (!isOnSite(me, incident, d)) {
@@ -527,13 +536,8 @@ public class DispatchServiceImpl implements DispatchService {
             if (!holder && !IncidentAccess.isAssignee(me, d)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới lập văn bản được");
             }
+            // một bên xác nhận là đủ (25/10/2026): cán bộ bấm "Đã xử lý xong" + điền kết quả là đóng ca
             requireAtScene(incident, d);
-            boolean skip = request.isSkipConfirm() && demoMode; // nút "Kết thúc ngay (test)"
-            if (!skip && (incident.getOfficerConfirmedAt() == null || incident.getCitizenConfirmedAt() == null)) {
-                throw new SosException(HttpStatus.CONFLICT, request.isSkipConfirm()
-                        ? "Kết thúc ngay chỉ dùng được khi bật chế độ test (DEMO_INCIDENTS=true)"
-                        : "Cần cả cán bộ và người dân xác nhận đã xử lý xong");
-            }
             if (request.getResult() != ReportResult.RESOLVED && request.getResult() != ReportResult.FALSE_ALARM) {
                 throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong hoặc Báo khống");
             }
@@ -544,13 +548,33 @@ public class DispatchServiceImpl implements DispatchService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        if (result != ReportResult.FORCED && incident.getOfficerConfirmedAt() == null) {
+            incident.setOfficerConfirmedAt(now);
+            incident.setOfficerConfirmedBy(me.memberId());
+        }
+        close(incident, d, result, trim(request.getSummary()), trim(request.getForces()), trim(request.getNote()),
+                me.memberId(), now);
+        log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) by {}", incidentId, result, me.email());
+    }
+
+    static final String CITIZEN_CLOSED_SUMMARY = "Người báo tin xác nhận sự việc đã được xử lý xong.";
+
+    /** Người viết văn bản tự động khi dân đóng ca: người phụ trách hiện trường, không có thì người giữ ca. */
+    private static UUID fieldOrHandler(Incident incident, IncidentDispatch d) {
+        return d != null && d.getFieldMember() != null ? d.getFieldMember().getId() : incident.getHandlerId();
+    }
+
+    /** Đóng ca: văn bản kết thúc, ca RESOLVED, lượt DONE, đóng lượt giữ ca, gỡ thẻ khỏi hàng đợi. */
+    private void close(Incident incident, IncidentDispatch d, ReportResult result, String summary, String forces,
+                       String note, UUID createdBy, LocalDateTime now) {
+        String incidentId = incident.getId();
         incidentReportRepository.save(IncidentReport.builder()
                 .incidentId(incidentId)
                 .result(result)
-                .summary(trim(request.getSummary()))
-                .forces(trim(request.getForces()))
-                .note(trim(request.getNote()))
-                .createdBy(me.memberId())
+                .summary(summary)
+                .forces(forces)
+                .note(note)
+                .createdBy(createdBy)
                 .createdAt(now)
                 .build());
         incident.setStatus(IncidentStatus.RESOLVED);
@@ -570,7 +594,6 @@ public class DispatchServiceImpl implements DispatchService {
                         incidentClaimRepository.save(claim);
                     });
         }
-        log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) by {}", incidentId, result, me.email());
         notifier.notify(incidentId, IncidentEvent.INCIDENT_REMOVED);
     }
 

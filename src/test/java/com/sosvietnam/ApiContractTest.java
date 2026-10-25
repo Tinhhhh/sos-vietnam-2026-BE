@@ -82,6 +82,7 @@ class ApiContractTest {
     @MockitoBean BandoSyncService bandoSyncService;
     @MockitoBean IncidentService incidentService;
     @MockitoBean WeatherService weatherService;
+    @MockitoBean com.sosvietnam.service.RoadSnapService roadSnapService;
     @MockitoBean DashboardService dashboardService;
     @MockitoBean com.sosvietnam.security.StompSessionRegistry stompSessionRegistry;
     @MockitoBean com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;

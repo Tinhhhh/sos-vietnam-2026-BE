@@ -57,23 +57,24 @@ public interface DispatchService {
     DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);
 
     /**
-     * "Khởi hành ngay" ở bước Theo dõi: lực lượng tới hiện trường (EN_ROUTE -> ARRIVED, bước 4 Kết thúc).
-     * Cán bộ được giao (đơn vị được uỷ quyền), hoặc người giữ ca khi chính đơn vị mình đi.
+     * "Đã đến" ở bước Theo dõi: lực lượng tới hiện trường (EN_ROUTE -> ARRIVED, bước 4). Một bên bấm là đủ:
+     * cán bộ được giao (đơn vị được uỷ quyền), người giữ ca khi chính đơn vị mình đi, người phụ trách hiện trường,
+     * hoặc người dân (citizenAccessToken).
      */
-    DispatchPlanResponse arrive(String incidentId);
+    DispatchPlanResponse arrive(String incidentId, String citizenAccessToken);
 
     /**
-     * CHỈ ĐỂ DEMO ("Mô phỏng di chuyển"): giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường.
-     * Cán bộ xem được ca; chỉ khi công tắc ca demo đang bật hoặc ca là ca [DEMO]; lượt phải EN_ROUTE và người đi
-     * phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
+     * "Mô phỏng": giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường (mọi ca, 25/10/2026).
+     * Cán bộ xem được ca; lượt phải EN_ROUTE và người đi phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
      */
     DispatchPlanResponse startSimulation(String incidentId);
 
     DispatchPlanResponse stopSimulation(String incidentId);
 
     /**
-     * Bước 4 "Xác nhận đã xử lý xong" (lực lượng đã ở hiện trường): đơn vị đi xử lý (cán bộ được giao, hoặc
-     * người giữ ca khi chính đơn vị mình đi) dùng JWT; người dân dùng citizenAccessToken.
+     * Bước 4 "Đã xử lý xong" (lực lượng đã ở hiện trường). Một bên bấm là đủ: người dân (citizenAccessToken) bấm thì
+     * ca đóng luôn (RESOLVED, văn bản kết thúc ghi "người báo tin xác nhận"); cán bộ (JWT) chỉ ghi nhận xác nhận,
+     * đóng ca bằng finish (điền kết quả).
      */
     DispatchPlanResponse confirm(String incidentId, String citizenAccessToken);
 

@@ -101,12 +101,14 @@ public class DispatchController {
                 dispatchService.changeFieldMember(id, request.getMemberId()));
     }
 
-    @Operation(summary = "\"Khởi hành ngay\" in step 3: the force is at the scene -> step 4",
-            description = "The assigned officer (delegated unit), or the officer holding the incident when their own unit went. "
-                    + "Role required: OFFICER, ADMIN")
+    @Operation(summary = "\"Đã đến\" in step 3: the force is at the scene -> step 4",
+            description = "One side is enough: the assigned officer (delegated unit), the officer holding the incident when "
+                    + "their own unit went, the field officer, or the citizen (header X-SOS-Access-Token). "
+                    + "Role required: OFFICER, ADMIN or citizen token")
     @PostMapping("/arrive")
-    public ResponseEntity<Object> arrive(@PathVariable String id) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.arrive(id));
+    public ResponseEntity<Object> arrive(@PathVariable String id,
+                                         @RequestHeader(value = IncidentController.CITIZEN_TOKEN_HEADER, required = false) String citizenToken) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.arrive(id, citizenToken));
     }
 
     @Operation(summary = "DEMO ONLY: simulate the field officer's phone driving along the route",
@@ -125,9 +127,10 @@ public class DispatchController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Simulation stopped", dispatchService.stopSimulation(id));
     }
 
-    @Operation(summary = "Step 4: confirm the incident is handled (both sides must confirm)",
-            description = "The unit on site (JWT: assigned officer, or holder of own unit), or the citizen "
-                    + "(header X-SOS-Access-Token). Role required: OFFICER, ADMIN or citizen token")
+    @Operation(summary = "Step 4: \"Đã xử lý xong\" (one side is enough)",
+            description = "The citizen (header X-SOS-Access-Token) closes the incident at once (RESOLVED, report 'confirmed by "
+                    + "the reporter'); the unit on site (JWT) only records its confirmation and closes with /finish. "
+                    + "Role required: OFFICER, ADMIN or citizen token")
     @PostMapping("/confirm")
     public ResponseEntity<Object> confirm(@PathVariable String id,
                                           @RequestHeader(value = IncidentController.CITIZEN_TOKEN_HEADER, required = false) String citizenToken) {
@@ -135,7 +138,8 @@ public class DispatchController {
     }
 
     @Operation(summary = "Close the incident with its report (-> RESOLVED)",
-            description = "Normal: both confirmed, result RESOLVED / FALSE_ALARM, summary >= 10 characters. "
+            description = "Normal: force on site (ARRIVED), no citizen confirmation needed, result RESOLVED / FALSE_ALARM, "
+                    + "summary >= 10 characters. "
                     + "force=true: the officer holding it ends it at any step, note = reason (>= 5). Role required: OFFICER, ADMIN")
     @PostMapping("/finish")
     public ResponseEntity<Object> finish(@PathVariable String id, @RequestBody @Valid FinishIncidentRequest request) {

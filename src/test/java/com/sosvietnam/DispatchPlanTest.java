@@ -253,10 +253,23 @@ class DispatchPlanTest {
     void arrive_ownUnit_holderMovesToStep4() {
         IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE); // chính đơn vị mình đi (không có người được giao)
-        DispatchPlanResponse plan = service.arrive("SOS-1");
+        DispatchPlanResponse plan = service.arrive("SOS-1", null);
         assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         assertThat(plan.getStep()).isEqualTo(4);
         assertThat(d.getArrivedAt()).isNotNull();
+    }
+
+    @Test
+    void arrive_byTheCitizen_isEnough_wrongToken403() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
+        assertThatThrownBy(() -> service.arrive("SOS-1", "sai")).isInstanceOf(SosException.class)
+                .hasMessageContaining("Mã truy cập");
+        assertThat(service.arrive("SOS-1", "tok").getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        // đã tới rồi thì bấm lại -> 409
+        assertThatThrownBy(() -> service.arrive("SOS-1", "tok")).isInstanceOf(SosException.class)
+                .hasMessageContaining("chưa ở bước đang di chuyển");
     }
 
     @Test
@@ -307,36 +320,30 @@ class DispatchPlanTest {
     }
 
     @Test
-    void finish_needsBothConfirmations_thenResolves() {
+    void finish_byTheOfficerAlone_noCitizenConfirmationNeeded() {
         IncidentDispatch d = atScene();
-        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
-
-        assertThatThrownBy(() -> service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối")))
-                .isInstanceOf(SosException.class).hasMessageContaining("Cần cả cán bộ và người dân");
-
-        service.confirm("SOS-1", null);   // cán bộ (người giữ ca, đơn vị mình đi)
-        assertThat(incident.getOfficerConfirmedAt()).isNotNull();
-        service.confirm("SOS-1", "tok");  // người dân
-        assertThat(incident.getCitizenConfirmedAt()).isNotNull();
-
         service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối"));
         assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(incident.getOfficerConfirmedAt()).isNotNull();
         assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
         verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.RESOLVED));
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
     }
 
     @Test
-    void finishNow_skipConfirm_onlyInDemoMode() {
-        atScene();
-        var req = report(ReportResult.RESOLVED, "Đã xử lý xong vụ việc");
-        req.setSkipConfirm(true);
-        assertThatThrownBy(() -> service.finish("SOS-1", req))
-                .isInstanceOf(SosException.class).hasMessageContaining("chế độ test");
-
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "demoMode", true);
-        service.finish("SOS-1", req); // chưa ai xác nhận vẫn kết thúc được
+    void citizenConfirm_closesTheIncidentAtOnce() {
+        IncidentDispatch d = atScene();
+        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
+        service.confirm("SOS-1", "tok");
+        assertThat(incident.getCitizenConfirmedAt()).isNotNull();
         assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
+        verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.RESOLVED
+                && rep.getSummary().contains("Người báo tin xác nhận")));
+        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
+        // ca đã đóng: cán bộ không kết thúc lại được
+        assertThatThrownBy(() -> service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối")))
+                .isInstanceOf(SosException.class);
     }
 
     @Test

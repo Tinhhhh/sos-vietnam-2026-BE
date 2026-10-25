@@ -86,6 +86,10 @@ public class DispatchPlanResponse {
     @JsonProperty("destination")
     private Point destination;
 
+    /** Vị trí người báo tin (GPS lúc gửi SOS): khác điểm đến khi xe dừng ở đường lớn ngoài hẻm. */
+    @JsonProperty("sos_point")
+    private Point sosPoint;
+
     @JsonProperty("route")
     private Route route;
 
@@ -220,6 +224,8 @@ public class DispatchPlanResponse {
                         .address(s.getAddress()).phone(s.getPhone())
                         .latitude(s.getLatitude()).longitude(s.getLongitude()).build())
                 .destination(destination)
+                .sosPoint(d.getIncident().getLatitude() == null ? null : Point.builder()
+                        .latitude(d.getIncident().getLatitude()).longitude(d.getIncident().getLongitude()).build())
                 .route(route == null ? null : Route.builder()
                         .origin(Point.builder().latitude(route.getOriginLat()).longitude(route.getOriginLng())
                                 .address(route.getOriginAddress()).build())
