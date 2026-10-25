@@ -45,7 +45,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(request -> request
                         // ── Swagger, WebSocket, error ────────────────────────────────
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
-                                "/ws/**", "/ws-raw/**", "/error").permitAll()
+                                "/ws-raw/**", "/error").permitAll()
                         // ── Traccar đẩy điểm GPS (chỉ trong mạng Docker, controller kiểm X-Traccar-Secret) ──
                         .requestMatchers(HttpMethod.POST, "/internal/traccar/positions").permitAll()
 
@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/change-password").authenticated()
                         .requestMatchers("/api/v1/auth/pin").hasAnyAuthority(STAFF)
                         .requestMatchers("/api/v1/unit/**").hasAuthority(RoleName.OFFICER.getRole())
+                        // dân không có tài khoản (báo tin không cần đăng nhập), FE không gọi: tắt hẳn đăng ký công khai
+                        .requestMatchers("/api/v1/auth/register").denyAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
                         // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─
@@ -61,7 +63,11 @@ public class SecurityConfig {
                         // phiên bản dữ liệu + thời tiết tại đơn vị: chỉ màn hình trực ban dùng
                         .requestMatchers(HttpMethod.GET, "/api/v1/geo/data-status", "/api/v1/weather/**")
                                 .hasAnyAuthority(STAFF)
-                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations", "/api/v1/stations/**").permitAll()
+                        // Dân chỉ cần tra xã / tỉnh từ toạ độ (màn gửi SOS). Danh bạ trạm, danh sách tỉnh / xã chỉ màn cán bộ
+                        // dùng: khoá lại để không bị cào cả danh bạ từ ngoài (25/10/2026).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/resolve").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations", "/api/v1/stations/**")
+                                .hasAnyAuthority(STAFF)
 
                         // ── Incident: người dân gửi SOS + ảnh không cần đăng nhập ─────
                         .requestMatchers(HttpMethod.POST, "/api/v1/incidents", "/api/v1/incidents/lookup", "/api/v1/incidents/*/media", "/api/v1/incidents/*/cancel",

@@ -15,7 +15,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Mọi API dưới `/api/v1/...`. Response `{ http_status, time_stamp, message, data }`; lỗi `{ httpStatus, timestamp, message, error?, data? }`.
 - JSON snake_case, luôn trả DTO, field lạ → 400.
 - Login/refresh chỉ trả `access_token` + `refresh_token`; thông tin qua `GET /auth/me` (có `agency_type`, `unit_level`). Register công khai luôn CITIZEN, chỉ trả message.
-- `/api/v1/admin/**` chỉ ADMIN. `GET /geo/**`, `/stations/**` công khai.
+- `/api/v1/admin/**` chỉ ADMIN. Từ 25/10/2026 chỉ cán bộ (OFFICER/ADMIN): `/stations`, `/stations/nearest`, `/geo/provinces`, `/geo/provinces/{id}/wards`; công khai chỉ còn `/geo/resolve` (màn SOS của dân). `POST /auth/register` tắt hẳn (denyAll, dân không có tài khoản). Bỏ endpoint SockJS `/ws` (FE chỉ dùng `/ws-raw`). Swagger bật / tắt bằng `SWAGGER_ENABLED` (mặc định bật; VPS nên để false). Các API dân dùng (tạo ca, media, tracking, cancel, escalate, lookup, văn bản dân, dispatch-plan GET + confirm, ice-servers) vẫn công khai, service tự kiểm citizen token.
 - Địa bàn trong API: `province_id` (= `provinces.code`) + `province` (tên), `ward_id` + `ward`. Geo: `GET /geo/provinces` (`code`, `name`...), `GET /geo/provinces/{provinceId}/wards` (sắp theo tên, tỉnh lạ 404; thay `/geo/wards?provinceCode` cũ, 18/10/2026), `GET /geo/resolve` trả `province_id`/`ward_id`.
 
 ## Dữ liệu / seed

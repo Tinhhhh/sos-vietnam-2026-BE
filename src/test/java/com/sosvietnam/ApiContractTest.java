@@ -256,6 +256,21 @@ class ApiContractTest {
                 .andExpect(jsonPath("$.http_status").value(401));
     }
 
+    /** API công khai mà màn dân không dùng: khoá lại (chống cào danh bạ trạm, tắt đăng ký tài khoản). */
+    @Test
+    void officerOnlyDirectories_andRegister_areClosedToThePublic() throws Exception {
+        for (String path : List.of("/api/v1/stations", "/api/v1/stations/nearest?lat=10&lng=105",
+                "/api/v1/geo/provinces", "/api/v1/geo/provinces/92/wards")) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        String officer = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        mvc.perform(post("/api/v1/auth/register").header("Authorization", "Bearer " + officer)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void refresh_works_andRotatesTokens_andOldAccessIsRevoked() throws Exception {
         JsonNode first = login("officer@sos.vn", "Officer@123").get("data");
@@ -324,34 +339,7 @@ class ApiContractTest {
         mvc.perform(post("/api/v1/auth/logout").header("Authorization", "Bearer abc.def.ghi")).andExpect(status().isOk());
     }
 
-    @Test
-    void register_rejectsRoleField_with400() throws Exception {
-        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"hacker@x.vn\",\"password\":\"Password1\",\"roleName\":\"ADMIN\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Dữ liệu gửi lên không hợp lệ"));
-        assertThat(accounts).doesNotContainKey("hacker@x.vn");
-    }
-
-    @Test
-    void register_alwaysCreatesCitizen_andNeverCreatesRoles() throws Exception {
-        JsonNode body = json(mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"dan@x.vn\",\"password\":\"Password1\",\"first_name\":\"Bình\",\"last_name\":\"Trần\"}"))
-                .andExpect(status().isOk()).andReturn());
-        // Đăng ký chỉ trả message, không tự đăng nhập
-        assertThat(body.has("data")).isFalse();
-        assertThat(accounts.get("dan@x.vn").fullName()).isEqualTo("Trần Bình");
-        assertThat(accounts.get("dan@x.vn").getRole().getRoleName()).isEqualTo("CITIZEN");
-        verify(roleRepository, never()).save(any());
-    }
-
-    @Test
-    void register_weakPassword_returnsFieldErrors() throws Exception {
-        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"x@x.vn\",\"password\":\"123\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.data.password").exists());
-    }
+    // Đăng ký công khai đã tắt (25/10/2026): xem officerOnlyDirectories_andRegister_areClosedToThePublic
 
     // ── Geo / Station ────────────────────────────────────────────────
 
@@ -380,21 +368,25 @@ class ApiContractTest {
         verify(bandoSyncService, never()).syncFromNationalDatabase();
     }
 
+    private String officerBearer() throws Exception {
+        return "Bearer " + login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+    }
+
     @Test
-    void stationsNearest_isPublic() throws Exception {
+    void stationsNearest_forOfficers() throws Exception {
         when(geoService.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of());
-        mvc.perform(get("/api/v1/stations/nearest").param("lat", "21").param("lng", "105").param("agency", "POLICE"))
+        mvc.perform(get("/api/v1/stations/nearest").header("Authorization", officerBearer()).param("lat", "21").param("lng", "105").param("agency", "POLICE"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
     }
 
     @Test
-    void stationsList_isPublic_andPassesFilters() throws Exception {
+    void stationsList_forOfficers_andPassesFilters() throws Exception {
         StationResponse station = StationResponse.builder()
                 .id(1L).name("Công An TP. Cần Thơ").agencyType(AgencyType.POLICE).level(StationLevel.PROVINCE)
                 .facilityType("Trụ sở chính").build();
         when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new ListResponse(List.of(station), 1, 5, 6, 2, true));
-        mvc.perform(get("/api/v1/stations").param("pageNo", "1").param("pageSize", "5").param("province", "c")
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("pageNo", "1").param("pageSize", "5").param("province", "c")
                         .param("agency", "POLICE").param("level", "PROVINCE").param("sortBy", "name").param("sortDir", "desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].agency_type").value("POLICE"))
@@ -412,14 +404,14 @@ class ApiContractTest {
     void stationsList_defaultsLikeHivTmss() throws Exception {
         when(geoService.getStations(anyInt(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new ListResponse(List.of(), 0, 10, 0, 0, true));
-        mvc.perform(get("/api/v1/stations")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer())).andExpect(status().isOk());
         verify(geoService).getStations(0, 10, null, null, null, "id", "asc");
     }
 
     @Test
     void stationsList_removedEnumValues_return400() throws Exception {
-        mvc.perform(get("/api/v1/stations").param("level", "DISTRICT")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/stations").param("agency", "MOBILE_POLICE")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("level", "DISTRICT")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/stations").header("Authorization", officerBearer()).param("agency", "MOBILE_POLICE")).andExpect(status().isBadRequest());
     }
 
     @Test
