@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.UUID;
 import com.sosvietnam.util.CitizenTokens;
 import com.sosvietnam.util.IncidentAccess;
+import com.sosvietnam.util.Polylines;
+import com.sosvietnam.util.RouteSimulation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -48,6 +50,8 @@ public class DispatchServiceImpl implements DispatchService {
     private final IncidentClaimRepository incidentClaimRepository;
     private final IncidentReportRepository incidentReportRepository;
     private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
+    private final com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
+    private final com.sosvietnam.service.DemoModeService demoModeService;
 
     // CHỈ ĐỂ TEST: chế độ ca demo đang bật thì cho "Kết thúc ngay" bỏ qua xác nhận của người dân
     @org.springframework.beans.factory.annotation.Value("${app.demo.incidents.enabled:false}")
@@ -57,24 +61,105 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse getPlan(String incidentId, String citizenAccessToken) {
         Incident incident = findIncident(incidentId);
-        if (citizenAccessToken != null && !citizenAccessToken.isBlank()) {
+        boolean citizen = citizenAccessToken != null && !citizenAccessToken.isBlank();
+        if (citizen) {
             if (!CitizenTokens.matches(incident, citizenAccessToken)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
             }
         } else {
-            OfficerPrincipal me = currentOfficer();
-            if (!IncidentAccess.canView(me, incident) && !IncidentAccess.isDelegatedUnit(me, latestPrimary(incidentId))) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Ca này không thuộc phạm vi của bạn");
-            }
+            requireViewer(incident);
         }
-        IncidentDispatch latest = latestPrimary(incidentId);
+        return planView(incident, latestPrimary(incidentId), !citizen);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public DispatchPlanResponse startSimulation(String incidentId) {
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = requireViewer(incident);
+        if (!simulationAllowed(incident)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Mô phỏng di chuyển chỉ dùng khi bật \"Ca demo\" trong Cài đặt");
+        }
+        if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
+            throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa trên đường tới hiện trường");
+        }
+        String badge = badgeOfTracker(d);
+        if (badge == null) {
+            throw new SosException(HttpStatus.CONFLICT, "Người đi hiện trường chưa có số hiệu (mã thiết bị GPS)");
+        }
+        List<double[]> path = simulationPath(incident, d);
+        if (path.size() < 2) {
+            throw new SosException(HttpStatus.CONFLICT, "Chưa có toạ độ điểm xuất phát / điểm đến");
+        }
+        dispatchSimulationService.start(d.getId(), badge,
+                RouteSimulation.steps(path, dispatchSimulationService.stepMeters(), SIMULATION_STOP_BEFORE_M));
+        log.info("🧪 [SIMULATE] {} bắt đầu mô phỏng ca {}", currentOfficer().email(), incidentId);
+        return planView(incident, d, true);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public DispatchPlanResponse stopSimulation(String incidentId) {
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = requireViewer(incident);
+        if (d != null) dispatchSimulationService.stop(d.getId());
+        return planView(incident, d, true);
+    }
+
+    /** Xe giả dừng cách hiện trường 30 m: người vẫn phải bấm "Tới nơi". */
+    private static final double SIMULATION_STOP_BEFORE_M = 30;
+
+    /** Cán bộ xem được ca (hoặc đơn vị được uỷ quyền); trả lượt chủ trì mới nhất. */
+    private IncidentDispatch requireViewer(Incident incident) {
+        OfficerPrincipal me = currentOfficer();
+        IncidentDispatch latest = latestPrimary(incident.getId());
+        if (!IncidentAccess.canView(me, incident) && !IncidentAccess.isDelegatedUnit(me, latest)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Ca này không thuộc phạm vi của bạn");
+        }
+        return latest;
+    }
+
+    private DispatchPlanResponse planView(Incident incident, IncidentDispatch latest, boolean officer) {
         if (latest == null) return null;
         DispatchPlanResponse plan = DispatchPlanResponse.of(latest, currentRoute(latest));
+        boolean enRoute = latest.getStatus() == DispatchStatus.EN_ROUTE;
         // vị trí GPS người đi (Traccar, RAM): chỉ khi đang trên đường; FE hỏi lại mỗi 5 giây trong lúc này
-        if (latest.getStatus() == DispatchStatus.EN_ROUTE) {
+        if (enRoute) {
             plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
         }
+        if (officer) {
+            plan.setSimulation(DispatchPlanResponse.Simulation.builder()
+                    .available(enRoute && simulationAllowed(incident) && badgeOfTracker(latest) != null)
+                    .running(dispatchSimulationService.running(latest.getId()))
+                    .build());
+        }
         return plan;
+    }
+
+    private boolean simulationAllowed(Incident incident) {
+        return demoModeService.generateEnabled() || com.sosvietnam.util.DemoIncidents.isDemo(incident);
+    }
+
+    /** Số hiệu người đi hiện trường (được uỷ quyền, không có thì người điều động); null nếu chưa có. */
+    private static String badgeOfTracker(IncidentDispatch d) {
+        com.sosvietnam.model.entity.UnitMember m = d.getAssignedTo() != null ? d.getAssignedTo() : d.getDispatchedBy();
+        String badge = m == null ? null : m.getBadgeNumber();
+        return badge == null || badge.isBlank() ? null : badge.trim();
+    }
+
+    /** Tuyến đã tính (polyline); không có thì đường thẳng trạm -> điểm đến. */
+    private List<double[]> simulationPath(Incident incident, IncidentDispatch d) {
+        IncidentRoute route = currentRoute(d);
+        List<double[]> path = route == null ? List.of() : Polylines.decode(route.getPolyline());
+        if (path.size() >= 2) return path;
+        Double fromLat = route != null && route.getOriginLat() != null ? route.getOriginLat() : d.getStation().getLatitude();
+        Double fromLng = route != null && route.getOriginLng() != null ? route.getOriginLng() : d.getStation().getLongitude();
+        Double toLat = route != null && route.getDestLat() != null ? route.getDestLat()
+                : incident.getDestLatitude() != null ? incident.getDestLatitude() : incident.getLatitude();
+        Double toLng = route != null && route.getDestLng() != null ? route.getDestLng()
+                : incident.getDestLongitude() != null ? incident.getDestLongitude() : incident.getLongitude();
+        if (fromLat == null || fromLng == null || toLat == null || toLng == null) return List.of();
+        return List.of(new double[]{fromLat, fromLng}, new double[]{toLat, toLng});
     }
 
     @Transactional

@@ -33,6 +33,23 @@ public class DispatchPlanResponse {
     @JsonProperty("last_position")
     private LivePosition lastPosition;
 
+    /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
+    @JsonProperty("simulation")
+    private Simulation simulation;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Simulation {
+        /** Bấm được: lượt EN_ROUTE, người đi có số hiệu, công tắc ca demo bật (hoặc ca [DEMO]). */
+        @JsonProperty("available")
+        private boolean available;
+        /** Đang chạy. */
+        @JsonProperty("running")
+        private boolean running;
+    }
+
     @JsonProperty("status")
     private DispatchStatus status;
 

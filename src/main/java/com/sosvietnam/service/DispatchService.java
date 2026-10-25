@@ -50,6 +50,15 @@ public interface DispatchService {
     DispatchPlanResponse arrive(String incidentId);
 
     /**
+     * CHỈ ĐỂ DEMO ("Mô phỏng di chuyển"): giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường.
+     * Cán bộ xem được ca; chỉ khi công tắc ca demo đang bật hoặc ca là ca [DEMO]; lượt phải EN_ROUTE và người đi
+     * phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
+     */
+    DispatchPlanResponse startSimulation(String incidentId);
+
+    DispatchPlanResponse stopSimulation(String incidentId);
+
+    /**
      * Bước 4 "Xác nhận đã xử lý xong" (lực lượng đã ở hiện trường): đơn vị đi xử lý (cán bộ được giao, hoặc
      * người giữ ca khi chính đơn vị mình đi) dùng JWT; người dân dùng citizenAccessToken.
      */
