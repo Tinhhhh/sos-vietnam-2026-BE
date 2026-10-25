@@ -25,7 +25,7 @@ public class DispatchPlanResponse {
     @JsonProperty("dispatch_id")
     private Long dispatchId;
 
-    /** Người đi hiện trường: cán bộ được uỷ quyền, không có thì người điều động (đơn vị tự đi). */
+    /** Người phụ trách hiện trường (field_member_id), null khi chưa xuất phát. */
     @JsonProperty("tracker")
     private Officer tracker;
 
@@ -210,7 +210,7 @@ public class DispatchPlanResponse {
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
                 .assignedTo(officer(d.getAssignedTo()))
-                .tracker(officer(d.getAssignedTo() != null ? d.getAssignedTo() : d.getDispatchedBy()))
+                .tracker(officer(d.getFieldMember()))
                 .rejectReason(d.getRejectReason())
                 .respondedAt(withZone(d.getRespondedAt()))
                 .officerConfirmedAt(withZone(d.getIncident().getOfficerConfirmedAt()))

@@ -56,18 +56,30 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
             @org.springframework.data.repository.query.Param("incidentStatuses") java.util.Collection<com.sosvietnam.model.payload.enums.IncidentStatus> incidentStatuses);
 
     /**
-     * Lượt chủ trì đang trên đường (EN_ROUTE) mà người đi hiện trường có số hiệu này: cán bộ được uỷ quyền,
-     * không có thì người điều động (đơn vị tự đi). Mới cập nhật nhất trước (số hiệu trùng ở 2 lượt: lấy lượt đầu).
+     * Lượt chủ trì đang trên đường (EN_ROUTE) mà người phụ trách hiện trường có số hiệu này.
+     * Mới xuất phát nhất trước (số hiệu trùng ở 2 lượt: lấy lượt đầu).
      */
     @org.springframework.data.jpa.repository.Query("""
-            SELECT d FROM IncidentDispatch d LEFT JOIN d.assignedTo a LEFT JOIN d.dispatchedBy b
+            SELECT d FROM IncidentDispatch d JOIN d.fieldMember f
             WHERE d.role = com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY
               AND d.status = com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
-              AND ((a IS NOT NULL AND a.badgeNumber = :badge) OR (a IS NULL AND b.badgeNumber = :badge))
+              AND f.badgeNumber = :badge
             ORDER BY d.departedAt DESC, d.id DESC
             """)
     List<IncidentDispatch> findEnRouteByTrackerBadge(
             @org.springframework.data.repository.query.Param("badge") String badge);
+
+    /** Lượt các cán bộ này đang phụ trách hiện trường ở những ca còn mở (một người chỉ đi một lượt). */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT d FROM IncidentDispatch d JOIN FETCH d.incident i
+            WHERE d.fieldMember.id IN :memberIds
+              AND d.status IN :statuses
+              AND i.status IN :incidentStatuses
+            """)
+    List<IncidentDispatch> findActiveFieldTrips(
+            @org.springframework.data.repository.query.Param("memberIds") java.util.Collection<java.util.UUID> memberIds,
+            @org.springframework.data.repository.query.Param("statuses") java.util.Collection<DispatchStatus> statuses,
+            @org.springframework.data.repository.query.Param("incidentStatuses") java.util.Collection<com.sosvietnam.model.payload.enums.IncidentStatus> incidentStatuses);
 
     /** Lượt chủ trì đang hoạt động của ca (không tính lượt đã bị từ chối). */
     Optional<IncidentDispatch> findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(

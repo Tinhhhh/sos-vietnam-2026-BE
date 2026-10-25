@@ -34,6 +34,10 @@ public class DispatchPlanRequest {
     @JsonProperty("delegate")
     private boolean delegate;
 
+    /** Người phụ trách hiện trường (cán bộ đơn vị mình); bắt buộc khi delegate = false (đơn vị tự đi). */
+    @JsonProperty("field_member_id")
+    private java.util.UUID fieldMemberId;
+
     @Data
     @Builder
     @NoArgsConstructor

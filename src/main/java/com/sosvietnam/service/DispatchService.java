@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.sosvietnam.model.payload.request.DispatchPlanRequest;
 import com.sosvietnam.model.payload.request.FinishIncidentRequest;
 import com.sosvietnam.model.payload.response.DispatchPlanResponse;
+import com.sosvietnam.model.payload.response.FieldCandidateResponse;
 
 /** Kế hoạch điều động của một ca: trạm xuất phát, điểm đến, tuyến đường, bước hiện tại. */
 public interface DispatchService {
@@ -40,8 +41,20 @@ public interface DispatchService {
     /** Cán bộ được giao từ chối kèm lý do (-> REJECTED); bên giao chọn lại đơn vị khác. */
     DispatchPlanResponse reject(String incidentId, String reason);
 
-    /** "Lập tức điều động" của đơn vị được giao (ACCEPTED -> EN_ROUTE): người dân bắt đầu theo dõi được. */
-    DispatchPlanResponse depart(String incidentId);
+    /**
+     * "Lập tức điều động" của đơn vị được giao (ACCEPTED -> EN_ROUTE), kèm người phụ trách hiện trường
+     * (cán bộ đơn vị mình, cầm điện thoại GPS): người dân bắt đầu theo dõi được.
+     */
+    DispatchPlanResponse depart(String incidentId, UUID fieldMemberId);
+
+    /**
+     * Cán bộ đơn vị đi xử lý để chọn người phụ trách hiện trường (không cần trực tuyến).
+     * Chỉ người nhận ca của đơn vị đi: cán bộ được uỷ quyền, không có thì người giữ ca.
+     */
+    List<FieldCandidateResponse> getFieldCandidates(String incidentId);
+
+    /** Đổi người phụ trách hiện trường khi lực lượng đang trên đường (cùng người được chọn như trên). */
+    DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);
 
     /**
      * "Khởi hành ngay" ở bước Theo dõi: lực lượng tới hiện trường (EN_ROUTE -> ARRIVED, bước 4 Kết thúc).

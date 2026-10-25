@@ -2,6 +2,7 @@ package com.sosvietnam.controller;
 
 import com.sosvietnam.model.payload.request.DelegateRequest;
 import com.sosvietnam.model.payload.request.DispatchPlanRequest;
+import com.sosvietnam.model.payload.request.FieldMemberRequest;
 import com.sosvietnam.model.payload.request.FinishIncidentRequest;
 import com.sosvietnam.model.payload.request.RejectDelegationRequest;
 import com.sosvietnam.service.DispatchService;
@@ -33,7 +34,8 @@ public class DispatchController {
 
     @Operation(summary = "Choose / change the starting station, destination and route (step 1)",
             description = "Only the officer holding the incident while it is RESOLVING. delegate=true: the station belongs "
-                    + "to another (ward) unit -> step 2 Uỷ quyền; false -> step 3 Theo dõi. Role required: OFFICER, ADMIN")
+                    + "to another (ward) unit -> step 2 Uỷ quyền; false -> step 3 Theo dõi, field_member_id required "
+                    + "(field officer of my unit, see /field-candidates). Role required: OFFICER, ADMIN")
     @PutMapping
     public ResponseEntity<Object> savePlan(@PathVariable String id, @RequestBody @Valid DispatchPlanRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Dispatch plan saved", dispatchService.savePlan(id, request));
@@ -75,10 +77,28 @@ public class DispatchController {
     }
 
     @Operation(summary = "The delegated unit sets off (\"Lập tức điều động\"): step 3 tracking",
-            description = "Role required: OFFICER (the assigned officer, after accepting)")
+            description = "Body { member_id }: the field officer of my unit (carries the GPS phone, needs a badge number, "
+                    + "not on another open trip; online not required). Role required: OFFICER (the assigned officer, after accepting)")
     @PostMapping("/depart")
-    public ResponseEntity<Object> depart(@PathVariable String id) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Departed", dispatchService.depart(id));
+    public ResponseEntity<Object> depart(@PathVariable String id, @RequestBody @Valid FieldMemberRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Departed", dispatchService.depart(id, request.getMemberId()));
+    }
+
+    @Operation(summary = "Officers of the unit that goes, to pick the field officer (người phụ trách hiện trường)",
+            description = "The officer holding the incident when their own unit goes, or the assigned officer of the "
+                    + "delegated unit. selectable=false + unavailable_reason: no badge number / on another open trip. "
+                    + "Role required: OFFICER, ADMIN")
+    @GetMapping("/field-candidates")
+    public ResponseEntity<Object> getFieldCandidates(@PathVariable String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Field officer candidates", dispatchService.getFieldCandidates(id));
+    }
+
+    @Operation(summary = "Change the field officer while the force is on the way (EN_ROUTE)",
+            description = "Same rules as choosing it; a running simulation stops. Role required: OFFICER, ADMIN")
+    @PutMapping("/field-member")
+    public ResponseEntity<Object> changeFieldMember(@PathVariable String id, @RequestBody @Valid FieldMemberRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Field officer changed",
+                dispatchService.changeFieldMember(id, request.getMemberId()));
     }
 
     @Operation(summary = "\"Khởi hành ngay\" in step 3: the force is at the scene -> step 4",

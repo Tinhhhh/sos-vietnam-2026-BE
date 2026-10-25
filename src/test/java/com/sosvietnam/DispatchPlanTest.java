@@ -63,7 +63,7 @@ class DispatchPlanTest {
                 .level(StationLevel.WARD).latitude(10.03).longitude(105.76).address("02 Nguyễn Tri Phương").build();
 
         known.put(me.getId(), me);
-        when(members.findById(any())).thenAnswer(i -> Optional.ofNullable(known.get((UUID) i.getArgument(0))).map(TestGeo::member));
+        when(members.findById(any())).thenAnswer(i -> Optional.ofNullable(known.get((UUID) i.getArgument(0))).map(DispatchPlanTest::withBadge));
         when(members.getReferenceById(any())).thenAnswer(i -> TestGeo.member(known.get((UUID) i.getArgument(0))));
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
         when(stations.findById(7L)).thenReturn(Optional.of(station));
@@ -81,8 +81,16 @@ class DispatchPlanTest {
         SecurityContextHolder.clearContext();
     }
 
+    /** Cán bộ có số hiệu (= mã thiết bị GPS) để làm người phụ trách hiện trường. */
+    static UnitMember withBadge(Account a) {
+        UnitMember m = TestGeo.member(a);
+        m.setBadgeNumber("B" + Math.abs(a.getId().hashCode() % 100000));
+        return m;
+    }
+
     DispatchPlanRequest request(boolean delegate) {
         return DispatchPlanRequest.builder().stationId(7L).delegate(delegate)
+                .fieldMemberId(delegate ? null : me.getId())
                 .destination(new DispatchPlanRequest.Destination(10.028, 105.758, "02 Nguyễn Tri Phương", DestinationSource.OFFICER_EDIT))
                 .route(new DispatchPlanRequest.Route(2700, 180, null, "abc", RouteProvider.OSRM))
                 .build();
@@ -260,8 +268,9 @@ class DispatchPlanTest {
 
         assertThat(service.accept("SOS-1").getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
         assertThat(d.getRespondedAt()).isNotNull();
-        DispatchPlanResponse plan = service.depart("SOS-1");
+        DispatchPlanResponse plan = service.depart("SOS-1", assignee.getId());
         assertThat(plan.getStep()).isEqualTo(3);
+        assertThat(plan.getTracker().getMemberId()).isEqualTo(assignee.getId()); // người phụ trách hiện trường
         assertThat(d.getDepartedAt()).isNotNull();
         verify(notifier, times(2)).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
     }
@@ -281,7 +290,7 @@ class DispatchPlanTest {
         assertThat(plan.getStep()).isEqualTo(1);
         assertThat(plan.getRejectReason()).isEqualTo("Đơn vị đang xử lý vụ khác");
         // đã từ chối thì không xuất phát được
-        assertThatThrownBy(() -> service.depart("SOS-1")).isInstanceOf(SosException.class);
+        assertThatThrownBy(() -> service.depart("SOS-1", assignee.getId())).isInstanceOf(SosException.class);
     }
 
     // ---------------------------------------------------------------- bước 4 kết thúc
@@ -378,5 +387,88 @@ class DispatchPlanTest {
         assertThat(service.getPlan("SOS-1", "tok")).isNull(); // chưa chọn trạm
         assertThatThrownBy(() -> service.getPlan("SOS-1", "sai"))
                 .isInstanceOf(SosException.class).hasMessageContaining("không hợp lệ");
+    }
+
+    // ---------------------------------------------------------------- người phụ trách hiện trường (25/10/2026)
+
+    @Test
+    void ownUnit_needsAFieldOfficerOfMyUnit_withBadge() {
+        when(dispatches.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(any(), any(), any()))
+                .thenReturn(Optional.empty());
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
+
+        DispatchPlanRequest none = request(false);
+        none.setFieldMemberId(null);
+        assertThatThrownBy(() -> service.savePlan("SOS-1", none))
+                .isInstanceOf(SosException.class).hasMessageContaining("Chưa chọn người phụ trách");
+
+        DispatchPlanRequest stranger = request(false);
+        stranger.setFieldMemberId(wardOfficer("other.unit@sos.vn").getId()); // tài khoản đơn vị khác
+        assertThatThrownBy(() -> service.savePlan("SOS-1", stranger))
+                .isInstanceOf(SosException.class).hasMessageContaining("cán bộ của đơn vị bạn");
+
+        UnitMember colleague = withBadge(me);
+        colleague.setId(UUID.randomUUID()); // cùng tài khoản đơn vị, không trực tuyến cũng được
+        when(members.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        DispatchPlanRequest ok = request(false);
+        ok.setFieldMemberId(colleague.getId());
+        DispatchPlanResponse plan = service.savePlan("SOS-1", ok);
+        assertThat(plan.getTracker().getMemberId()).isEqualTo(colleague.getId());
+        assertThat(plan.getTracker().getBadgeNumber()).isEqualTo(colleague.getBadgeNumber());
+
+        colleague.setBadgeNumber(" ");
+        assertThatThrownBy(() -> service.savePlan("SOS-1", ok))
+                .isInstanceOf(SosException.class).hasMessageContaining("số hiệu");
+    }
+
+    @Test
+    void fieldOfficerOnAnotherOpenTrip_409() {
+        when(dispatches.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(any(), any(), any()))
+                .thenReturn(Optional.empty());
+        Incident other = Incident.builder().id("SOS-2").status(IncidentStatus.RESOLVING).build();
+        when(dispatches.findActiveFieldTrips(eq(List.of(me.getId())), any(), any())).thenReturn(List.of(
+                IncidentDispatch.builder().id(22L).incident(other).fieldMember(withBadge(me)).build()));
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đang phụ trách ca SOS-2");
+    }
+
+    @Test
+    void candidates_holderOrAssignee_markBusyAndNoBadge() {
+        IncidentDispatch d = pending();
+        UnitMember free = withBadge(me);
+        UnitMember noBadge = TestGeo.member(me);
+        noBadge.setId(UUID.randomUUID());
+        when(members.findByAccount_IdAndActiveTrueOrderByFullNameAsc(me.getId())).thenReturn(List.of(free, noBadge));
+        when(notifier.onlineMemberIds()).thenReturn(java.util.Set.of());
+
+        var list = service.getFieldCandidates("SOS-1");
+        assertThat(list).hasSize(2);
+        assertThat(list.get(0).isSelectable()).isTrue();
+        assertThat(list.get(0).isOnline()).isFalse(); // ngoại tuyến vẫn chọn được
+        assertThat(list.get(1).isSelectable()).isFalse();
+        assertThat(list.get(1).getUnavailableReason()).contains("số hiệu");
+
+        // đã uỷ quyền cho xã: cán bộ được giao xem đơn vị của họ; người khác (không giữ ca, không được giao) 403
+        Account assignee = wardOfficer("ha@sos.vn");
+        d.setAssignedTo(TestGeo.member(assignee));
+        TestGeo.signIn(wardOfficer("khac@sos.vn"));
+        assertThatThrownBy(() -> service.getFieldCandidates("SOS-1"))
+                .isInstanceOf(SosException.class).hasMessageContaining("người nhận ca");
+        TestGeo.signIn(assignee);
+        when(members.findByAccount_IdAndActiveTrueOrderByFullNameAsc(assignee.getId()))
+                .thenReturn(List.of(withBadge(assignee)));
+        assertThat(service.getFieldCandidates("SOS-1")).hasSize(1);
+    }
+
+    @Test
+    void changeFieldMember_onlyWhileEnRoute_stopsSimulation() {
+        IncidentDispatch d = pending();
+        assertThatThrownBy(() -> service.changeFieldMember("SOS-1", me.getId()))
+                .isInstanceOf(SosException.class).hasMessageContaining("đang trên đường");
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        DispatchPlanResponse plan = service.changeFieldMember("SOS-1", me.getId());
+        assertThat(plan.getTracker().getMemberId()).isEqualTo(me.getId());
+        verify(simulation).stop(11L);
+        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
     }
 }

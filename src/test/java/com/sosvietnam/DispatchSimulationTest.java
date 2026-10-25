@@ -58,7 +58,7 @@ class DispatchSimulationTest {
                 .level(StationLevel.WARD).latitude(10.03).longitude(105.76).build();
         goer = TestGeo.member(me);
         goer.setBadgeNumber("594288");
-        trip = IncidentDispatch.builder().id(11L).incident(incident).station(station).dispatchedBy(goer)
+        trip = IncidentDispatch.builder().id(11L).incident(incident).station(station).dispatchedBy(goer).fieldMember(goer)
                 .role(DispatchRole.PRIMARY).status(DispatchStatus.EN_ROUTE).build();
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
         when(dispatches.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc("SOS-1", DispatchRole.PRIMARY))
