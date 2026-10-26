@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.sosvietnam.model.payload.request.DispatchPlanRequest;
 import com.sosvietnam.model.payload.request.FinishIncidentRequest;
 import com.sosvietnam.model.payload.response.DispatchPlanResponse;
+import com.sosvietnam.model.payload.response.FieldCandidateResponse;
 
 /** Kế hoạch điều động của một ca: trạm xuất phát, điểm đến, tuyến đường, bước hiện tại. */
 public interface DispatchService {
@@ -40,33 +41,58 @@ public interface DispatchService {
     /** Cán bộ được giao từ chối kèm lý do (-> REJECTED); bên giao chọn lại đơn vị khác. */
     DispatchPlanResponse reject(String incidentId, String reason);
 
-    /** "Lập tức điều động" của đơn vị được giao (ACCEPTED -> EN_ROUTE): người dân bắt đầu theo dõi được. */
-    DispatchPlanResponse depart(String incidentId);
-
     /**
-     * "Khởi hành ngay" ở bước Theo dõi: lực lượng tới hiện trường (EN_ROUTE -> ARRIVED, bước 4 Kết thúc).
-     * Cán bộ được giao (đơn vị được uỷ quyền), hoặc người giữ ca khi chính đơn vị mình đi.
+     * "Lập tức điều động" của đơn vị được giao (ACCEPTED -> EN_ROUTE), kèm người phụ trách hiện trường
+     * (cán bộ đơn vị mình, cầm điện thoại GPS): người dân bắt đầu theo dõi được.
      */
-    DispatchPlanResponse arrive(String incidentId);
+    DispatchPlanResponse depart(String incidentId, UUID fieldMemberId);
 
     /**
-     * CHỈ ĐỂ DEMO ("Mô phỏng di chuyển"): giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường.
-     * Cán bộ xem được ca; chỉ khi công tắc ca demo đang bật hoặc ca là ca [DEMO]; lượt phải EN_ROUTE và người đi
-     * phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
+     * Cán bộ đơn vị đi xử lý để chọn người phụ trách hiện trường (không cần trực tuyến).
+     * Chỉ người nhận ca của đơn vị đi: cán bộ được uỷ quyền, không có thì người giữ ca.
+     */
+    List<FieldCandidateResponse> getFieldCandidates(String incidentId);
+
+    /**
+     * "Yêu cầu điều động": người giữ ca chọn người phụ trách hiện trường của đơn vị mình (cùng điều kiện như lúc
+     * chọn ở bước điều động). Sai -> 400 / 403 / 409.
+     */
+    void checkFieldMember(String incidentId, UUID fieldMemberId);
+
+    /** Đổi người phụ trách hiện trường khi lực lượng đang trên đường (cùng người được chọn như trên). */
+    DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);
+
+    /**
+     * "Đã đến" ở bước Theo dõi: lực lượng tới hiện trường (EN_ROUTE -> ARRIVED, bước 4). Một bên bấm là đủ:
+     * cán bộ được giao (đơn vị được uỷ quyền), người giữ ca khi chính đơn vị mình đi, người phụ trách hiện trường,
+     * hoặc người dân (citizenAccessToken).
+     */
+    DispatchPlanResponse arrive(String incidentId, String citizenAccessToken);
+
+    /**
+     * "Mô phỏng": giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường (mọi ca, 25/10/2026).
+     * Cán bộ xem được ca; lượt phải EN_ROUTE và người đi phải có số hiệu (= mã thiết bị). Không đổi trạng thái lượt.
      */
     DispatchPlanResponse startSimulation(String incidentId);
 
     DispatchPlanResponse stopSimulation(String incidentId);
 
     /**
-     * Bước 4 "Xác nhận đã xử lý xong" (lực lượng đã ở hiện trường): đơn vị đi xử lý (cán bộ được giao, hoặc
-     * người giữ ca khi chính đơn vị mình đi) dùng JWT; người dân dùng citizenAccessToken.
+     * CHỈ ĐỂ DEMO "Rẽ đường khác": xe giả rẽ phải khỏi tuyến từ vị trí hiện tại (hoặc trạm), đi vòng một đoạn rồi
+     * mới tới hiện trường, để thử BE tự tính lại tuyến khi xe lệch đường. Cùng điều kiện như startSimulation.
+     */
+    DispatchPlanResponse detourSimulation(String incidentId);
+
+    /**
+     * Bước 4 "Đã xử lý xong" (lực lượng đã ở hiện trường): ghi xác nhận của người dân (citizenAccessToken) hoặc cán bộ
+     * (JWT). Thứ tự nào cũng được; cán bộ đã lập văn bản "Đã xử lý xong" (finish) rồi thì xác nhận này đóng ca.
      */
     DispatchPlanResponse confirm(String incidentId, String citizenAccessToken);
 
     /**
-     * Văn bản kết thúc, ca -> RESOLVED. Bình thường: cả hai bên đã xác nhận, người giữ ca hoặc cán bộ được giao lập.
-     * force: chỉ người giữ ca, khi lực lượng đã điều động (EN_ROUTE / ARRIVED), không chờ được xác nhận.
+     * Văn bản kết thúc (người giữ ca hoặc cán bộ được giao). RESOLVED: ghi văn bản + xác nhận của cán bộ, đóng ca khi
+     * dân cũng đã xác nhận. FALSE_ALARM / TEST: đóng ngay. force: chỉ người giữ ca, khi lực lượng đã điều động.
+     * @return true nếu ca đã đóng (RESOLVED), false nếu đang chờ người dân xác nhận
      */
-    void finish(String incidentId, FinishIncidentRequest request);
+    boolean finish(String incidentId, FinishIncidentRequest request);
 }

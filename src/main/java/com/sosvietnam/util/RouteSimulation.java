@@ -55,7 +55,35 @@ public class RouteSimulation {
         return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
     }
 
-    private double bearing(double[] a, double[] b) {
+    /** Khoảng cách ngắn nhất (m) từ điểm tới tuyến; chiếu phẳng quanh điểm, đủ chính xác trong vài km. */
+    public double distanceToPathM(List<double[]> path, double[] p) {
+        double k = Math.cos(Math.toRadians(p[0]));
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i + 1 < path.size(); i++) {
+            double ax = (path.get(i)[1] - p[1]) * k;
+            double ay = path.get(i)[0] - p[0];
+            double dx = (path.get(i + 1)[1] - path.get(i)[1]) * k;
+            double dy = path.get(i + 1)[0] - path.get(i)[0];
+            double len = dx * dx + dy * dy;
+            double t = len == 0 ? 0 : Math.max(0, Math.min(1, (-ax * dx - ay * dy) / len));
+            best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+        }
+        return best * Math.toRadians(1) * EARTH_RADIUS_M;
+    }
+
+    /** Điểm cách p một quãng meters theo hướng headingDeg (0 = bắc, 90 = đông). */
+    public double[] offset(double[] p, double headingDeg, double meters) {
+        double d = meters / EARTH_RADIUS_M;
+        double h = Math.toRadians(headingDeg);
+        double lat1 = Math.toRadians(p[0]);
+        double lng1 = Math.toRadians(p[1]);
+        double lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(h));
+        double lng2 = lng1 + Math.atan2(Math.sin(h) * Math.sin(d) * Math.cos(lat1),
+                Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+        return new double[]{Math.toDegrees(lat2), Math.toDegrees(lng2)};
+    }
+
+    public double bearing(double[] a, double[] b) {
         double lat1 = Math.toRadians(a[0]);
         double lat2 = Math.toRadians(b[0]);
         double dLng = Math.toRadians(b[1] - a[1]);

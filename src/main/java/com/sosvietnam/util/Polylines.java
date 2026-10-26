@@ -31,6 +31,31 @@ public class Polylines {
         return points;
     }
 
+    /** Ngược lại của decode: các điểm [lat, lng] -> chuỗi polyline 1e-5. */
+    public String encode(List<double[]> points) {
+        StringBuilder out = new StringBuilder();
+        long prevLat = 0;
+        long prevLng = 0;
+        for (double[] p : points) {
+            long lat = Math.round(p[0] * 1e5);
+            long lng = Math.round(p[1] * 1e5);
+            put(out, lat - prevLat);
+            put(out, lng - prevLng);
+            prevLat = lat;
+            prevLng = lng;
+        }
+        return out.toString();
+    }
+
+    private void put(StringBuilder out, long value) {
+        long v = value < 0 ? ~(value << 1) : value << 1;
+        while (v >= 0x20) {
+            out.append((char) ((0x20 | (v & 0x1f)) + 63));
+            v >>= 5;
+        }
+        out.append((char) (v + 63));
+    }
+
     /** Một số có dấu: trả {giá trị, vị trí tiếp theo}. */
     private int[] next(String s, int index) {
         int result = 0;

@@ -35,8 +35,7 @@ public class FinishIncidentRequest {
     private boolean force;
 
     /**
-     * CHỈ ĐỂ TEST (gỡ cùng DemoIncidentSeeder): bỏ qua bước chờ hai bên xác nhận. BE chỉ chấp nhận khi
-     * app.demo.incidents.enabled=true (DEMO_INCIDENTS=true).
+     * Không còn dùng (25/10/2026: cán bộ đóng ca không cần chờ dân xác nhận). Giữ trường để FE cũ gửi lên không bị 400.
      */
     @JsonProperty("skip_confirm")
     private boolean skipConfirm;

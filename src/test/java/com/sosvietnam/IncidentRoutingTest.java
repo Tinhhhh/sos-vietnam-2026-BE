@@ -110,6 +110,21 @@ class IncidentRoutingTest {
     }
 
     @Test
+    void police_staysInTheWardContainingThePoint_evenIfAnotherWardsStationIsNearer() {
+        // GPS nằm ở Phường Cái Khế: ca thuộc Cái Khế, trạm gần nhất (có thể của xã khác) chỉ chọn lúc điều động
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
+        Incident inc = create(EmergencyType.POLICE);
+        assertThat(inc.getWard()).isEqualTo(TestGeo.CAI_KHE);
+    }
+
+    @Test
+    void fire_keepsTheWardContainingThePoint() {
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
+        Incident inc = create(EmergencyType.FIRE);
+        assertThat(inc.getWard()).isEqualTo(TestGeo.CAI_KHE);
+    }
+
+    @Test
     void police_wardWithOfficersButNoneOnline_goesStraightToProvince() {
         when(notifier.onlineOfficers()).thenReturn(List.of(OfficerPrincipal.of(TestGeo.member(
                 officerAccount("someone.else@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Cái Khế")))));

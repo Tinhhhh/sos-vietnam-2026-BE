@@ -122,6 +122,10 @@ public class IncidentQueueResponse {
     @JsonProperty("can_handle")
     private boolean canHandle;
 
+    /** Người phụ trách hiện trường chọn lúc "Yêu cầu điều động" (bước chọn trạm dùng lại khi đơn vị mình đi). */
+    @JsonProperty("field_member_id")
+    private java.util.UUID fieldMemberId;
+
     /** Bước điều động hiện tại 1-4 của lượt chủ trì (null = chưa chọn trạm / đã bị từ chối). */
     @JsonProperty("dispatch_step")
     private Integer dispatchStep;
@@ -185,6 +189,7 @@ public class IncidentQueueResponse {
                 .status(i.getStatus())
                 .routedAgency(i.getRoutedAgency())
                 .routedLevel(i.getRoutedLevel())
+                .fieldMemberId(i.getFieldMemberId())
                 .province(i.provinceName())
                 .ward(i.wardName())
                 .address(i.getAddress())

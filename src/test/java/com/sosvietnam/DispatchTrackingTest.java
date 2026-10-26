@@ -22,7 +22,8 @@ import static org.mockito.Mockito.*;
 class DispatchTrackingTest {
 
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
-    final DispatchTrackingService tracking = new DispatchTrackingServiceImpl(dispatches);
+    final com.sosvietnam.service.RouteRecalcService recalc = mock(com.sosvietnam.service.RouteRecalcService.class);
+    final DispatchTrackingService tracking = new DispatchTrackingServiceImpl(dispatches, recalc);
 
     static TraccarPositionRequest point(String badge, Double lat, Double lng) {
         return TraccarPositionRequest.builder()

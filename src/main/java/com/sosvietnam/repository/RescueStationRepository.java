@@ -16,6 +16,7 @@ public interface RescueStationRepository extends JpaRepository<RescueStation, Lo
 
     List<RescueStation> findByProvince_Code(String provinceCode);
 
+
     @Query(value = """
         SELECT * FROM rescue_stations s
         WHERE (:agencyType IS NULL OR s.agency_type = :agencyType)

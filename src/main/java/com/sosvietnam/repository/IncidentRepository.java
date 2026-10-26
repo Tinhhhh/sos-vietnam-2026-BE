@@ -91,11 +91,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     /** Cán bộ giữ ca xác minh xong, yêu cầu điều động lực lượng: VERIFYING -> RESOLVING. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
-        UPDATE Incident i SET i.status = com.sosvietnam.model.payload.enums.IncidentStatus.RESOLVING, i.updatedAt = :now
+        UPDATE Incident i SET i.status = com.sosvietnam.model.payload.enums.IncidentStatus.RESOLVING,
+               i.fieldMemberId = COALESCE(:fieldMemberId, i.fieldMemberId), i.updatedAt = :now
         WHERE i.id = :id AND i.handlerId = :handlerId
           AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING
         """)
-    int startResolving(@Param("id") String id, @Param("handlerId") UUID handlerId, @Param("now") LocalDateTime now);
+    int startResolving(@Param("id") String id, @Param("handlerId") UUID handlerId,
+                       @Param("fieldMemberId") UUID fieldMemberId, @Param("now") LocalDateTime now);
 
     /**
      * Chuyển ngay ca cấp xã đang có người giữ lên cấp tỉnh (cán bộ tự chuyển, hoặc người dân yêu cầu khi

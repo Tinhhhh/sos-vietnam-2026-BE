@@ -84,7 +84,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/incidents/*/dispatch-plan").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/incidents/*/dispatch-plan").hasAnyAuthority(STAFF)
                         // xác nhận đã xử lý xong: cán bộ (JWT) hoặc người dân (citizen token), service tự kiểm
-                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch-plan/confirm").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/incidents/*/dispatch-plan/confirm",
+                                "/api/v1/incidents/*/dispatch-plan/arrive").permitAll()
                         .requestMatchers("/api/v1/incidents/*/dispatch-plan/**").hasAnyAuthority(STAFF)
                         // Cán bộ (JWT) hoặc người báo tin (citizen token): CallServiceImpl tự kiểm
                         .requestMatchers(HttpMethod.GET, "/api/v1/calls/ice-servers").permitAll()

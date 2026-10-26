@@ -25,7 +25,7 @@ public class DispatchPlanResponse {
     @JsonProperty("dispatch_id")
     private Long dispatchId;
 
-    /** Người đi hiện trường: cán bộ được uỷ quyền, không có thì người điều động (đơn vị tự đi). */
+    /** Người phụ trách hiện trường (field_member_id), null khi chưa xuất phát. */
     @JsonProperty("tracker")
     private Officer tracker;
 
@@ -85,6 +85,10 @@ public class DispatchPlanResponse {
 
     @JsonProperty("destination")
     private Point destination;
+
+    /** Vị trí người báo tin (GPS lúc gửi SOS): khác điểm đến khi xe dừng ở đường lớn ngoài hẻm. */
+    @JsonProperty("sos_point")
+    private Point sosPoint;
 
     @JsonProperty("route")
     private Route route;
@@ -193,6 +197,9 @@ public class DispatchPlanResponse {
         private String polyline;
         @JsonProperty("provider")
         private RouteProvider provider;
+        /** STATION / CUSTOM; VEHICLE = tính lại từ vị trí xe vì đi lệch tuyến */
+        @JsonProperty("origin_source")
+        private RouteOriginSource originSource;
         @JsonProperty("computed_at")
         private OffsetDateTime computedAt;
     }
@@ -210,7 +217,7 @@ public class DispatchPlanResponse {
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
                 .assignedTo(officer(d.getAssignedTo()))
-                .tracker(officer(d.getAssignedTo() != null ? d.getAssignedTo() : d.getDispatchedBy()))
+                .tracker(officer(d.getFieldMember()))
                 .rejectReason(d.getRejectReason())
                 .respondedAt(withZone(d.getRespondedAt()))
                 .officerConfirmedAt(withZone(d.getIncident().getOfficerConfirmedAt()))
@@ -220,6 +227,8 @@ public class DispatchPlanResponse {
                         .address(s.getAddress()).phone(s.getPhone())
                         .latitude(s.getLatitude()).longitude(s.getLongitude()).build())
                 .destination(destination)
+                .sosPoint(d.getIncident().getLatitude() == null ? null : Point.builder()
+                        .latitude(d.getIncident().getLatitude()).longitude(d.getIncident().getLongitude()).build())
                 .route(route == null ? null : Route.builder()
                         .origin(Point.builder().latitude(route.getOriginLat()).longitude(route.getOriginLng())
                                 .address(route.getOriginAddress()).build())
@@ -228,6 +237,7 @@ public class DispatchPlanResponse {
                         .durationTrafficS(route.getDurationTrafficS())
                         .polyline(route.getPolyline())
                         .provider(route.getProvider())
+                        .originSource(route.getOriginSource())
                         .computedAt(withZone(route.getComputedAt()))
                         .build())
                 .dispatchedAt(withZone(d.getDispatchedAt()))

@@ -68,7 +68,7 @@ public class DataSeeder implements CommandLineRunner {
     private static final String STATIONS_FILE = "data/rescue_stations.json";
     private static final String STATIONS_SEED_NAME = SeedVersion.RESCUE_STATIONS;
     // Tăng số này khi đổi cách đọc file (thêm cột, đổi mapping) để lần khởi động sau nạp lại dù file không đổi
-    private static final String STATIONS_SEED_FORMAT = "5";
+    private static final String STATIONS_SEED_FORMAT = "7";
     private static final String PLACEHOLDER = "Đang cập nhật";
     // Xã / tỉnh của trạm theo toạ độ (điểm nằm trong xã nào); không khớp xã thì tỉnh theo tên trong file.
     // location do DB tự sinh từ latitude/longitude (generated column) nên không ghi.
@@ -83,7 +83,14 @@ public class DataSeeder implements CommandLineRunner {
             + "COALESCE((SELECT w.province_id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1), "
             + "(SELECT p.code FROM provinces p WHERE " + PROVINCE_KEY_SQL.formatted("p.name") + " = "
             + PROVINCE_KEY_SQL.formatted("?") + " LIMIT 1)), "
-            + "(SELECT w.id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1), "
+            // xã của trạm: tên trạm có "phường X" / "xã X" (Công an phường X - Cơ sở 2) thì theo tên trong cùng tỉnh
+            // (cơ sở có thể nằm ở xã bên cạnh), không thì xã chứa toạ độ
+            + "COALESCE((SELECT w.id FROM wards w WHERE w.province_id = (SELECT w2.province_id FROM wards w2 "
+            + "WHERE ST_Contains(w2.geometry, " + POINT_SQL + ") LIMIT 1) "
+            // tên xã đứng trọn ("xã An Phú" không khớp "xã An Phú Tân"), sau nó là hết chuỗi hoặc " - Cơ sở 2"...
+            + "AND unaccent(lower(?)) ~ ('(^|\\s)' || unaccent(lower(w.name)) || '\\s*($|[-,(–])') "
+            + "ORDER BY length(w.name) DESC LIMIT 1), "
+            + "(SELECT w.id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1)), "
             + "?, ?, ?, ?, ?, ?) "
             + "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, agency_type = EXCLUDED.agency_type, "
             + "level = EXCLUDED.level, phone = EXCLUDED.phone, address = EXCLUDED.address, "
@@ -301,7 +308,8 @@ public class DataSeeder implements CommandLineRunner {
                 sn.path("address").asText(null),
                 lng, lat,                               // province: ward containing the point (ST_MakePoint(lng, lat))
                 sn.path("province").asText(null),       // ... else province by name
-                lng, lat,                               // ward containing the point
+                lng, lat, name,                         // ward named in the station name, in the point's province
+                lng, lat,                               // ... else ward containing the point
                 truncate(cleanText(sn, "officer"), 200),
                 truncate(cleanText(sn, "email"), 150),
                 cleanText(sn, "services"),

@@ -33,6 +33,7 @@ public interface GeoService {
      * @param province tỉnh chứa điểm, null = ngoài ranh giới dữ liệu
      * @param ward     xã chứa điểm, null = trong tỉnh nhưng không khớp xã nào
      */
+
     record Area(Province province, Ward ward) {
         public static final Area NONE = new Area(null, null);
     }

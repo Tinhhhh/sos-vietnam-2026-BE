@@ -3,6 +3,7 @@ package com.sosvietnam.controller;
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.service.BandoSyncService;
 import com.sosvietnam.service.GeoService;
+import com.sosvietnam.service.RoadSnapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class GeoController {
 
     private final GeoService geoService;
+    private final RoadSnapService roadSnapService;
     private final BandoSyncService bandoSyncService;
 
     @Operation(summary = "Get all provinces", description = "List of 34 provinces, sorted by name. Role required: none")
@@ -44,6 +46,17 @@ public class GeoController {
     public ResponseEntity<Object> resolveLocation(@RequestParam("lat") double lat, @RequestParam("lng") double lng) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully resolved location",
                 geoService.resolveLocation(lat, lng));
+    }
+
+    @Operation(summary = "Where the vehicle should stop for an SOS point",
+            description = "OSRM nearest (OpenStreetMap): nearest point on a named road that is not an alley (hẻm / kiệt / "
+                    + "ngõ / ngách) within 300 m (source MAIN_ROAD), else the nearest drivable point (NEAREST_ROAD), else the "
+                    + "point itself (NONE). For citizens in an alley the officer can use it as the dispatch destination. "
+                    + "Role required: OFFICER, ADMIN")
+    @GetMapping("/road-snap")
+    public ResponseEntity<Object> roadSnap(@RequestParam("lat") double lat, @RequestParam("lng") double lng) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully snapped to the nearest road",
+                roadSnapService.snap(lat, lng));
     }
 
     @Operation(summary = "Get map data versions",

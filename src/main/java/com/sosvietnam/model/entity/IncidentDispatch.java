@@ -58,6 +58,12 @@ public class IncidentDispatch {
     @JoinColumn(name = "assigned_to")
     private UnitMember assignedTo;
 
+    // Người phụ trách hiện trường (cầm điện thoại GPS, số hiệu = mã thiết bị Traccar): người nhận ca của
+    // đơn vị đi chọn lúc xuất phát; null khi chưa xuất phát
+    @ManyToOne
+    @JoinColumn(name = "field_member_id")
+    private UnitMember fieldMember;
+
     @Column(length = 500)
     private String note;
 

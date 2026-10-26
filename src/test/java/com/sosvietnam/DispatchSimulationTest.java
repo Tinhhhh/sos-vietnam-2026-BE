@@ -4,7 +4,6 @@ import com.sosvietnam.model.entity.*;
 import com.sosvietnam.model.payload.enums.*;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.repository.*;
-import com.sosvietnam.service.DemoModeService;
 import com.sosvietnam.service.DispatchSimulationService;
 import com.sosvietnam.service.IncidentNotifier;
 import com.sosvietnam.service.implement.DispatchServiceImpl;
@@ -24,22 +23,24 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-/** "Mô phỏng di chuyển" (ca demo): công tắc demo, lượt EN_ROUTE, số hiệu; tuyến giải mã + chia bước đều. */
+/** "Mô phỏng" di chuyển (mọi ca, 25/10/2026): lượt EN_ROUTE, số hiệu; tuyến giải mã + chia bước đều. */
 class DispatchSimulationTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
     final IncidentRouteRepository routes = mock(IncidentRouteRepository.class);
     final DispatchSimulationService simulation = mock(DispatchSimulationService.class);
-    final DemoModeService demo = mock(DemoModeService.class);
+    final com.sosvietnam.service.RoutingService routing = mock(com.sosvietnam.service.RoutingService.class);
     final DispatchServiceImpl service = new DispatchServiceImpl(incidents, dispatches, routes,
             mock(RescueStationRepository.class), mock(UnitMemberRepository.class),
             new com.sosvietnam.security.CurrentOfficer(), mock(IncidentNotifier.class),
             mock(com.sosvietnam.service.OfficerService.class), mock(IncidentClaimRepository.class),
-            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches), simulation, demo);
+            mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches, mock(com.sosvietnam.service.RouteRecalcService.class)),
+            simulation, routing);
 
     Incident incident;
     IncidentDispatch trip;
@@ -60,7 +61,7 @@ class DispatchSimulationTest {
                 .level(StationLevel.WARD).latitude(10.03).longitude(105.76).build();
         goer = TestGeo.member(me);
         goer.setBadgeNumber("594288");
-        trip = IncidentDispatch.builder().id(11L).incident(incident).station(station).dispatchedBy(goer)
+        trip = IncidentDispatch.builder().id(11L).incident(incident).station(station).dispatchedBy(goer).fieldMember(goer)
                 .role(DispatchRole.PRIMARY).status(DispatchStatus.EN_ROUTE).build();
         when(incidents.findById("SOS-1")).thenReturn(Optional.of(incident));
         when(dispatches.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc("SOS-1", DispatchRole.PRIMARY))
@@ -76,18 +77,15 @@ class DispatchSimulationTest {
     }
 
     @Test
-    void refusedWhileTheDemoSwitchIsOff() {
-        when(demo.generateEnabled()).thenReturn(false);
-        assertThatThrownBy(() -> service.startSimulation("SOS-1")).isInstanceOf(SosException.class)
-                .hasMessageContaining("Ca demo");
-        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isFalse();
-        verify(simulation, never()).start(any(), any(), any());
+    void realIncident_allowed_noDemoSwitchNeeded() {
+        service.startSimulation("SOS-1");
+        verify(simulation).start(eq(11L), eq("594288"), any());
+        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isTrue();
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void demoOn_drivesTheStraightLineFromTheStation_officersOnly() {
-        when(demo.generateEnabled()).thenReturn(true);
+    void drivesTheStraightLineFromTheStation_officersOnly() {
 
         service.startSimulation("SOS-1");
 
@@ -105,16 +103,25 @@ class DispatchSimulationTest {
     }
 
     @Test
-    void demoIncident_allowedEvenWithTheSwitchOff() {
-        when(demo.generateEnabled()).thenReturn(false);
-        incident.setCitizenName("[DEMO] Người báo tin");
-        service.startSimulation("SOS-1");
+    void detour_turnsOffTheRoute_thenHeadsToTheScene() {
+        List<double[]> path = List.of(new double[]{10.03, 105.76}, new double[]{10.031, 105.765}, new double[]{10.0276, 105.7574});
+        when(routing.route(any())).thenReturn(new com.sosvietnam.service.RoutingService.RoadRoute("x", path, 900, 120));
+
+        service.detourSimulation("SOS-1");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<double[]>> via = ArgumentCaptor.forClass(List.class);
+        verify(routing).route(via.capture());
+        assertThat(via.getValue()).hasSize(3); // vị trí xe -> điểm rẽ -> hiện trường
+        assertThat(via.getValue().get(0)[0]).isEqualTo(10.03); // chưa có GPS: từ đầu tuyến (trạm)
         verify(simulation).start(eq(11L), eq("594288"), any());
+
+        when(routing.route(any())).thenReturn(null);
+        assertThatThrownBy(() -> service.detourSimulation("SOS-1")).isInstanceOf(SosException.class)
+                .hasMessageContaining("đường rẽ");
     }
 
     @Test
     void needsAnEnRouteTripAndABadge() {
-        when(demo.generateEnabled()).thenReturn(true);
         goer.setBadgeNumber(" ");
         assertThatThrownBy(() -> service.startSimulation("SOS-1")).isInstanceOf(SosException.class)
                 .hasMessageContaining("số hiệu");

@@ -190,6 +190,8 @@ public class IncidentServiceImpl implements IncidentService {
             log.warn("Could not resolve jurisdiction for {}: {}", id, e.getMessage());
         }
 
+        // Ca luôn thuộc xã chứa GPS (kể cả khi trụ sở xã khác gần hơn); trạm xuất phát gần nhất chọn lúc điều động
+
         // Phân luồng: chọn cấp nhận ca theo lực lượng và địa bàn
         LocalDateTime now = LocalDateTime.now();
         UnitLevel level = routeLevel(agency, area);
@@ -320,7 +322,8 @@ public class IncidentServiceImpl implements IncidentService {
             throw new SosException(HttpStatus.BAD_REQUEST, "Ghi lý do chuyển lực lượng (ít nhất 5 ký tự)");
         }
         LocalDateTime now = LocalDateTime.now();
-        UnitLevel level = routeLevel(target, new GeoService.Area(incident.getProvince(), incident.getWard()));
+        GeoService.Area area = new GeoService.Area(incident.getProvince(), incident.getWard());
+        UnitLevel level = routeLevel(target, area);
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.TRANSFERRED, null,
                         "Chuyển sang " + target.getLabel() + ": " + reason));
@@ -801,13 +804,13 @@ public class IncidentServiceImpl implements IncidentService {
 
     @Transactional
     @Override
-    public IncidentQueueResponse requestDispatch(String id) {
+    public IncidentQueueResponse requestDispatch(String id, UUID fieldMemberId) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        if (incidentRepository.startResolving(id, me.memberId(), LocalDateTime.now()) == 0) {
+        if (incidentRepository.startResolving(id, me.memberId(), fieldMemberId, LocalDateTime.now()) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước xác minh, tải lại hàng đợi");
         }
         log.info("🚓 [RESOLVING] Incident {} verified by {}, dispatch requested", id, me.email());
@@ -868,7 +871,9 @@ public class IncidentServiceImpl implements IncidentService {
         String note = byCitizen ? "Người báo tin yêu cầu chuyển lên cấp tỉnh" : reason.trim();
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, handlerId)
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.ESCALATED, null, note));
+        stopWardDispatch(id, now);
         Incident moved = findIncident(id);
+        moved.setFieldMemberId(null); // người phụ trách do cán bộ xã chọn, tỉnh chọn lại
         moved.setEscalationReason(byCitizen ? com.sosvietnam.model.payload.enums.EscalationReason.CITIZEN_REQUEST
                 : com.sosvietnam.model.payload.enums.EscalationReason.OFFICER_REQUEST);
         moved.setEscalationNote(byCitizen ? null : reason.trim());
@@ -877,6 +882,23 @@ public class IncidentServiceImpl implements IncidentService {
         log.info("⚡ [ESCALATION] Incident {} moved to province now (by {})", id, who);
         notifier.notify(id, IncidentEvent.INCIDENT_ESCALATED);
         return tracking(findIncident(id));
+    }
+
+    /** Ca lên tỉnh lúc xã đã chọn tuyến (RESOLVING): ngắt lượt của xã, không thì cán bộ tỉnh mở lại lượt cũ và kẹt (409 khi uỷ quyền). */
+    static final String ESCALATED_DISPATCH_REASON = "Ca đã chuyển lên cấp tỉnh";
+
+    private void stopWardDispatch(String id, LocalDateTime now) {
+        incidentDispatchRepository.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(
+                        id, DispatchRole.PRIMARY, DispatchStatus.REJECTED)
+                .filter(d -> d.getStatus() != DispatchStatus.DONE)
+                .ifPresent(d -> {
+                    // REJECTED: tỉnh bắt đầu lại từ bước 1, lượt cũ vẫn giữ để tra cứu; mô phỏng tự dừng khi hết EN_ROUTE
+                    d.setStatus(DispatchStatus.REJECTED);
+                    d.setRejectReason(ESCALATED_DISPATCH_REASON);
+                    d.setRespondedAt(now);
+                    d.setUpdatedAt(now);
+                    incidentDispatchRepository.save(d);
+                });
     }
 
     @Override
