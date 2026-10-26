@@ -589,11 +589,9 @@ public class DispatchServiceImpl implements DispatchService {
                 throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
             }
             requireAtScene(incident, d);
+            // dân chỉ xác nhận, ca chỉ đóng khi cán bộ kết thúc (cần cả hai bên, trừ kết thúc bắt buộc)
             incident.setCitizenConfirmedAt(now);
-            // một bên bấm "Đã xử lý xong" là đủ: dân xác nhận thì đóng ca luôn, cán bộ vẫn lập văn bản sau được
-            close(incident, d, ReportResult.RESOLVED, CITIZEN_CLOSED_SUMMARY, null, null, fieldOrHandler(incident, d), now);
-            log.info("🤝 [CONFIRM DONE] Incident {} closed by the citizen", incidentId);
-            return DispatchPlanResponse.of(d, currentRoute(d));
+            who = "citizen";
         } else {
             OfficerPrincipal me = currentOfficer();
             if (!isOnSite(me, incident, d)) {
@@ -636,8 +634,13 @@ public class DispatchServiceImpl implements DispatchService {
             if (!holder && !IncidentAccess.isAssignee(me, d)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới lập văn bản được");
             }
-            // một bên xác nhận là đủ (25/10/2026): cán bộ bấm "Đã xử lý xong" + điền kết quả là đóng ca
             requireAtScene(incident, d);
+            // kết thúc ca cần cả hai bên: dân đã xác nhận, cán bộ bấm kết thúc = xác nhận của cán bộ.
+            // Dân không xác nhận được (mất liên lạc...) thì người giữ ca dùng kết thúc bắt buộc.
+            if (incident.getCitizenConfirmedAt() == null) {
+                throw new SosException(HttpStatus.CONFLICT,
+                        "Người báo tin chưa xác nhận sự việc đã được xử lý xong. Không liên lạc được thì dùng Kết thúc ca (bắt buộc)");
+            }
             if (request.getResult() != ReportResult.RESOLVED && request.getResult() != ReportResult.FALSE_ALARM) {
                 throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong hoặc Báo khống");
             }
@@ -655,13 +658,6 @@ public class DispatchServiceImpl implements DispatchService {
         close(incident, d, result, trim(request.getSummary()), trim(request.getForces()), trim(request.getNote()),
                 me.memberId(), now);
         log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) by {}", incidentId, result, me.email());
-    }
-
-    static final String CITIZEN_CLOSED_SUMMARY = "Người báo tin xác nhận sự việc đã được xử lý xong.";
-
-    /** Người viết văn bản tự động khi dân đóng ca: người phụ trách hiện trường, không có thì người giữ ca. */
-    private static UUID fieldOrHandler(Incident incident, IncidentDispatch d) {
-        return d != null && d.getFieldMember() != null ? d.getFieldMember().getId() : incident.getHandlerId();
     }
 
     /** Đóng ca: văn bản kết thúc, ca RESOLVED, lượt DONE, đóng lượt giữ ca, gỡ thẻ khỏi hàng đợi. */

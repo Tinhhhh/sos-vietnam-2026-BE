@@ -182,11 +182,11 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - FE: ô "Người phụ trách hiện trường" ở bước 1 cửa sổ điều động (đơn vị tự đi) và trên thẻ uỷ quyền xã sau "Chấp nhận"; "Đổi người" ở bước 3 / thẻ xã khi đang di chuyển (`features/incident-dispatch/components/field-officer-picker.jsx`).
 - Đã test: 185 unit test; e2e 46/46 (8081/5199): CA xã tự đi (giao diện), CA tỉnh tự đi, tỉnh uỷ quyền xã Cái Khế (thẻ xã, mobile 375), PCCC tỉnh, CSGT tỉnh.
 
-## Điểm xe dừng + Đã đến / Đã xử lý xong 1 bên (25/10/2026) — ĐỔI API
+## Điểm xe dừng + Đã đến 1 bên (25/10/2026) — ĐỔI API
 - `GET /api/v1/geo/road-snap?lat&lng` (OFFICER/ADMIN, `RoadSnapService`): OSRM nearest `number=50`, chọn điểm gần nhất trên đường có tên, không phải hẻm / kiệt / ngõ / ngách trong 300 m (`MAIN_ROAD`), không có thì điểm gần nhất xe vào được (`NEAREST_ROAD`), lỗi thì `NONE`; cache 30' theo toạ độ 1e-4, ~0,2 s. Không dùng Overpass (máy chủ công cộng quá tải / treo, kể cả từ VPS); Google cũng không có API "đường lớn". `app.road-snap.osrm-url|radius-m|timeout-seconds`.
 - `DestinationSource.ROAD_SNAP` (cột varchar, không cần migration). `GET /dispatch-plan` thêm `sos_point` (vị trí GPS người báo) để bản đồ vẽ chấm cam + nét đứt tới điểm xe dừng.
 - `POST /dispatch-plan/arrive` "Đã đến": một bên là đủ: đơn vị đi xử lý, người phụ trách hiện trường, hoặc DÂN (header `X-SOS-Access-Token`, SecurityConfig permitAll). Lần 2 -> 409.
-- "Đã xử lý xong" 1 bên: dân `POST /confirm` (token) -> ca RESOLVED ngay, văn bản kết thúc tự ghi "Người báo tin xác nhận..." (người tạo = người phụ trách hiện trường, không có thì người giữ ca); cán bộ `POST /finish` không còn chờ dân xác nhận (ghi luôn officer_confirmed). Đã bỏ `skip_confirm` / "Kết thúc ngay (test)" (trường vẫn nhận để FE cũ không 400).
+- "Đã xử lý xong" CẦN CẢ HAI BÊN (sửa 26/10/2026, bản 25/10 cho dân tự đóng ca là sai): dân `POST /confirm` (token) chỉ ghi `citizen_confirmed_at` + `INCIDENT_UPDATED`, ca vẫn RESOLVING; cán bộ `POST /finish` (không force) bắt buộc dân đã xác nhận (chưa -> 409), bấm finish = xác nhận của cán bộ (ghi officer_confirmed). Dân không liên lạc được -> người giữ ca dùng `force=true` (kết thúc bắt buộc). Đã bỏ `skip_confirm` / "Kết thúc ngay (test)" (trường vẫn nhận để FE cũ không 400).
 - Đã test: 190 unit test (`RoadSnapServiceTest`, `DispatchPlanTest` mới); e2e 5 luồng 23/24 (bước còn lại do script đoán 401 trong khi BE trả 403 cho gọi ẩn danh, vẫn chặn đúng).
 
 ## Chọn người lúc Yêu cầu điều động + tự tính lại tuyến (25/10/2026 tối) — ĐỔI API

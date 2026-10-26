@@ -389,30 +389,32 @@ class DispatchPlanTest {
     }
 
     @Test
-    void finish_byTheOfficerAlone_noCitizenConfirmationNeeded() {
+    void finish_needsTheCitizenConfirmationFirst_409() {
         IncidentDispatch d = atScene();
+        assertThatThrownBy(() -> service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối")))
+                .isInstanceOf(SosException.class).hasMessageContaining("chưa xác nhận");
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVING);
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        verify(reports, never()).save(any());
+    }
+
+    @Test
+    void citizenConfirm_onlyRecords_thenTheOfficerFinishes() {
+        IncidentDispatch d = atScene();
+        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
+        service.confirm("SOS-1", "tok");
+        assertThat(incident.getCitizenConfirmedAt()).isNotNull();
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVING);
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        verify(reports, never()).save(any());
+        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
+
         service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối"));
         assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
         assertThat(incident.getOfficerConfirmedAt()).isNotNull();
         assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
         verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.RESOLVED));
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
-    }
-
-    @Test
-    void citizenConfirm_closesTheIncidentAtOnce() {
-        IncidentDispatch d = atScene();
-        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
-        service.confirm("SOS-1", "tok");
-        assertThat(incident.getCitizenConfirmedAt()).isNotNull();
-        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
-        assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
-        verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.RESOLVED
-                && rep.getSummary().contains("Người báo tin xác nhận")));
-        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
-        // ca đã đóng: cán bộ không kết thúc lại được
-        assertThatThrownBy(() -> service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối")))
-                .isInstanceOf(SosException.class);
     }
 
     @Test
