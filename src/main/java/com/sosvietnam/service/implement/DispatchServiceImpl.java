@@ -213,30 +213,31 @@ public class DispatchServiceImpl implements DispatchService {
             throw new SosException(HttpStatus.BAD_REQUEST, "Trạm chưa có toạ độ");
         }
 
-        // Đơn vị mình tự đi: chọn luôn người phụ trách hiện trường; uỷ quyền thì đơn vị nhận chọn lúc xuất phát
-        UnitMember field = null;
-        if (!request.isDelegate()) {
-            // chọn lúc "Yêu cầu điều động" (lưu trên ca), đổi được ở bước chọn trạm
-            UUID fieldId = request.getFieldMemberId() != null ? request.getFieldMemberId() : incident.getFieldMemberId();
-            if (fieldId == null) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Chưa chọn người phụ trách hiện trường");
-            }
-            field = requireFieldMember(me, fieldId, incidentId);
-            incident.setFieldMemberId(field.getId());
+        // Đơn vị mình tự đi: bước 2 "Điều động" chọn người phụ trách hiện trường rồi mới xuất phát (/depart).
+        // Đang trên đường mà đổi điểm xuất phát / điểm đến thì vẫn đi tiếp với người cũ.
+        IncidentDispatch current = currentPrimary(incidentId).orElse(null);
+        boolean keepTrip = !request.isDelegate() && current != null && current.getAssignedTo() == null
+                && current.getStatus() == DispatchStatus.EN_ROUTE && current.getFieldMember() != null;
+        UnitMember field = keepTrip ? current.getFieldMember() : null;
+        if (!request.isDelegate() && request.getFieldMemberId() != null) {
+            field = requireFieldMember(me, request.getFieldMemberId(), incidentId);
         }
+        if (field != null) incident.setFieldMemberId(field.getId());
 
         LocalDateTime now = LocalDateTime.now();
-        DispatchStatus status = request.isDelegate() ? DispatchStatus.PENDING_ACCEPT : DispatchStatus.EN_ROUTE;
-        IncidentDispatch dispatch = currentPrimary(incidentId).orElseGet(() -> IncidentDispatch.builder()
+        DispatchStatus status = request.isDelegate() ? DispatchStatus.PENDING_ACCEPT
+                : field != null ? DispatchStatus.EN_ROUTE : DispatchStatus.ACCEPTED;
+        LocalDateTime departedAt = keepTrip ? current.getDepartedAt() : now;
+        IncidentDispatch dispatch = current != null ? current : IncidentDispatch.builder()
                 .incident(incident)
                 .role(DispatchRole.PRIMARY)
-                .build());
+                .build();
         dispatch.setStation(station);
         dispatch.setStatus(status);
         dispatch.setDispatchedBy(unitMemberRepository.getReferenceById(me.memberId()));
         dispatch.setUnitLevel(me.level());
         dispatch.setDispatchedAt(now);
-        dispatch.setDepartedAt(status == DispatchStatus.EN_ROUTE ? now : null);
+        dispatch.setDepartedAt(status == DispatchStatus.EN_ROUTE ? departedAt : null);
         dispatch.setArrivedAt(null);
         dispatch.setAssignedTo(null); // bước uỷ quyền chọn cán bộ nhận sau
         dispatch.setFieldMember(field);
@@ -341,13 +342,27 @@ public class DispatchServiceImpl implements DispatchService {
         }
         LocalDateTime now = LocalDateTime.now();
         d.setAssignedTo(target);
-        d.setRespondedAt(null);
         d.setRejectReason(null);
         d.setUpdatedAt(now);
+        if (appointsFieldOfficer(st)) {
+            // PCCC / CSGT: người được chỉ định cũng là người phụ trách hiện trường (cầm GPS), đi luôn không chờ nhận
+            d.setFieldMember(requireFieldReady(target, incidentId));
+            d.setStatus(DispatchStatus.EN_ROUTE);
+            d.setRespondedAt(now);
+            d.setDepartedAt(now);
+        } else {
+            d.setRespondedAt(null);
+        }
         IncidentDispatch saved = incidentDispatchRepository.save(d);
-        log.info("📨 [DELEGATE] Incident {} -> {} of {} ({})", incidentId, target.getFullName(), unit.getEmail(), st.getName());
+        log.info("📨 [DELEGATE] Incident {} -> {} of {} ({}) {}", incidentId, target.getFullName(), unit.getEmail(),
+                st.getName(), saved.getStatus());
         notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
         return DispatchPlanResponse.of(saved, currentRoute(saved));
+    }
+
+    /** PCCC / CSGT: chỉ định một người của đơn vị xuất phát là đi luôn (không có bước Chấp nhận). */
+    private static boolean appointsFieldOfficer(RescueStation station) {
+        return station.getAgencyType() == AgencyType.FIRE || station.getAgencyType() == AgencyType.CSGT;
     }
 
     @Transactional
@@ -387,6 +402,29 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse depart(String incidentId, UUID fieldMemberId) {
         OfficerPrincipal me = currentOfficer();
+        IncidentDispatch current = latestPrimary(incidentId);
+        if (current != null && current.getAssignedTo() == null) {
+            // đơn vị của người giữ ca tự đi: bước 2 "Điều động" -> chọn người phụ trách -> "Lập tức điều động"
+            Incident incident = findIncident(incidentId);
+            if (!me.memberId().equals(incident.getHandlerId())) {
+                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới điều động được");
+            }
+            if (incident.getStatus() != IncidentStatus.RESOLVING || current.getStatus() != DispatchStatus.ACCEPTED) {
+                throw new SosException(HttpStatus.CONFLICT, "Trạng thái điều động đã thay đổi, tải lại cửa sổ");
+            }
+            LocalDateTime now = LocalDateTime.now();
+            current.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
+            current.setStatus(DispatchStatus.EN_ROUTE);
+            current.setDepartedAt(now);
+            current.setUpdatedAt(now);
+            incident.setFieldMemberId(fieldMemberId);
+            incidentRepository.save(incident);
+            IncidentDispatch saved = incidentDispatchRepository.save(current);
+            log.info("🚓 [DEPART] Incident {} by {} (own unit), field {}", incidentId, me.email(),
+                    saved.getFieldMember().getFullName());
+            notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
+            return planView(incident, saved, true);
+        }
         return respond(incidentId, DispatchStatus.ACCEPTED, d -> {
             d.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
             d.setStatus(DispatchStatus.EN_ROUTE);
@@ -479,6 +517,11 @@ public class DispatchServiceImpl implements DispatchService {
         if (!m.isActive() || !m.getAccount().getId().equals(me.unitAccountId())) {
             throw new SosException(HttpStatus.BAD_REQUEST, "Người phụ trách phải là cán bộ của đơn vị bạn");
         }
+        return requireFieldReady(m, incidentId);
+    }
+
+    /** Có số hiệu (mã thiết bị GPS) và không đang phụ trách lượt khác của ca còn mở. */
+    private UnitMember requireFieldReady(UnitMember m, String incidentId) {
         if (blank(m.getBadgeNumber(), 1)) {
             throw new SosException(HttpStatus.BAD_REQUEST, m.displayName() + " chưa có số hiệu (mã thiết bị GPS)");
         }

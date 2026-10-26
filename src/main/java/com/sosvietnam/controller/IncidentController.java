@@ -139,16 +139,16 @@ public class IncidentController {
     }
 
     @Operation(summary = "Officer: verification done, request dispatch of forces (VERIFYING -> RESOLVING)",
-            description = "Body { field_member_id }: the field officer of my unit (GET dispatch-plan/field-candidates; "
-                    + "badge number, not on another open trip, online not required), used when my unit goes. "
-                    + "Only the officer holding the incident. 409 if it is no longer VERIFYING. Role required: OFFICER, ADMIN")
+            description = "Optional body { field_member_id }: the field officer of my unit, normally picked later in "
+                    + "step 2 of the dispatch window. Only the officer holding the incident. 409 if it is no longer VERIFYING. Role required: OFFICER, ADMIN")
     @PostMapping("/{id}/request-dispatch")
     public ResponseEntity<Object> requestDispatch(@PathVariable("id") String id,
-                                                  @RequestBody @jakarta.validation.Valid
+                                                  @RequestBody(required = false) @jakarta.validation.Valid
                                                   com.sosvietnam.model.payload.request.RequestDispatchRequest request) {
-        dispatchService.checkFieldMember(id, request.getFieldMemberId());
+        java.util.UUID fieldMemberId = request == null ? null : request.getFieldMemberId();
+        if (fieldMemberId != null) dispatchService.checkFieldMember(id, fieldMemberId);
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã gửi yêu cầu điều động lực lượng",
-                incidentService.requestDispatch(id, request.getFieldMemberId()));
+                incidentService.requestDispatch(id, fieldMemberId));
     }
 
     @Operation(summary = "Move a ward incident up to the province right now",

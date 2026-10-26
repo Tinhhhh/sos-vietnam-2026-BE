@@ -281,7 +281,7 @@ class DispatchPlanTest {
     }
 
     @Test
-    void requestDispatch_fieldMemberChosen_isUsedWhenMyUnitGoes() {
+    void ownUnit_step2_holderPicksTheFieldOfficer_thenSetsOff() {
         incident.setStatus(IncidentStatus.VERIFYING);
         service.checkFieldMember("SOS-1", me.getId()); // cán bộ đơn vị mình, có số hiệu: hợp lệ
         incident.setHandlerId(UUID.randomUUID());
@@ -296,7 +296,36 @@ class DispatchPlanTest {
         when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
         DispatchPlanRequest noPick = request(false);
         noPick.setFieldMemberId(null);
-        assertThat(service.savePlan("SOS-1", noPick).getTracker().getMemberId()).isEqualTo(me.getId());
+        DispatchPlanResponse step2 = service.savePlan("SOS-1", noPick);
+        assertThat(step2.getStatus()).isEqualTo(DispatchStatus.ACCEPTED); // chờ chọn người, không tự đi
+
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.ACCEPTED);
+        DispatchPlanResponse off = service.depart("SOS-1", me.getId());
+        assertThat(off.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
+        assertThat(off.getTracker().getMemberId()).isEqualTo(me.getId());
+        assertThat(d.getDepartedAt()).isNotNull();
+
+        // người khác (không giữ ca) không điều động thay được
+        d.setStatus(DispatchStatus.ACCEPTED);
+        TestGeo.signIn(wardOfficer("khac2@sos.vn"));
+        assertThatThrownBy(() -> service.depart("SOS-1", me.getId())).isInstanceOf(SosException.class)
+                .hasMessageContaining("đang giữ ca");
+    }
+
+    @Test
+    void fireOrCsgt_appointedOfficerIsTheFieldOfficer_andSetsOffAtOnce() {
+        station.setAgencyType(AgencyType.FIRE);
+        station.setWard(TestGeo.ward("Phường Tân An"));
+        IncidentDispatch d = pending();
+        Account team = wardOfficer("doi.pccc@sos.vn");
+        team.setAgencyType(AgencyType.FIRE);
+
+        DispatchPlanResponse plan = service.delegate("SOS-1", team.getId());
+        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE); // không chờ Chấp nhận
+        assertThat(d.getAssignedTo().getId()).isEqualTo(team.getId());
+        assertThat(d.getFieldMember().getId()).isEqualTo(team.getId()); // người được chỉ định = người cầm GPS
+        assertThat(d.getDepartedAt()).isNotNull();
     }
 
     @Test
@@ -444,10 +473,12 @@ class DispatchPlanTest {
                 .thenReturn(Optional.empty());
         when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
 
+        // chưa chọn người: bước 2 "Điều động" chờ chọn người phụ trách (ACCEPTED), chưa xuất phát
         DispatchPlanRequest none = request(false);
         none.setFieldMemberId(null);
-        assertThatThrownBy(() -> service.savePlan("SOS-1", none))
-                .isInstanceOf(SosException.class).hasMessageContaining("Chưa chọn người phụ trách");
+        DispatchPlanResponse waiting = service.savePlan("SOS-1", none);
+        assertThat(waiting.getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
+        assertThat(waiting.getTracker()).isNull();
 
         DispatchPlanRequest stranger = request(false);
         stranger.setFieldMemberId(wardOfficer("other.unit@sos.vn").getId()); // tài khoản đơn vị khác

@@ -92,7 +92,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Incident i SET i.status = com.sosvietnam.model.payload.enums.IncidentStatus.RESOLVING,
-               i.fieldMemberId = :fieldMemberId, i.updatedAt = :now
+               i.fieldMemberId = COALESCE(:fieldMemberId, i.fieldMemberId), i.updatedAt = :now
         WHERE i.id = :id AND i.handlerId = :handlerId
           AND i.status = com.sosvietnam.model.payload.enums.IncidentStatus.VERIFYING
         """)

@@ -190,12 +190,18 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Đã test: 190 unit test (`RoadSnapServiceTest`, `DispatchPlanTest` mới); e2e 5 luồng 23/24 (bước còn lại do script đoán 401 trong khi BE trả 403 cho gọi ẩn danh, vẫn chặn đúng).
 
 ## Chọn người lúc Yêu cầu điều động + tự tính lại tuyến (25/10/2026 tối) — ĐỔI API
-- `POST /incidents/{id}/request-dispatch` BẮT BUỘC body `{ field_member_id }` (cán bộ đơn vị người giữ ca, cùng điều kiện như `field-candidates`; kiểm ở `DispatchService.checkFieldMember`). V15 `incidents.field_member_id`; queue trả `field_member_id`. PUT `/dispatch-plan` khi `delegate=false` không gửi `field_member_id` thì dùng người đã chọn trên ca. Lượt uỷ quyền: xã vẫn tự chọn người của xã lúc `/depart`.
-- FE: cửa sổ "Xác nhận điều động lực lượng" có ô chọn người, chưa chọn thì nút mờ, "Huỷ" = quay ra (ca vẫn VERIFYING); bước chọn trạm hiện sẵn người đã chọn (thu gọn, "Đổi người").
+- ~~request-dispatch bắt buộc chọn người~~ (đổi lại 26/10, xem mục dưới). V15 `incidents.field_member_id` vẫn giữ (body `{ field_member_id }` tuỳ chọn, queue trả `field_member_id`).
 - Tự tính lại tuyến (`RouteRecalcService`, gọi từ `DispatchTrackingServiceImpl.accept`, chạy nền): lệch tuyến hiện hành > `app.routing.off-route-m=50` ở 2 điểm liên tiếp, cách lần trước >= `app.routing.recalc-cooldown-seconds=20` -> OSRM (`RoutingService`, `app.routing.osrm-url`) từ vị trí xe tới điểm đến, tuyến cũ `superseded_at`, tuyến mới `origin_source=VEHICLE` (enum mới, cột varchar), `INCIDENT_UPDATED`. Tuyến ước lượng không polyline thì coi đường thẳng là tuyến. `route.origin_source` có trong GET `/dispatch-plan`; FE lấy tuyến theo lần hỏi lại 5 giây, ghi "· đã tính lại đường", giờ tới tính từ lúc tính lại.
 - CHỈ DEMO `POST /dispatch-plan/simulate/detour` (nút "↪ Rẽ đường khác"): từ chấm xe hiện tại đi thẳng 150 m, rẽ phải 350 m rồi mới về hiện trường (OSRM), máy chủ chỉ đường lỗi -> 503.
 - "Đã đến": dừng mô phỏng, `/arrive` + GET `/dispatch-plan` trả `last_position` cả khi ARRIVED / DONE (điểm cuối trong RAM); FE giữ chấm xe + "Đã đến · vị trí cuối HH:mm".
 - Đã test: 198 unit test (`RouteRecalcTest` mới); e2e 39/39 (8081/5199): CA xã (giao diện: chọn người, Huỷ, thu gọn, mô phỏng, rẽ -> tính lại thật qua OSRM, Đã đến giữ chấm), CA tỉnh, PCCC, CSGT, tỉnh uỷ quyền xã (xã rẽ -> tỉnh thấy tuyến mới).
+
+## Luồng điều động theo lực lượng (26/10/2026) — ĐỔI API
+- `POST /incidents/{id}/request-dispatch`: body tuỳ chọn (không cần chọn người). FE bỏ ô chọn người khỏi hộp "Xác nhận điều động".
+- Đơn vị của người giữ ca tự đi (CA xã, trụ sở CA tỉnh / PCCC / CSGT): PUT `/dispatch-plan` `delegate=false` không có `field_member_id` -> lượt `ACCEPTED` (bước 2 "Điều động", chưa đi); `POST /dispatch-plan/depart { member_id }` giờ người giữ ca gọi được khi lượt không có `assigned_to` -> EN_ROUTE. Đang EN_ROUTE mà đổi tuyến (PUT lại) thì giữ nguyên chuyến + người. FE: bước "Chọn tuyến" -> "Điều động" (nút "Chỉ định người phụ trách" mở popup chọn, "Lập tức điều động" mờ tới khi chọn) -> "Theo dõi" -> "Kết thúc"; công an xã giờ cũng 4 bước.
+- Tỉnh uỷ quyền công an xã: như cũ (bước 2 "Uỷ quyền" liên hệ cán bộ xã, xã Chấp nhận rồi tự chọn người phụ trách lúc xuất phát).
+- PCCC / CSGT chọn đội cấp xã: `POST /delegate { member_id }` = chỉ định người đó vừa được uỷ quyền vừa là người phụ trách hiện trường, lượt EN_ROUTE ngay (không Chấp nhận; cần số hiệu, không đang đi lượt khác). FE nút "Chỉ định & điều động". Dữ liệu trạm Cần Thơ: PCCC chỉ 1 đội xã (Thới An Đông), CSGT không có đội xã.
+- Đã test: 199 unit test; e2e 33 bước qua (CA xã giao diện đủ luồng + rẽ đường + Đã đến; CA tỉnh / PCCC / CSGT trụ sở tỉnh; PCCC đội xã API + giao diện; tỉnh uỷ quyền xã).
 
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
