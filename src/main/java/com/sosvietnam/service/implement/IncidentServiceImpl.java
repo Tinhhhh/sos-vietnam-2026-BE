@@ -190,6 +190,10 @@ public class IncidentServiceImpl implements IncidentService {
             log.warn("Could not resolve jurisdiction for {}: {}", id, e.getMessage());
         }
 
+        // Lực lượng nhận ca ở cấp xã (Công an): giao cho xã có trạm gần GPS nhất (phường / xã như nhau,
+        // một xã nhiều trụ sở / cơ sở), không nhất thiết là xã chứa điểm
+        area = nearestUnitArea(agency, area, request.getLatitude(), request.getLongitude());
+
         // Phân luồng: chọn cấp nhận ca theo lực lượng và địa bàn
         LocalDateTime now = LocalDateTime.now();
         UnitLevel level = routeLevel(agency, area);
@@ -320,7 +324,11 @@ public class IncidentServiceImpl implements IncidentService {
             throw new SosException(HttpStatus.BAD_REQUEST, "Ghi lý do chuyển lực lượng (ít nhất 5 ký tự)");
         }
         LocalDateTime now = LocalDateTime.now();
-        UnitLevel level = routeLevel(target, new GeoService.Area(incident.getProvince(), incident.getWard()));
+        // sang Công an thì giao cho xã có trạm gần hiện trường nhất (như lúc tạo ca)
+        GeoService.Area area = nearestUnitArea(target, new GeoService.Area(incident.getProvince(), incident.getWard()),
+                incident.getLatitude(), incident.getLongitude());
+        incident.setWard(area.ward());
+        UnitLevel level = routeLevel(target, area);
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.TRANSFERRED, null,
                         "Chuyển sang " + target.getLabel() + ": " + reason));
@@ -347,6 +355,18 @@ public class IncidentServiceImpl implements IncidentService {
         notifier.notifyRemovedFor(id, previous);
         notifier.notify(id, IncidentEvent.INCIDENT_NEW);
         return queueView(id, me);
+    }
+
+    /** Xã sở hữu trạm cấp xã gần nhất, chỉ với lực lượng nhận ca ở cấp xã; lỗi tra cứu thì giữ xã chứa điểm. */
+    private GeoService.Area nearestUnitArea(AgencyType agency, GeoService.Area area, Double lat, Double lng) {
+        if (agency.getIntakeLevel() != UnitLevel.WARD || lat == null || lng == null) return area;
+        try {
+            GeoService.Area nearest = geoService.nearestStationArea(agency, area, lat, lng);
+            return nearest == null ? area : nearest;
+        } catch (Exception e) {
+            log.warn("Could not find the nearest {} station: {}", agency, e.getMessage());
+            return area;
+        }
     }
 
     /**

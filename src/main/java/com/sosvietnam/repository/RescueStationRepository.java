@@ -16,6 +16,20 @@ public interface RescueStationRepository extends JpaRepository<RescueStation, Lo
 
     List<RescueStation> findByProvince_Code(String provinceCode);
 
+    /**
+     * Xã của trạm cấp xã (phường / xã như nhau) gần điểm nhất, cùng lực lượng, trong tỉnh: dùng để giao ca công an
+     * cho đơn vị có trạm gần hiện trường nhất (một xã có thể có nhiều trụ sở / cơ sở). null nếu tỉnh không có trạm.
+     */
+    @Query(value = """
+        SELECT s.ward_id FROM rescue_stations s
+        WHERE s.agency_type = :agencyType AND s.level = 'WARD' AND s.province_id = :provinceId
+          AND s.ward_id IS NOT NULL AND s.location IS NOT NULL
+        ORDER BY s.location <-> ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)
+        LIMIT 1
+        """, nativeQuery = true)
+    Long findNearestWardStationWardId(@Param("agencyType") String agencyType, @Param("provinceId") String provinceId,
+                                      @Param("lat") double lat, @Param("lng") double lng);
+
     @Query(value = """
         SELECT * FROM rescue_stations s
         WHERE (:agencyType IS NULL OR s.agency_type = :agencyType)

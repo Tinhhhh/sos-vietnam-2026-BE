@@ -33,6 +33,12 @@ public interface GeoService {
      * @param province tỉnh chứa điểm, null = ngoài ranh giới dữ liệu
      * @param ward     xã chứa điểm, null = trong tỉnh nhưng không khớp xã nào
      */
+    /**
+     * Địa bàn giao ca cho lực lượng nhận ca ở cấp xã (Công an): xã sở hữu trạm cấp xã gần điểm nhất trong tỉnh
+     * (phường hay xã như nhau, một xã có thể có nhiều cơ sở). Không có trạm thì giữ nguyên area (xã chứa điểm).
+     */
+    Area nearestStationArea(com.sosvietnam.model.payload.enums.AgencyType agency, Area area, double lat, double lng);
+
     record Area(Province province, Ward ward) {
         public static final Area NONE = new Area(null, null);
     }

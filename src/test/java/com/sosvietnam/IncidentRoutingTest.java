@@ -110,6 +110,25 @@ class IncidentRoutingTest {
     }
 
     @Test
+    void police_goesToTheWardOwningTheNearestStation_notTheWardContainingThePoint() {
+        // GPS nằm ở Phường Cái Khế nhưng trạm công an cấp xã gần nhất là của Phường Tân An (đang có người trực)
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
+        when(geo.nearestStationArea(eq(AgencyType.POLICE), any(), anyDouble(), anyDouble()))
+                .thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.TAN_AN));
+        Incident inc = create(EmergencyType.POLICE);
+        assertThat(inc.getWard()).isEqualTo(TestGeo.TAN_AN);
+        assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.WARD);
+    }
+
+    @Test
+    void fire_keepsTheWardContainingThePoint() {
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
+        Incident inc = create(EmergencyType.FIRE);
+        assertThat(inc.getWard()).isEqualTo(TestGeo.CAI_KHE);
+        verify(geo, never()).nearestStationArea(any(), any(), anyDouble(), anyDouble());
+    }
+
+    @Test
     void police_wardWithOfficersButNoneOnline_goesStraightToProvince() {
         when(notifier.onlineOfficers()).thenReturn(List.of(OfficerPrincipal.of(TestGeo.member(
                 officerAccount("someone.else@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Cái Khế")))));
