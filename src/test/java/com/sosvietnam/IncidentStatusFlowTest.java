@@ -51,7 +51,8 @@ class IncidentStatusFlowTest {
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
+    final com.sosvietnam.repository.IncidentDispatchRepository dispatchRepo = mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
             mock(GeoService.class), mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
             mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
@@ -181,6 +182,28 @@ class IncidentStatusFlowTest {
         assertThat(incident.getEscalationNote()).isEqualTo("Vượt khả năng cấp xã");
         assertThat(incident.getEscalatedBy()).isEqualTo(officer.getId());
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_ESCALATED);
+    }
+
+    @Test
+    void officerEscalates_afterPickingTheRoute_stopsTheWardDispatch() {
+        // xã đã chọn tuyến (đơn vị mình tự đi, ACCEPTED) rồi mới chuyển lên tỉnh: tỉnh phải chọn lại từ bước 1,
+        // không thì mở lại lượt cũ của xã và "Lập tức liên hệ" bị 409
+        loginAsOfficer();
+        incident.setStatus(IncidentStatus.RESOLVING);
+        incident.setFieldMemberId(UUID.randomUUID());
+        var d = com.sosvietnam.model.entity.IncidentDispatch.builder()
+                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED).build();
+        when(dispatchRepo.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc("SOS-1",
+                com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY,
+                com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED)).thenReturn(Optional.of(d));
+        when(incidentRepo.escalateHeld(eq("SOS-1"), eq(officer.getId()), eq(IncidentStatus.HELD), any())).thenReturn(1);
+
+        service.escalateNow("SOS-1", null, "Vượt khả năng cấp xã");
+
+        assertThat(d.getStatus()).isEqualTo(com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED);
+        assertThat(d.getRejectReason()).isEqualTo("Ca đã chuyển lên cấp tỉnh");
+        assertThat(incident.getFieldMemberId()).isNull();
+        verify(dispatchRepo).save(d);
     }
 
     @Test

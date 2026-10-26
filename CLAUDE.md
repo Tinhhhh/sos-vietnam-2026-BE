@@ -202,6 +202,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - Tỉnh uỷ quyền công an xã: như cũ (bước 2 "Uỷ quyền" liên hệ cán bộ xã, xã Chấp nhận rồi tự chọn người phụ trách lúc xuất phát).
 - PCCC / CSGT chọn đội cấp xã: `POST /delegate { member_id }` = chỉ định người đó vừa được uỷ quyền vừa là người phụ trách hiện trường, lượt EN_ROUTE ngay (không Chấp nhận; cần số hiệu, không đang đi lượt khác). FE nút "Chỉ định & điều động". Dữ liệu trạm Cần Thơ: PCCC chỉ 1 đội xã (Thới An Đông), CSGT không có đội xã.
 - Đã test: 199 unit test; e2e 33 bước qua (CA xã giao diện đủ luồng + rẽ đường + Đã đến; CA tỉnh / PCCC / CSGT trụ sở tỉnh; PCCC đội xã API + giao diện; tỉnh uỷ quyền xã).
+- Sửa 26/10 tối: xã đã chọn tuyến (RESOLVING) rồi mới chuyển lên tỉnh thì `escalateNow` ngắt lượt PRIMARY của xã (REJECTED, `reject_reason` "Ca đã chuyển lên cấp tỉnh", `incidents.field_member_id` = null). Trước đó cán bộ tỉnh mở lại lượt cũ (ACCEPTED) ở bước "Uỷ quyền" và "Lập tức liên hệ" bị 409 "Đơn vị đã nhận ca...". FE: lượt REJECTED không có `assigned_to` hiện "Lượt điều động trước (...) đã dừng: ..." thay vì "đã từ chối". Ca kẹt từ trước (vd SOS-20261026-246BC5): bấm "Đổi điểm xuất phát / điểm đến" rồi chọn lại trạm là thoát. 200 unit test, e2e 8/8.
 
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.

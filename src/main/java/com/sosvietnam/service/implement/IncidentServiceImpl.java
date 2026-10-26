@@ -868,7 +868,9 @@ public class IncidentServiceImpl implements IncidentService {
         String note = byCitizen ? "Người báo tin yêu cầu chuyển lên cấp tỉnh" : reason.trim();
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, handlerId)
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.ESCALATED, null, note));
+        stopWardDispatch(id, now);
         Incident moved = findIncident(id);
+        moved.setFieldMemberId(null); // người phụ trách do cán bộ xã chọn, tỉnh chọn lại
         moved.setEscalationReason(byCitizen ? com.sosvietnam.model.payload.enums.EscalationReason.CITIZEN_REQUEST
                 : com.sosvietnam.model.payload.enums.EscalationReason.OFFICER_REQUEST);
         moved.setEscalationNote(byCitizen ? null : reason.trim());
@@ -877,6 +879,23 @@ public class IncidentServiceImpl implements IncidentService {
         log.info("⚡ [ESCALATION] Incident {} moved to province now (by {})", id, who);
         notifier.notify(id, IncidentEvent.INCIDENT_ESCALATED);
         return tracking(findIncident(id));
+    }
+
+    /** Ca lên tỉnh lúc xã đã chọn tuyến (RESOLVING): ngắt lượt của xã, không thì cán bộ tỉnh mở lại lượt cũ và kẹt (409 khi uỷ quyền). */
+    static final String ESCALATED_DISPATCH_REASON = "Ca đã chuyển lên cấp tỉnh";
+
+    private void stopWardDispatch(String id, LocalDateTime now) {
+        incidentDispatchRepository.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(
+                        id, DispatchRole.PRIMARY, DispatchStatus.REJECTED)
+                .filter(d -> d.getStatus() != DispatchStatus.DONE)
+                .ifPresent(d -> {
+                    // REJECTED: tỉnh bắt đầu lại từ bước 1, lượt cũ vẫn giữ để tra cứu; mô phỏng tự dừng khi hết EN_ROUTE
+                    d.setStatus(DispatchStatus.REJECTED);
+                    d.setRejectReason(ESCALATED_DISPATCH_REASON);
+                    d.setRespondedAt(now);
+                    d.setUpdatedAt(now);
+                    incidentDispatchRepository.save(d);
+                });
     }
 
     @Override
