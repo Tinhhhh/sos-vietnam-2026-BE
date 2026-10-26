@@ -110,14 +110,11 @@ class IncidentRoutingTest {
     }
 
     @Test
-    void police_goesToTheWardOwningTheNearestStation_notTheWardContainingThePoint() {
-        // GPS nằm ở Phường Cái Khế nhưng trạm công an cấp xã gần nhất là của Phường Tân An (đang có người trực)
+    void police_staysInTheWardContainingThePoint_evenIfAnotherWardsStationIsNearer() {
+        // GPS nằm ở Phường Cái Khế: ca thuộc Cái Khế, trạm gần nhất (có thể của xã khác) chỉ chọn lúc điều động
         when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
-        when(geo.nearestStationArea(eq(AgencyType.POLICE), any(), anyDouble(), anyDouble()))
-                .thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.TAN_AN));
         Incident inc = create(EmergencyType.POLICE);
-        assertThat(inc.getWard()).isEqualTo(TestGeo.TAN_AN);
-        assertThat(inc.getRoutedLevel()).isEqualTo(UnitLevel.WARD);
+        assertThat(inc.getWard()).isEqualTo(TestGeo.CAI_KHE);
     }
 
     @Test
@@ -125,7 +122,6 @@ class IncidentRoutingTest {
         when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
         Incident inc = create(EmergencyType.FIRE);
         assertThat(inc.getWard()).isEqualTo(TestGeo.CAI_KHE);
-        verify(geo, never()).nearestStationArea(any(), any(), anyDouble(), anyDouble());
     }
 
     @Test

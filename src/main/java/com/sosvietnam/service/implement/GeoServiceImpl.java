@@ -81,14 +81,6 @@ public class GeoServiceImpl implements GeoService {
     }
 
     @Override
-    public Area nearestStationArea(com.sosvietnam.model.payload.enums.AgencyType agency, Area area, double lat, double lng) {
-        if (agency == null || area == null || area.province() == null) return area;
-        Long wardId = rescueStationRepository.findNearestWardStationWardId(agency.name(), area.province().getCode(), lat, lng);
-        if (wardId == null || (area.ward() != null && wardId.equals(area.ward().getId()))) return area;
-        return wardRepository.findById(wardId).map(w -> new Area(area.province(), w)).orElse(area);
-    }
-
-    @Override
     public Area resolveArea(double lat, double lng) {
         Point point = geometryFactory.createPoint(new Coordinate(lng, lat));
         point.setSRID(4326);
