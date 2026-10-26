@@ -389,13 +389,43 @@ class DispatchPlanTest {
     }
 
     @Test
-    void finish_needsTheCitizenConfirmationFirst_409() {
+    void officerFirst_thenTheCitizen_closes() {
         IncidentDispatch d = atScene();
-        assertThatThrownBy(() -> service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối")))
-                .isInstanceOf(SosException.class).hasMessageContaining("chưa xác nhận");
+        incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
+        // cán bộ lập văn bản "Đã xử lý xong" trước: ghi văn bản + xác nhận, ca chưa đóng
+        assertThat(service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối"))).isFalse();
+        assertThat(incident.getOfficerConfirmedAt()).isNotNull();
         assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVING);
         assertThat(d.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
-        verify(reports, never()).save(any());
+        org.mockito.ArgumentCaptor<IncidentReport> draft = org.mockito.ArgumentCaptor.forClass(IncidentReport.class);
+        verify(reports).save(draft.capture());
+
+        // dân xác nhận sau -> đủ hai bên, đóng ca bằng văn bản của cán bộ
+        when(reports.findById("SOS-1")).thenReturn(Optional.of(draft.getValue()));
+        service.confirm("SOS-1", "tok");
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
+        verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_REMOVED);
+    }
+
+    @Test
+    void falseAlarm_closesAtOnce_withoutTheCitizen() {
+        IncidentDispatch d = atScene();
+        assertThat(service.finish("SOS-1", report(ReportResult.FALSE_ALARM, "Không có sự việc như báo tin"))).isTrue();
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+        assertThat(incident.getCitizenConfirmedAt()).isNull();
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);
+        verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.FALSE_ALARM));
+    }
+
+    @Test
+    void testCase_closesAtOnce_anyStep_noTextNeeded() {
+        IncidentDispatch d = pending(); // chưa tới nơi vẫn đóng được
+        var test = com.sosvietnam.model.payload.request.FinishIncidentRequest.builder().result(ReportResult.TEST).build();
+        assertThat(service.finish("SOS-1", test)).isTrue();
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
+        verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.TEST
+                && "Ca test".equals(rep.getSummary())));
     }
 
     @Test
@@ -409,7 +439,7 @@ class DispatchPlanTest {
         verify(reports, never()).save(any());
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
 
-        service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối"));
+        assertThat(service.finish("SOS-1", report(ReportResult.RESOLVED, "Đã giải tán nhóm gây rối"))).isTrue();
         assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
         assertThat(incident.getOfficerConfirmedAt()).isNotNull();
         assertThat(d.getStatus()).isEqualTo(DispatchStatus.DONE);

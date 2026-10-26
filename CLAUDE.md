@@ -186,7 +186,12 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - `GET /api/v1/geo/road-snap?lat&lng` (OFFICER/ADMIN, `RoadSnapService`): OSRM nearest `number=50`, chọn điểm gần nhất trên đường có tên, không phải hẻm / kiệt / ngõ / ngách trong 300 m (`MAIN_ROAD`), không có thì điểm gần nhất xe vào được (`NEAREST_ROAD`), lỗi thì `NONE`; cache 30' theo toạ độ 1e-4, ~0,2 s. Không dùng Overpass (máy chủ công cộng quá tải / treo, kể cả từ VPS); Google cũng không có API "đường lớn". `app.road-snap.osrm-url|radius-m|timeout-seconds`.
 - `DestinationSource.ROAD_SNAP` (cột varchar, không cần migration). `GET /dispatch-plan` thêm `sos_point` (vị trí GPS người báo) để bản đồ vẽ chấm cam + nét đứt tới điểm xe dừng.
 - `POST /dispatch-plan/arrive` "Đã đến": một bên là đủ: đơn vị đi xử lý, người phụ trách hiện trường, hoặc DÂN (header `X-SOS-Access-Token`, SecurityConfig permitAll). Lần 2 -> 409.
-- "Đã xử lý xong" CẦN CẢ HAI BÊN (sửa 26/10/2026, bản 25/10 cho dân tự đóng ca là sai): dân `POST /confirm` (token) chỉ ghi `citizen_confirmed_at` + `INCIDENT_UPDATED`, ca vẫn RESOLVING; cán bộ `POST /finish` (không force) bắt buộc dân đã xác nhận (chưa -> 409), bấm finish = xác nhận của cán bộ (ghi officer_confirmed). Dân không liên lạc được -> người giữ ca dùng `force=true` (kết thúc bắt buộc). Đã bỏ `skip_confirm` / "Kết thúc ngay (test)" (trường vẫn nhận để FE cũ không 400).
+- Kết thúc ca (đổi lại 26/10/2026 tối):
+  - "Đã xử lý xong" (`result=RESOLVED`) cần CẢ HAI BÊN, THỨ TỰ NÀO CŨNG ĐƯỢC: cán bộ `POST /finish` ghi văn bản (`incident_reports`, PK incident_id) + `officer_confirmed_*`; dân `POST /confirm` (token) ghi `citizen_confirmed_at`. Bên nào xác nhận sau thì ca đóng (RESOLVED, dispatch DONE, `INCIDENT_REMOVED`) bằng văn bản của cán bộ. `/finish` trả message "Đã ghi xác nhận của cán bộ..." khi còn chờ dân, "Đã kết thúc ca" khi đóng.
+  - `FALSE_ALARM` (báo khống): đóng ngay, không cần dân (vẫn cần tới nơi + mô tả >= 10).
+  - `ReportResult.TEST` "Ca test": đóng ngay ở mọi bước điều động (RESOLVING), không cần mô tả (summary = "Ca test"). FE nút "Đây là ca test – kết thúc ngay".
+  - Dân không liên lạc được ca thật -> `force=true` (kết thúc bắt buộc) như cũ. Đã bỏ `skip_confirm` (trường vẫn nhận để FE cũ không 400).
+  - FE `FinishPanel`: 2 dấu tích (người báo tin / cán bộ), nút "Đã xử lý xong / Báo khống" mở văn bản, cán bộ xác nhận trước thì hiện "Đang chờ người báo tin xác nhận"; màn dân báo "Ca đã kết thúc" nếu cán bộ đã xác nhận. 204 unit test, e2e 9/9.
 - Đã test: 190 unit test (`RoadSnapServiceTest`, `DispatchPlanTest` mới); e2e 5 luồng 23/24 (bước còn lại do script đoán 401 trong khi BE trả 403 cho gọi ẩn danh, vẫn chặn đúng).
 
 ## Chọn người lúc Yêu cầu điều động + tự tính lại tuyến (25/10/2026 tối) — ĐỔI API

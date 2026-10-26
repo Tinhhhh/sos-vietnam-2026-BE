@@ -84,15 +84,15 @@ public interface DispatchService {
     DispatchPlanResponse detourSimulation(String incidentId);
 
     /**
-     * Bước 4 "Đã xử lý xong" (lực lượng đã ở hiện trường). Một bên bấm là đủ: người dân (citizenAccessToken) bấm thì
-     * ca đóng luôn (RESOLVED, văn bản kết thúc ghi "người báo tin xác nhận"); cán bộ (JWT) chỉ ghi nhận xác nhận,
-     * đóng ca bằng finish (điền kết quả).
+     * Bước 4 "Đã xử lý xong" (lực lượng đã ở hiện trường): ghi xác nhận của người dân (citizenAccessToken) hoặc cán bộ
+     * (JWT). Thứ tự nào cũng được; cán bộ đã lập văn bản "Đã xử lý xong" (finish) rồi thì xác nhận này đóng ca.
      */
     DispatchPlanResponse confirm(String incidentId, String citizenAccessToken);
 
     /**
-     * Văn bản kết thúc, ca -> RESOLVED. Bình thường: cả hai bên đã xác nhận, người giữ ca hoặc cán bộ được giao lập.
-     * force: chỉ người giữ ca, khi lực lượng đã điều động (EN_ROUTE / ARRIVED), không chờ được xác nhận.
+     * Văn bản kết thúc (người giữ ca hoặc cán bộ được giao). RESOLVED: ghi văn bản + xác nhận của cán bộ, đóng ca khi
+     * dân cũng đã xác nhận. FALSE_ALARM / TEST: đóng ngay. force: chỉ người giữ ca, khi lực lượng đã điều động.
+     * @return true nếu ca đã đóng (RESOLVED), false nếu đang chờ người dân xác nhận
      */
-    void finish(String incidentId, FinishIncidentRequest request);
+    boolean finish(String incidentId, FinishIncidentRequest request);
 }

@@ -605,13 +605,27 @@ public class DispatchServiceImpl implements DispatchService {
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);
         log.info("🤝 [CONFIRM DONE] Incident {} by {}", incidentId, who);
+        // bên kia (cán bộ đã lập văn bản "Đã xử lý xong") đã xác nhận trước -> đủ hai bên, đóng ca
+        if (closeIfBothConfirmed(incident, d, now)) {
+            return DispatchPlanResponse.of(d, currentRoute(d));
+        }
         notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
         return DispatchPlanResponse.of(d, currentRoute(d));
     }
 
+    /** Cả dân và cán bộ đã xác nhận, cán bộ đã lập văn bản: đóng ca bằng văn bản đó. */
+    private boolean closeIfBothConfirmed(Incident incident, IncidentDispatch d, LocalDateTime now) {
+        if (incident.getCitizenConfirmedAt() == null || incident.getOfficerConfirmedAt() == null) return false;
+        IncidentReport draft = incidentReportRepository.findById(incident.getId()).orElse(null);
+        if (draft == null) return false;
+        close(incident, d, draft, now);
+        log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) after both sides confirmed", incident.getId(), draft.getResult());
+        return true;
+    }
+
     @Transactional
     @Override
-    public void finish(String incidentId, FinishIncidentRequest request) {
+    public boolean finish(String incidentId, FinishIncidentRequest request) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
@@ -634,45 +648,57 @@ public class DispatchServiceImpl implements DispatchService {
             if (!holder && !IncidentAccess.isAssignee(me, d)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới lập văn bản được");
             }
-            requireAtScene(incident, d);
-            // kết thúc ca cần cả hai bên: dân đã xác nhận, cán bộ bấm kết thúc = xác nhận của cán bộ.
-            // Dân không xác nhận được (mất liên lạc...) thì người giữ ca dùng kết thúc bắt buộc.
-            if (incident.getCitizenConfirmedAt() == null) {
-                throw new SosException(HttpStatus.CONFLICT,
-                        "Người báo tin chưa xác nhận sự việc đã được xử lý xong. Không liên lạc được thì dùng Kết thúc ca (bắt buộc)");
-            }
-            if (request.getResult() != ReportResult.RESOLVED && request.getResult() != ReportResult.FALSE_ALARM) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong hoặc Báo khống");
-            }
-            if (blank(request.getSummary(), 10)) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng mô tả kết quả xử lý (ít nhất 10 ký tự)");
-            }
             result = request.getResult();
+            if (result == ReportResult.TEST) {
+                // ca thử nghiệm: đóng ngay ở bất kỳ bước điều động nào, không cần mô tả
+                if (incident.getStatus() != IncidentStatus.RESOLVING) {
+                    throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước điều động");
+                }
+            } else {
+                requireAtScene(incident, d);
+                if (result != ReportResult.RESOLVED && result != ReportResult.FALSE_ALARM) {
+                    throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong, Báo khống hoặc Ca test");
+                }
+                if (blank(request.getSummary(), 10)) {
+                    throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng mô tả kết quả xử lý (ít nhất 10 ký tự)");
+                }
+            }
         }
 
         LocalDateTime now = LocalDateTime.now();
-        if (result != ReportResult.FORCED && incident.getOfficerConfirmedAt() == null) {
+        IncidentReport report = IncidentReport.builder()
+                .incidentId(incidentId)
+                .result(result)
+                .summary(result == ReportResult.TEST && blank(request.getSummary(), 1) ? "Ca test" : trim(request.getSummary()))
+                .forces(trim(request.getForces()))
+                .note(trim(request.getNote()))
+                .createdBy(me.memberId())
+                .createdAt(now)
+                .build();
+        if (result != ReportResult.FORCED) {
             incident.setOfficerConfirmedAt(now);
             incident.setOfficerConfirmedBy(me.memberId());
         }
-        close(incident, d, result, trim(request.getSummary()), trim(request.getForces()), trim(request.getNote()),
-                me.memberId(), now);
+        // "Đã xử lý xong" cần cả hai bên (thứ tự nào cũng được): dân chưa xác nhận thì ghi văn bản + xác nhận của
+        // cán bộ, ca đóng khi dân xác nhận. Báo khống / ca test / kết thúc bắt buộc đóng ngay.
+        if (result == ReportResult.RESOLVED && incident.getCitizenConfirmedAt() == null) {
+            incidentReportRepository.save(report);
+            incident.setUpdatedAt(now);
+            incidentRepository.save(incident);
+            log.info("📝 [FINISH] Incident {} officer confirmed by {}, waiting for the citizen", incidentId, me.email());
+            notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
+            return false;
+        }
+        close(incident, d, report, now);
         log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) by {}", incidentId, result, me.email());
+        return true;
     }
 
     /** Đóng ca: văn bản kết thúc, ca RESOLVED, lượt DONE, đóng lượt giữ ca, gỡ thẻ khỏi hàng đợi. */
-    private void close(Incident incident, IncidentDispatch d, ReportResult result, String summary, String forces,
-                       String note, UUID createdBy, LocalDateTime now) {
+    private void close(Incident incident, IncidentDispatch d, IncidentReport report, LocalDateTime now) {
         String incidentId = incident.getId();
-        incidentReportRepository.save(IncidentReport.builder()
-                .incidentId(incidentId)
-                .result(result)
-                .summary(summary)
-                .forces(forces)
-                .note(note)
-                .createdBy(createdBy)
-                .createdAt(now)
-                .build());
+        ReportResult result = report.getResult();
+        incidentReportRepository.save(report);
         incident.setStatus(IncidentStatus.RESOLVED);
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);

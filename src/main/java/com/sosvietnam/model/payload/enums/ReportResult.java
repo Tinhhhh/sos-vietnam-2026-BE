@@ -7,7 +7,9 @@ import lombok.Getter;
 public enum ReportResult {
     RESOLVED("Đã xử lý xong"),
     FALSE_ALARM("Báo khống"),
-    FORCED("Kết thúc bắt buộc");
+    FORCED("Kết thúc bắt buộc"),
+    /** Ca thử nghiệm: cán bộ đóng ngay, không cần mô tả */
+    TEST("Ca test");
 
     private final String label;
 

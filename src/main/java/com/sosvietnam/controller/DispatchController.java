@@ -138,8 +138,9 @@ public class DispatchController {
 
     @Operation(summary = "Step 4: \"Đã xử lý xong\" confirmation of one side",
             description = "The citizen (header X-SOS-Access-Token) or the unit on site (JWT) records its confirmation "
-                    + "(dispatch ARRIVED, else 409). It does not close the incident: the officer closes it with /finish "
-                    + "once the citizen has confirmed. Role required: OFFICER, ADMIN or citizen token")
+                    + "(dispatch ARRIVED, else 409). Either side may confirm first; when the officer has already "
+                    + "filed \"Đã xử lý xong\" with /finish, the citizen's confirmation closes the incident. "
+                    + "Role required: OFFICER, ADMIN or citizen token")
     @PostMapping("/confirm")
     public ResponseEntity<Object> confirm(@PathVariable String id,
                                           @RequestHeader(value = IncidentController.CITIZEN_TOKEN_HEADER, required = false) String citizenToken) {
@@ -147,12 +148,16 @@ public class DispatchController {
     }
 
     @Operation(summary = "Close the incident with its report (-> RESOLVED)",
-            description = "Normal: force on site (ARRIVED) and the citizen has confirmed (else 409), result "
-                    + "RESOLVED / FALSE_ALARM, summary >= 10 characters; it also counts as the officer's confirmation. "
-                    + "force=true: the officer holding it ends it at any step, note = reason (>= 5). Role required: OFFICER, ADMIN")
+            description = "result RESOLVED (on site, summary >= 10): records the report + the officer's confirmation; "
+                    + "the incident closes now if the citizen already confirmed, else when the citizen confirms. "
+                    + "FALSE_ALARM (on site, summary >= 10): closes at once. TEST: closes at once at any dispatch step, "
+                    + "no text needed. force=true: holder ends it, note = reason (>= 5). Role required: OFFICER, ADMIN")
     @PostMapping("/finish")
     public ResponseEntity<Object> finish(@PathVariable String id, @RequestBody @Valid FinishIncidentRequest request) {
-        dispatchService.finish(id, request);
+        if (!dispatchService.finish(id, request)) {
+            return ResponseBuilder.returnMessage(HttpStatus.OK,
+                    "Đã ghi xác nhận của cán bộ, ca kết thúc khi người báo tin xác nhận");
+        }
         return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã kết thúc ca");
     }
 }
