@@ -36,6 +36,10 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
     /** dispatch id -> điểm mới nhất. */
     private final Map<Long, DispatchPlanResponse.LivePosition> positions = new ConcurrentHashMap<>();
 
+    // SMS "sắp tới" cho người báo tin. Field không bắt buộc: test dựng tay không phải đổi constructor.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.DispatchSmsService dispatchSmsService;
+
     @Transactional(readOnly = true)
     @Override
     public boolean accept(TraccarPositionRequest request) {
@@ -68,6 +72,7 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
         positions.values().removeIf(old -> old.getReceivedAt().isBefore(now.minus(KEEP)));
         // lệch tuyến thì tính lại tuyến từ vị trí xe (chạy nền)
         routeRecalcService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
+        if (dispatchSmsService != null) dispatchSmsService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
         return true;
     }
 
@@ -92,6 +97,7 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
                 .source(SOURCE_BROWSER)
                 .build());
         routeRecalcService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
+        if (dispatchSmsService != null) dispatchSmsService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
         return true;
     }
 

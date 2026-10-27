@@ -42,6 +42,10 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class DispatchServiceImpl implements DispatchService {
 
+    // SMS "ca đã kết thúc" cho lực lượng đã đi. Field không bắt buộc (như phoneLockService).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.DispatchSmsService dispatchSmsService;
+
     // Chống báo tin giả (khoá SĐT, V20). Field không bắt buộc để test dựng tay service không phải đổi constructor.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.sosvietnam.service.PhoneLockService phoneLockService;
@@ -968,6 +972,25 @@ public class DispatchServiceImpl implements DispatchService {
                     });
         }
         notifier.notify(incidentId, IncidentEvent.INCIDENT_REMOVED);
+        if (dispatchSmsService != null && d != null && d.getStatus() != DispatchStatus.REJECTED) {
+            Long dispatchId = d.getId();
+            // sau commit: tin chạy nền đọc lượt đã DONE
+            afterCommitOrNow(() -> dispatchSmsService.onClosed(incidentId, dispatchId, result.getLabel()));
+        }
+    }
+
+    private static void afterCommitOrNow(Runnable r) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            r.run();
+                        }
+                    });
+        } else {
+            r.run();
+        }
     }
 
     /** Đơn vị đang có mặt xử lý: cán bộ được giao, hoặc người giữ ca khi không uỷ quyền cho ai. */

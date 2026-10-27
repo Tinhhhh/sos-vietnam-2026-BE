@@ -105,6 +105,10 @@ public class IncidentDispatch {
     @Column(name = "arrival_distance_m")
     private Integer arrivalDistanceM;
 
+    // SMS "lực lượng sắp tới" đã gửi cho người báo tin (V21), 1 lần / lượt
+    @Column(name = "approach_sms_at")
+    private LocalDateTime approachSmsAt;
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 

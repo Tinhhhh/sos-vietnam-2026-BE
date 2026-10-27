@@ -276,6 +276,12 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - `PhoneLockService` inject bằng field `@Autowired(required = false)` ở IncidentServiceImpl / IncidentNotifierImpl / DispatchServiceImpl (test dựng tay không phải đổi constructor).
 - FE: "Báo khống" là nút thứ 2 trong hộp "Huỷ ca" (cùng ô lý do, nói rõ luật khoá; trên thẻ không còn nút riêng, 27/10), cờ "⚠ IP: N ca báo khống" trên thẻ, dòng "Cảnh báo IP" ở Chi tiết ca; form SOS hiện câu 403. 238 unit test (`PhoneLockServiceTest`), e2e 20/20.
 
+## SMS "sắp tới" + "ca đã kết thúc" (27/10/2026)
+- `DispatchSmsService` (chạy nền trên `incidentTaskScheduler`, cổng SMS chưa cấu hình = bỏ qua, ca demo không gửi, tin không dấu không link):
+  - Người báo tin: mỗi điểm GPS của lượt EN_ROUTE (Traccar + trang link, gọi từ `DispatchTrackingServiceImpl`) -> cách điểm đến của tuyến hiện hành <= `app.sms.approach-distance-m=50` lần đầu -> "Luc luong chuc nang sap toi noi... chu y dien thoai va xac nhan... Ma ca"; 1 lần / lượt nhờ V21 `incident_dispatches.approach_sms_at` (gửi lỗi thì không ghi, điểm sau thử lại).
+  - Lực lượng đã đi: `DispatchServiceImpl.close` (ca RESOLVED: xử lý xong, báo khống, ca test, kết thúc bắt buộc) -> sau commit gửi "Ca XXXX-XXXX da duoc xac nhan ket thuc (kết quả)" cho người đi hiện trường + cán bộ được uỷ quyền (khác số).
+- Inject field `@Autowired(required = false)` ở DispatchTrackingServiceImpl / DispatchServiceImpl (test dựng tay không đổi constructor). V21 ĐÃ chạy DB local, CHƯA lên VPS. 243 unit test (`DispatchSmsTest`), e2e 8/8 với cổng SMS giả.
+
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
 2. ~~Dashboard "Thống Kê"~~ (xong 15/10/2026, CHƯA commit): `GET /api/v1/dashboard/summary?from&to` (ADMIN thêm `province`, `agency`), phạm vi giống quyền xem hàng đợi. SQL gộp nhóm trong `repository/DashboardRepository` (NamedParameterJdbcTemplate; so tỉnh/xã bằng unaccent + bỏ "TP."; đổi giờ server → giờ VN qua `:serverZone`). `fake_alarm_count`/`resolved_count` = null tới khi có module đóng ca. `by_day` có `accepted` + `within_sla_rate` (biểu đồ tỷ lệ nhận 15' theo ngày, admin). `by_agency` (cấp tỉnh + toàn quốc) đếm MỌI lực lượng trong địa bàn cho biểu đồ tròn "Tỷ trọng" (tỉnh: Lực lượng / Xã-phường; admin: Tỉnh / Lực lượng; cấp xã không có). Không làm `/dashboard/escalating` (FE lấy từ `/incidents/queue`). FE: trang `/officer/statistics`, mở bằng nút "Thống kê" trên bản đồ (bỏ thanh thống kê cũ). Xuất Excel làm sau.
