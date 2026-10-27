@@ -23,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DispatchTrackingServiceImpl implements DispatchTrackingService {
 
     private static final double KNOT_TO_KMH = 1.852;
+    /** App Traccar gửi điểm trong khoảng này thì bỏ điểm trình duyệt (app chính xác hơn). */
+    private static final Duration APP_PRIORITY = Duration.ofSeconds(20);
+    static final String SOURCE_APP = "TRACCAR";
+    static final String SOURCE_BROWSER = "BROWSER";
     /** Điểm cũ hơn mức này bị dọn khỏi RAM (lượt đã xong từ lâu). */
     private static final Duration KEEP = Duration.ofHours(2);
 
@@ -59,10 +63,35 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
                 .accuracyM(p.getAccuracy())
                 .fixTime(parseTime(p.getFixTime()))
                 .receivedAt(now)
+                .source(SOURCE_APP)
                 .build());
         positions.values().removeIf(old -> old.getReceivedAt().isBefore(now.minus(KEEP)));
         // lệch tuyến thì tính lại tuyến từ vị trí xe (chạy nền)
         routeRecalcService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
+        return true;
+    }
+
+    @Override
+    public boolean acceptBrowser(Long dispatchId, com.sosvietnam.model.payload.request.FieldPositionRequest point) {
+        if (dispatchId == null || point == null || !validCoordinates(point.getLatitude(), point.getLongitude())) {
+            return false;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        DispatchPlanResponse.LivePosition last = positions.get(dispatchId);
+        if (last != null && SOURCE_APP.equals(last.getSource()) && last.getReceivedAt().isAfter(now.minus(APP_PRIORITY))) {
+            return false; // app đang gửi: giữ điểm của app
+        }
+        positions.put(dispatchId, DispatchPlanResponse.LivePosition.builder()
+                .latitude(point.getLatitude())
+                .longitude(point.getLongitude())
+                .speedKmh(point.getSpeedKmh() == null ? null : Math.round(point.getSpeedKmh() * 10) / 10.0)
+                .heading(point.getHeading())
+                .accuracyM(point.getAccuracyM())
+                .fixTime(now)
+                .receivedAt(now)
+                .source(SOURCE_BROWSER)
+                .build());
+        routeRecalcService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
         return true;
     }
 

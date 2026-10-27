@@ -33,6 +33,10 @@ public class DispatchPlanResponse {
     @JsonProperty("last_position")
     private LivePosition lastPosition;
 
+    /** Chỉ cho cán bộ: lúc cấp link người phụ trách hiện trường gần nhất (null = chưa cấp / đã huỷ). */
+    @JsonProperty("field_link_issued_at")
+    private OffsetDateTime fieldLinkIssuedAt;
+
     /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
     @JsonProperty("simulation")
     private Simulation simulation;
@@ -163,6 +167,9 @@ public class DispatchPlanResponse {
         /** Lúc BE nhận điểm: FE tính "mất tín hiệu" theo mốc này. */
         @JsonProperty("received_at")
         private OffsetDateTime receivedAt;
+        /** TRACCAR (app trên điện thoại, ưu tiên) | BROWSER (trang link người phụ trách) */
+        @JsonProperty("source")
+        private String source;
     }
 
     @Data

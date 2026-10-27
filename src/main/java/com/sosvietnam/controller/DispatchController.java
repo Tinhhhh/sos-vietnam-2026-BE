@@ -93,6 +93,15 @@ public class DispatchController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Field officer candidates", dispatchService.getFieldCandidates(id));
     }
 
+    @Operation(summary = "Issue (or re-issue) the field officer's link /f/{token}",
+            description = "Trip EN_ROUTE / ARRIVED with a field officer. The token is returned once; re-issuing voids the "
+                    + "old link (also voided when the field officer changes). Holder or assigned officer. "
+                    + "Role required: OFFICER, ADMIN")
+    @PostMapping("/field-link")
+    public ResponseEntity<Object> issueFieldLink(@PathVariable String id) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Field link issued", dispatchService.issueFieldLink(id));
+    }
+
     @Operation(summary = "Change the field officer while the force is on the way (EN_ROUTE)",
             description = "Same rules as choosing it; a running simulation stops. Role required: OFFICER, ADMIN")
     @PutMapping("/field-member")

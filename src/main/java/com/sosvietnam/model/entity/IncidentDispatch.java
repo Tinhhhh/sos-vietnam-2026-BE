@@ -64,6 +64,13 @@ public class IncidentDispatch {
     @JoinColumn(name = "field_member_id")
     private UnitMember fieldMember;
 
+    // Link của người phụ trách hiện trường (/f/{token}): chỉ lưu SHA-256; null = chưa cấp / đã huỷ (đổi người)
+    @Column(name = "field_token_hash", length = 64)
+    private String fieldTokenHash;
+
+    @Column(name = "field_token_issued_at")
+    private LocalDateTime fieldTokenIssuedAt;
+
     @Column(length = 500)
     private String note;
 

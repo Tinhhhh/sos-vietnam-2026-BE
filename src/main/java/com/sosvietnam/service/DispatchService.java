@@ -59,6 +59,21 @@ public interface DispatchService {
      */
     void checkFieldMember(String incidentId, UUID fieldMemberId);
 
+    /**
+     * Cấp (hoặc cấp lại) link cho người phụ trách hiện trường của lượt chủ trì đang đi / đã tới: mã mới, mã cũ hết
+     * hiệu lực. Người giữ ca hoặc cán bộ được giao. Mã chỉ trả 1 lần.
+     */
+    com.sosvietnam.model.payload.response.FieldLinkResponse issueFieldLink(String incidentId);
+
+    /** Trang link: ca + kế hoạch điều động (mã sai 401, ca đóng 410). */
+    com.sosvietnam.model.payload.response.FieldPlanResponse getFieldPlan(String fieldToken);
+
+    /** Trang link: một điểm GPS từ trình duyệt (bị bỏ nếu app Traccar đang gửi). */
+    boolean fieldPosition(String fieldToken, com.sosvietnam.model.payload.request.FieldPositionRequest point);
+
+    /** Trang link: "Đã đến". */
+    DispatchPlanResponse fieldArrive(String fieldToken);
+
     /** Đổi người phụ trách hiện trường khi lực lượng đang trên đường (cùng người được chọn như trên). */
     DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);
 

@@ -161,6 +161,8 @@ public class DispatchServiceImpl implements DispatchService {
             plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
         }
         if (officer) {
+            plan.setFieldLinkIssuedAt(latest.getFieldTokenIssuedAt() == null ? null
+                    : latest.getFieldTokenIssuedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime());
             plan.setSimulation(DispatchPlanResponse.Simulation.builder()
                     .available(enRoute && badgeOfTracker(latest) != null)
                     .running(dispatchSimulationService.running(latest.getId()))
@@ -486,6 +488,8 @@ public class DispatchServiceImpl implements DispatchService {
             throw new SosException(HttpStatus.CONFLICT, "Chỉ đổi người phụ trách được khi lực lượng đang trên đường");
         }
         d.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
+        d.setFieldTokenHash(null); // link cũ là của người cũ
+        d.setFieldTokenIssuedAt(null);
         d.setUpdatedAt(LocalDateTime.now());
         if (d.getAssignedTo() == null) {
             incident.setFieldMemberId(fieldMemberId);
@@ -562,6 +566,10 @@ public class DispatchServiceImpl implements DispatchService {
             }
             who = me.email();
         }
+        return markArrived(incident, d, who, !"citizen".equals(who));
+    }
+
+    private DispatchPlanResponse markArrived(Incident incident, IncidentDispatch d, String who, boolean officerView) {
         if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa ở bước đang di chuyển");
         }
@@ -571,9 +579,100 @@ public class DispatchServiceImpl implements DispatchService {
         d.setUpdatedAt(now);
         IncidentDispatch saved = incidentDispatchRepository.save(d);
         dispatchSimulationService.stop(saved.getId()); // xe giả dừng ở điểm cuối, chấm xe vẫn hiện ở đó
-        log.info("📍 [ARRIVED] Incident {} by {}", incidentId, who);
-        notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
-        return planView(incident, saved, !"citizen".equals(who));
+        log.info("📍 [ARRIVED] Incident {} by {}", incident.getId(), who);
+        notifier.notify(incident.getId(), IncidentEvent.INCIDENT_UPDATED);
+        return planView(incident, saved, officerView);
+    }
+
+    // ------------------------------------------------------------------ link người phụ trách hiện trường
+
+    @Transactional
+    @Override
+    public com.sosvietnam.model.payload.response.FieldLinkResponse issueFieldLink(String incidentId) {
+        OfficerPrincipal me = currentOfficer();
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = latestPrimary(incidentId);
+        boolean allowed = me.memberId().equals(incident.getHandlerId()) || IncidentAccess.isAssignee(me, d);
+        if (!allowed) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới cấp link được");
+        }
+        if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getFieldMember() == null
+                || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ARRIVED)) {
+            throw new SosException(HttpStatus.CONFLICT, "Chỉ cấp link khi lực lượng đã xuất phát và có người phụ trách");
+        }
+        byte[] bytes = new byte[24];
+        FIELD_TOKEN_RANDOM.nextBytes(bytes);
+        String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        LocalDateTime now = LocalDateTime.now();
+        d.setFieldTokenHash(CitizenTokens.sha256(token));
+        d.setFieldTokenIssuedAt(now);
+        d.setUpdatedAt(now);
+        incidentDispatchRepository.save(d);
+        log.info("🔗 [FIELD LINK] Incident {} link for {} issued by {}", incidentId, d.getFieldMember().getFullName(), me.email());
+        UnitMember m = d.getFieldMember();
+        return com.sosvietnam.model.payload.response.FieldLinkResponse.builder()
+                .token(token)
+                .path("/f/" + token)
+                .issuedAt(now.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime())
+                .fieldMember(DispatchPlanResponse.Officer.builder().memberId(m.getId()).fullName(m.displayName())
+                        .phone(m.getPhone()).badgeNumber(m.getBadgeNumber()).build())
+                .build();
+    }
+
+    private static final java.security.SecureRandom FIELD_TOKEN_RANDOM = new java.security.SecureRandom();
+
+    /** Lượt của mã link: sai / đã cấp lại / đổi người -> 401; ca đã đóng -> 410. */
+    private IncidentDispatch requireFieldDispatch(String fieldToken) {
+        if (fieldToken == null || fieldToken.isBlank()) {
+            throw new SosException(HttpStatus.UNAUTHORIZED, "Thiếu mã link người phụ trách hiện trường");
+        }
+        IncidentDispatch d = incidentDispatchRepository.findByFieldTokenHash(CitizenTokens.sha256(fieldToken.trim()))
+                .orElseThrow(() -> new SosException(HttpStatus.UNAUTHORIZED,
+                        "Link không còn hiệu lực (đã cấp lại hoặc đổi người phụ trách)"));
+        if (!IncidentStatus.ACTIVE.contains(d.getIncident().getStatus()) || d.getStatus() == DispatchStatus.REJECTED) {
+            throw new SosException(HttpStatus.GONE, "Ca đã kết thúc");
+        }
+        return d;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public com.sosvietnam.model.payload.response.FieldPlanResponse getFieldPlan(String fieldToken) {
+        IncidentDispatch d = requireFieldDispatch(fieldToken);
+        Incident i = d.getIncident();
+        String handlerName = i.getHandlerId() == null ? null
+                : unitMemberRepository.findById(i.getHandlerId()).map(UnitMember::displayName).orElse(null);
+        String address = java.util.stream.Stream.of(i.getAddress(), i.wardName(), i.provinceName())
+                .filter(s -> s != null && !s.isBlank()).collect(java.util.stream.Collectors.joining(", "));
+        return com.sosvietnam.model.payload.response.FieldPlanResponse.builder()
+                .incidentId(i.getId())
+                .incidentStatus(i.getStatus())
+                .emergencyType(i.getEmergencyType())
+                .emergencyTypeLabel(i.getEmergencyType() == null ? null : i.getEmergencyType().getLabel())
+                .incidentTag(i.getIncidentTag())
+                .description(i.getDescription())
+                .citizenName(i.getCitizenName())
+                .citizenPhone(i.getPhone())
+                .address(address)
+                .createdAt(i.getCreatedAt() == null ? null : i.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime())
+                .handlerName(handlerName)
+                .plan(planView(i, d, false))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public boolean fieldPosition(String fieldToken, com.sosvietnam.model.payload.request.FieldPositionRequest point) {
+        IncidentDispatch d = requireFieldDispatch(fieldToken);
+        if (d.getStatus() != DispatchStatus.EN_ROUTE) return false; // chỉ theo dõi khi đang trên đường
+        return dispatchTrackingService.acceptBrowser(d.getId(), point);
+    }
+
+    @Transactional
+    @Override
+    public DispatchPlanResponse fieldArrive(String fieldToken) {
+        IncidentDispatch d = requireFieldDispatch(fieldToken);
+        return markArrived(d.getIncident(), d, "field link", false);
     }
 
     @Transactional

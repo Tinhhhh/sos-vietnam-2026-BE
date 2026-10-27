@@ -2,6 +2,8 @@ package com.sosvietnam.security;
 
 import com.sosvietnam.model.entity.AccessToken;
 import com.sosvietnam.model.entity.Incident;
+import com.sosvietnam.model.entity.IncidentDispatch;
+import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.repository.IncidentRepository;
 import com.sosvietnam.util.CitizenTokens;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +34,12 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     public static final String CITIZEN_INCIDENT_HEADER = "X-SOS-Incident-Id";
     public static final String CITIZEN_TOKEN_HEADER = "X-SOS-Access-Token";
     public static final String CALLS_SEND_DESTINATION = "/app/calls";
+    public static final String FIELD_TOKEN_HEADER = "X-SOS-Field-Token";
 
     private final JwtTokenProvider jwtTokenProvider;
     private final OfficerPrincipalLoader officerPrincipalLoader;
     private final IncidentRepository incidentRepository;
+    private final com.sosvietnam.repository.IncidentDispatchRepository incidentDispatchRepository;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -45,7 +49,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             String incidentId = accessor.getFirstNativeHeader(CITIZEN_INCIDENT_HEADER);
-            accessor.setUser(StringUtils.hasText(incidentId)
+            String fieldToken = accessor.getFirstNativeHeader(FIELD_TOKEN_HEADER);
+            accessor.setUser(StringUtils.hasText(fieldToken) ? authenticateField(fieldToken)
+                    : StringUtils.hasText(incidentId)
                     ? authenticateCitizen(incidentId, accessor.getFirstNativeHeader(CITIZEN_TOKEN_HEADER))
                     : authenticate(accessor.getFirstNativeHeader("Authorization")));
         } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
@@ -59,6 +65,15 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             }
         }
         return message;
+    }
+
+    /** Người phụ trách hiện trường mở link: mã còn hiệu lực + ca còn mở. */
+    private FieldPrincipal authenticateField(String token) {
+        IncidentDispatch d = incidentDispatchRepository.findByFieldTokenHash(CitizenTokens.sha256(token.trim())).orElse(null);
+        if (d == null || !IncidentStatus.ACTIVE.contains(d.getIncident().getStatus())) {
+            throw new MessageDeliveryException("Link người phụ trách hiện trường không còn hiệu lực");
+        }
+        return new FieldPrincipal(d.getIncident().getId(), d.getId());
     }
 
     private CitizenPrincipal authenticateCitizen(String incidentId, String token) {

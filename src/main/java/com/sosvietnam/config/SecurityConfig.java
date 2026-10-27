@@ -89,6 +89,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/incidents/*/dispatch-plan/**").hasAnyAuthority(STAFF)
                         // Cán bộ (JWT) hoặc người báo tin (citizen token): CallServiceImpl tự kiểm
                         .requestMatchers(HttpMethod.GET, "/api/v1/calls/ice-servers").permitAll()
+                        // trang link người phụ trách hiện trường (không đăng nhập): DispatchServiceImpl kiểm field token
+                        .requestMatchers("/api/v1/field/**").permitAll()
                         // xem danh sách + phân công là việc của trực ban
                         .requestMatchers(HttpMethod.GET, "/api/v1/incidents/queue", "/api/v1/incidents/history", "/api/v1/incidents/*", "/api/v1/incidents/*/handover-candidates")
                                 .hasAnyAuthority(STAFF)

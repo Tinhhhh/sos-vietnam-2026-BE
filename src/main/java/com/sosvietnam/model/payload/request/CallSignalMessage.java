@@ -44,6 +44,14 @@ public class CallSignalMessage {
     @JsonProperty("reason")
     private String reason;
 
+    /**
+     * Bên nhận: officer (cán bộ giữ ca) | citizen (người báo tin) | field (người phụ trách hiện trường).
+     * Bỏ trống thì như cũ: cán bộ -> dân, dân -> cán bộ, người phụ trách -> cán bộ.
+     */
+    @JsonProperty("to")
+    private String to;
+
+    /** Bên gửi, server điền: officer | citizen | field | server */
     @JsonProperty("from")
     private String from;
 

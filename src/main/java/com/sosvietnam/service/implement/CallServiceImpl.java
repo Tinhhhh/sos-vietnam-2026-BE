@@ -58,6 +58,7 @@ public class CallServiceImpl implements CallService {
     private final IncidentRepository incidentRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
+    private final com.sosvietnam.repository.IncidentDispatchRepository incidentDispatchRepository;
     // Tạo lúc gọi Cloudflare lần đầu: không cấu hình TURN thì không mở kết nối nào
     private volatile HttpClient httpClient;
 
@@ -77,8 +78,8 @@ public class CallServiceImpl implements CallService {
     // ------------------------------------------------------------------ ICE servers
 
     @Override
-    public IceServersResponse getIceServers(String incidentId, String citizenAccessToken) {
-        requireCaller(incidentId, citizenAccessToken);
+    public IceServersResponse getIceServers(String incidentId, String citizenAccessToken, String fieldToken) {
+        requireCaller(incidentId, citizenAccessToken, fieldToken);
         if (!StringUtils.hasText(turnKeyId) || !StringUtils.hasText(turnApiToken)) {
             return IceServersResponse.builder().iceServers(STUN_ONLY).ttlSeconds(turnTtlSeconds).relay(false).build();
         }
@@ -152,8 +153,14 @@ public class CallServiceImpl implements CallService {
         return servers;
     }
 
-    /** Cán bộ đã đăng nhập, hoặc người dân có đúng mã truy cập của một ca còn mở. */
-    private void requireCaller(String incidentId, String citizenAccessToken) {
+    /** Cán bộ đã đăng nhập, người dân có đúng mã truy cập, hoặc người phụ trách hiện trường có link còn hiệu lực. */
+    private void requireCaller(String incidentId, String citizenAccessToken, String fieldToken) {
+        if (StringUtils.hasText(fieldToken)) {
+            boolean ok = incidentDispatchRepository.findByFieldTokenHash(CitizenTokens.sha256(fieldToken.trim()))
+                    .filter(d -> IncidentStatus.ACTIVE.contains(d.getIncident().getStatus())).isPresent();
+            if (!ok) throw new SosException(HttpStatus.UNAUTHORIZED, "Link người phụ trách hiện trường không còn hiệu lực");
+            return;
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean loggedIn = auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
         if (loggedIn) {
@@ -186,28 +193,76 @@ public class CallServiceImpl implements CallService {
             return;
         }
 
+        // bên gửi: vai trò + tên hiện trên máy bên nhận
+        String from;
+        String peerName;
+        String unitName;
+        String defaultTo;
         if (sender instanceof OfficerPrincipal officer) {
             if (!officer.memberId().equals(incident.getHandlerId())) {
                 bounce(sender, signal, "not_handler");
                 return;
             }
-            send(CitizenPrincipal.nameOf(incident.getId()), signal.toBuilder()
-                    .from("officer").peerName(officer.fullName()).unitName(unitName(officer)).build());
+            from = ROLE_OFFICER;
+            peerName = officer.fullName();
+            unitName = unitName(officer);
+            defaultTo = ROLE_CITIZEN;
         } else if (sender instanceof CitizenPrincipal citizen) {
             if (!citizen.incidentId().equals(incident.getId())) {
                 return; // chỉ được gọi trong ca của chính mình
             }
-            if (incident.getHandlerId() == null) {
-                bounce(sender, signal, "no_handler");
+            from = ROLE_CITIZEN;
+            peerName = incident.getCitizenName();
+            unitName = null;
+            defaultTo = ROLE_OFFICER;
+        } else if (sender instanceof com.sosvietnam.security.FieldPrincipal field) {
+            com.sosvietnam.model.entity.IncidentDispatch trip = currentFieldTrip(incident.getId());
+            if (!field.incidentId().equals(incident.getId()) || trip == null || !trip.getId().equals(field.dispatchId())) {
+                bounce(sender, signal, "closed"); // link đã đổi người / cấp lại
                 return;
             }
-            // tên phiên STOMP của cán bộ = member id (OfficerPrincipal.getName)
-            send(incident.getHandlerId().toString(), signal.toBuilder()
-                    .from("citizen").peerName(incident.getCitizenName()).unitName(null).build());
+            from = ROLE_FIELD;
+            peerName = trip.getFieldMember().displayName();
+            unitName = trip.getStation() == null ? null : trip.getStation().getName();
+            defaultTo = ROLE_OFFICER;
+        } else {
+            return;
         }
+
+        String to = StringUtils.hasText(signal.getTo()) ? signal.getTo() : defaultTo;
+        String target = switch (to) {
+            // tên phiên STOMP của cán bộ = member id (OfficerPrincipal.getName)
+            case ROLE_OFFICER -> incident.getHandlerId() == null ? null : incident.getHandlerId().toString();
+            case ROLE_CITIZEN -> CitizenPrincipal.nameOf(incident.getId());
+            case ROLE_FIELD -> {
+                com.sosvietnam.model.entity.IncidentDispatch trip = currentFieldTrip(incident.getId());
+                yield trip == null ? null : com.sosvietnam.security.FieldPrincipal.nameOf(trip.getId());
+            }
+            default -> null;
+        };
+        if (target == null || to.equals(from)) {
+            bounce(sender, signal, ROLE_FIELD.equals(to) ? "no_field" : "no_handler");
+            return;
+        }
+        // to = bên nhận thấy ai gọi tới nó; bên nhận trả lời về "from"
+        send(target, signal.toBuilder().from(from).to(to).peerName(peerName).unitName(unitName).build());
         if ("ring".equals(action) || "end".equals(action) || "reject".equals(action)) {
             log.info("📞 [CALL] {} {} on {} by {}", action, signal.getCallId(), incident.getId(), sender.getName());
         }
+    }
+
+    static final String ROLE_OFFICER = "officer";
+    static final String ROLE_CITIZEN = "citizen";
+    static final String ROLE_FIELD = "field";
+
+    /** Lượt chủ trì hiện tại có người phụ trách hiện trường (đang đi / đã tới); null nếu chưa có. */
+    private com.sosvietnam.model.entity.IncidentDispatch currentFieldTrip(String incidentId) {
+        return incidentDispatchRepository.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(
+                        incidentId, com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
+                .filter(d -> d.getFieldMember() != null
+                        && (d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
+                        || d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.ARRIVED))
+                .orElse(null);
     }
 
     private void send(String user, CallSignalMessage signal) {

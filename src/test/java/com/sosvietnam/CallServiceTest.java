@@ -41,7 +41,8 @@ class CallServiceTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    final CallServiceImpl service = new CallServiceImpl(incidents, messaging, new ObjectMapper());
+    final CallServiceImpl service = new CallServiceImpl(incidents, messaging, new ObjectMapper(),
+            mock(com.sosvietnam.repository.IncidentDispatchRepository.class));
 
     final UUID handlerId = UUID.randomUUID();
     final OfficerPrincipal handler = TestGeo.officer(handlerId, "congan.tanan@sos.vn", "Cán Bộ A",
