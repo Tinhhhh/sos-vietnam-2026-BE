@@ -298,7 +298,9 @@ public class DispatchServiceImpl implements DispatchService {
         IncidentDispatch d = heldPlan(incidentId);
         RescueStation st = d.getStation();
         if (st.getLevel() != StationLevel.WARD || st.wardId() == null) return List.of();
-        List<UnitMember> officers = unitMemberRepository.findActiveOfficers(st.getAgencyType(), UnitLevel.WARD).stream()
+        // chỉ đơn vị xã của trạm (trước đây tải mọi cán bộ cấp xã cả nước rồi lọc: ~10 nghìn dòng)
+        List<UnitMember> officers = unitMemberRepository.findActiveOfficersOfUnit(st.getAgencyType(), UnitLevel.WARD,
+                        st.getProvince() == null ? null : st.getProvince().getCode(), st.wardId()).stream()
                 .filter(m -> st.wardId().equals(m.getAccount().wardId()) && !m.isLocked())
                 .toList();
         List<OfficerStatusResponse> list = officerService.describe(officers);

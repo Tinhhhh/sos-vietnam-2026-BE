@@ -694,7 +694,8 @@ public class IncidentServiceImpl implements IncidentService {
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        List<com.sosvietnam.model.entity.UnitMember> colleagues = unitMemberRepository.findActiveOfficers(me.agency(), me.level()).stream()
+        List<com.sosvietnam.model.entity.UnitMember> colleagues = unitMemberRepository.findActiveOfficersOfUnit(
+                        me.agency(), me.level(), me.provinceId(), me.level() == UnitLevel.WARD ? me.wardId() : null).stream()
                 .filter(m -> !me.is(m.getId()) && !m.isLocked())
                 .filter(m -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(m)))
                 .toList();
