@@ -169,7 +169,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     @Transactional(readOnly = true)
     public IncidentDocumentResponse citizenGet(String incidentId, String citizenToken) {
         Incident incident = citizenIncident(incidentId, citizenToken);
-        return citizenView(citizenDocument(incidentId), incident);
+        return citizenRead(incident);
     }
 
     @Override
@@ -183,7 +183,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     @Transactional(readOnly = true)
     public IncidentDocumentResponse lookupGet(IncidentLookupRequest request) {
         Incident incident = lookupIncident(request.getLookupCode(), request.getPhoneLast4());
-        return citizenView(citizenDocument(incident.getId()), incident);
+        return citizenRead(incident);
     }
 
     @Override
@@ -336,8 +336,27 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     }
 
     /** Người dân: không sửa được, SĐT chỉ hiện bản che, không lộ toạ độ */
+    /**
+     * Dân xem văn bản ngay khi ca xong: cán bộ chưa lưu thì trả bản nháp tự điền (saved = false, chưa ký được),
+     * để người báo tin đối chiếu thông tin luôn.
+     */
+    private IncidentDocumentResponse citizenRead(Incident incident) {
+        return documentRepository.findById(incident.getId())
+                .map(doc -> citizenView(doc, incident))
+                .orElseGet(() -> {
+                    if (incident.getStatus() != IncidentStatus.RESOLVED) {
+                        throw new SosException(HttpStatus.NOT_FOUND, "Cán bộ chưa lập văn bản báo cáo cho ca này");
+                    }
+                    return citizenView(draft(incident), incident, false);
+                });
+    }
+
     private IncidentDocumentResponse citizenView(IncidentDocument doc, Incident incident) {
-        IncidentDocumentResponse res = IncidentDocumentResponse.from(doc, true, false, null, null, nameLookup());
+        return citizenView(doc, incident, true);
+    }
+
+    private IncidentDocumentResponse citizenView(IncidentDocument doc, Incident incident, boolean saved) {
+        IncidentDocumentResponse res = IncidentDocumentResponse.from(doc, saved, false, null, null, nameLookup());
         res.getFields().setReporterPhone(IncidentLookupResponse.maskPhone(doc.getReporterPhone()));
         res.getFields().setCoordinates(null);
         return res;
