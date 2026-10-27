@@ -528,7 +528,11 @@ public class DispatchServiceImpl implements DispatchService {
                     .selectable(reason == null)
                     .unavailableReason(reason)
                     .build();
-        }).toList();
+        })
+                // chọn được lên trước, trong đó người đang trực tuyến trước; còn lại giữ thứ tự tên
+                .sorted(java.util.Comparator.comparing((FieldCandidateResponse c) -> !c.isSelectable())
+                        .thenComparing(c -> !c.isOnline()))
+                .toList();
     }
 
     @Transactional(readOnly = true)

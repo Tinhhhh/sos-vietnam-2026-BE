@@ -648,6 +648,26 @@ class DispatchPlanTest {
     }
 
     @Test
+    void candidates_selectableFirst_onlineFirst_thenByName() {
+        pending();
+        UnitMember noBadge = TestGeo.member(me);
+        noBadge.setId(UUID.randomUUID());
+        noBadge.setFullName("An Không Số Hiệu");
+        UnitMember offline = withBadge(me);
+        offline.setId(UUID.randomUUID());
+        offline.setFullName("Bình Ngoại Tuyến");
+        UnitMember online = withBadge(me);
+        online.setId(UUID.randomUUID());
+        online.setFullName("Cường Trực Tuyến");
+        // repository trả theo tên
+        when(members.findByAccount_IdAndActiveTrueOrderByFullNameAsc(me.getId())).thenReturn(List.of(noBadge, offline, online));
+        when(notifier.onlineMemberIds()).thenReturn(java.util.Set.of(online.getId(), noBadge.getId()));
+
+        var list = service.getFieldCandidates("SOS-1");
+        assertThat(list).extracting(c -> c.getMemberId()).containsExactly(online.getId(), offline.getId(), noBadge.getId());
+    }
+
+    @Test
     void changeFieldMember_onlyBeforeArrival_stopsSimulation() {
         IncidentDispatch d = pending();
         assertThatThrownBy(() -> service.changeFieldMember("SOS-1", me.getId()))
