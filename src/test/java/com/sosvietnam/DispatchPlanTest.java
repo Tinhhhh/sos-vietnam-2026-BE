@@ -122,7 +122,7 @@ class DispatchPlanTest {
     @Test
     void wardStation_needsDelegation_andOldRouteIsSuperseded() {
         IncidentDispatch existing = IncidentDispatch.builder().id(11L).incident(incident).station(station)
-                .role(DispatchRole.PRIMARY).status(DispatchStatus.EN_ROUTE).build();
+                .role(DispatchRole.PRIMARY).status(DispatchStatus.ACCEPTED).build(); // chưa khởi hành: đổi được
         IncidentRoute old = IncidentRoute.builder().id(1L).dispatch(existing).build();
         when(dispatches.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(any(), any(), any()))
                 .thenReturn(Optional.of(existing));
@@ -172,6 +172,35 @@ class DispatchPlanTest {
                 .thenReturn(Optional.of(d));
         when(dispatches.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(any(), any())).thenReturn(Optional.of(d));
         return d;
+    }
+
+    @Test
+    void afterDeparture_noRedelegation_noReset() {
+        IncidentDispatch d = pending();
+        UnitMember field = withBadge(me);
+        d.setFieldMember(field);
+        d.setStatus(DispatchStatus.EN_ROUTE);
+
+        // đơn vị mình đang đi: uỷ quyền lại -> 409; đổi điểm đến (không uỷ quyền) vẫn được, giữ chuyến
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(true)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã khởi hành");
+        assertThat(service.savePlan("SOS-1", request(false)).getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
+
+        // lượt uỷ quyền xã đã đi: không uỷ quyền lại, không đổi sang đơn vị mình
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        d.setAssignedTo(TestGeo.member(wardOfficer("xa@sos.vn")));
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(true)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã khởi hành");
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã khởi hành");
+
+        // đã tới nơi: không sửa kế hoạch nữa
+        d.setAssignedTo(null);
+        d.setStatus(DispatchStatus.ARRIVED);
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã khởi hành");
+        // delegate (chỉ định người) cũng bị chặn vì không còn chờ chấp nhận
+        assertThatThrownBy(() -> service.delegate("SOS-1", me.getId())).isInstanceOf(SosException.class);
     }
 
     @Test

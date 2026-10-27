@@ -241,7 +241,10 @@ public class DispatchServiceImpl implements DispatchService {
         if (incident.getStatus() != IncidentStatus.RESOLVING) {
             throw new SosException(HttpStatus.CONFLICT, "Ca chưa ở bước điều động (cần Yêu cầu điều động trước)");
         }
-        currentPrimary(incidentId).ifPresent(DispatchServiceImpl::requireAnswered);
+        currentPrimary(incidentId).ifPresent(d -> {
+            requireAnswered(d);
+            requireNotDeparted(d, request);
+        });
         RescueStation station = rescueStationRepository.findById(request.getStationId())
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy trạm ID: " + request.getStationId()));
         if (incident.getRoutedAgency() != null && station.getAgencyType() != incident.getRoutedAgency()) {
@@ -992,6 +995,20 @@ public class DispatchServiceImpl implements DispatchService {
         if (d.getStatus() == DispatchStatus.PENDING_ACCEPT && d.getAssignedTo() != null) {
             throw new SosException(HttpStatus.CONFLICT, "Đang chờ " + d.getAssignedTo().displayName()
                     + " chấp nhận hoặc từ chối, chưa thay đổi được điều động");
+        }
+    }
+
+    /**
+     * Đã "Khởi hành": không uỷ quyền lại / đổi sang đơn vị khác. Đang trên đường chỉ còn đơn vị mình tự đi được đổi
+     * điểm xuất phát / điểm đến (giữ chuyến + người); lượt uỷ quyền đã đi, hoặc đã tới nơi, thì không sửa kế hoạch.
+     */
+    private static void requireNotDeparted(IncidentDispatch d, DispatchPlanRequest request) {
+        DispatchStatus s = d.getStatus();
+        boolean departed = s == DispatchStatus.EN_ROUTE || s == DispatchStatus.ARRIVED || s == DispatchStatus.DONE;
+        if (!departed) return;
+        if (request.isDelegate() || d.getAssignedTo() != null || s != DispatchStatus.EN_ROUTE) {
+            throw new SosException(HttpStatus.CONFLICT,
+                    "Lực lượng đã khởi hành, không uỷ quyền lại hay đổi đơn vị đi xử lý được");
         }
     }
 
