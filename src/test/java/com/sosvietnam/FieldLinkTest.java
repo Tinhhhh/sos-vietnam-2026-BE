@@ -127,6 +127,25 @@ class FieldLinkTest {
         assertThat(service.issueFieldLink("SOS-1").getToken()).isNotBlank(); // gửi hỏng thì không tính lượt chặn
     }
 
+    /** "Người nhận ca" (người giữ ca) có trên thẻ theo dõi; trang link / dân không thấy SĐT cá nhân của họ. */
+    @Test
+    void plan_hasTheReceiver_phoneOnlyForOfficers() {
+        UnitMember holder = TestGeo.member(me);
+        holder.setId(me.getId());
+        holder.setFullName("Đinh Phương Ngân");
+        holder.setPhone("0911222333");
+        when(members.findById(me.getId())).thenReturn(Optional.of(holder));
+
+        var officerView = service.getPlan("SOS-1", null).getReceiver();
+        assertThat(officerView.getFullName()).contains("Đinh Phương Ngân");
+        assertThat(officerView.getPhone()).isEqualTo("0911222333");
+
+        String token = service.issueFieldLink("SOS-1").getToken();
+        var fieldView = service.getFieldPlan(token).getPlan().getReceiver();
+        assertThat(fieldView.getFullName()).contains("Đinh Phương Ngân");
+        assertThat(fieldView.getPhone()).isNull();
+    }
+
     @Test
     void holderIssuesLink_reissueVoidsTheOldOne() {
         FieldLinkResponse first = service.issueFieldLink("SOS-1");

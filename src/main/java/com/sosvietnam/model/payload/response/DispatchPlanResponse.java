@@ -25,6 +25,10 @@ public class DispatchPlanResponse {
     @JsonProperty("dispatch_id")
     private Long dispatchId;
 
+    /** Người nhận ca = cán bộ đang giữ ca (incidents.handler_id); SĐT chỉ có ở bản cho cán bộ. */
+    @JsonProperty("receiver")
+    private Officer receiver;
+
     /** Người phụ trách hiện trường (field_member_id), null khi chưa xuất phát. */
     @JsonProperty("tracker")
     private Officer tracker;

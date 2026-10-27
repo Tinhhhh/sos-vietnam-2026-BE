@@ -183,6 +183,12 @@ public class DispatchServiceImpl implements DispatchService {
         if (enRoute || latest.getStatus() == DispatchStatus.ARRIVED || latest.getStatus() == DispatchStatus.DONE) {
             plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
         }
+        // "Người nhận ca" trên thẻ theo dõi (trên "Người đi hiện trường"); dân / link không thấy SĐT cá nhân
+        if (incident.getHandlerId() != null) {
+            unitMemberRepository.findById(incident.getHandlerId()).ifPresent(h -> plan.setReceiver(
+                    DispatchPlanResponse.Officer.builder().memberId(h.getId()).fullName(h.displayName())
+                            .phone(officer ? h.getPhone() : null).badgeNumber(h.getBadgeNumber()).build()));
+        }
         if (officer) {
             plan.setFieldLinkIssuedAt(latest.getFieldTokenIssuedAt() == null ? null
                     : latest.getFieldTokenIssuedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime());
