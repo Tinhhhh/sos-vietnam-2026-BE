@@ -39,6 +39,7 @@ class FieldLinkTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final IncidentDispatchRepository dispatches = mock(IncidentDispatchRepository.class);
+    final com.sosvietnam.service.SmsService sms = mock(com.sosvietnam.service.SmsService.class);
     final IncidentRouteRepository routes = mock(IncidentRouteRepository.class);
     final UnitMemberRepository members = mock(UnitMemberRepository.class);
     final DispatchTrackingServiceImpl tracking =
@@ -47,7 +48,7 @@ class FieldLinkTest {
             mock(RescueStationRepository.class), members, new com.sosvietnam.security.CurrentOfficer(),
             mock(IncidentNotifier.class), mock(com.sosvietnam.service.OfficerService.class),
             mock(IncidentClaimRepository.class), mock(IncidentReportRepository.class), tracking,
-            mock(DispatchSimulationService.class), mock(com.sosvietnam.service.RoutingService.class));
+            mock(DispatchSimulationService.class), mock(com.sosvietnam.service.RoutingService.class), sms);
     final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
     final CallServiceImpl calls = new CallServiceImpl(incidents, messaging, new ObjectMapper(), dispatches,
             mock(org.springframework.beans.factory.ObjectProvider.class));
@@ -90,6 +91,40 @@ class FieldLinkTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** Người phụ trách có số: link đi qua SMS (không dấu, 1 tin), cấp lại ngay sau đó bị chặn 60 giây. */
+    @Test
+    void issueLink_smsTheFieldOfficer_thenCooldown() {
+        goer.setPhone("0912345678");
+        when(sms.send(any(), any())).thenReturn(new com.sosvietnam.service.SmsService.Result(true, null));
+
+        FieldLinkResponse r = service.issueFieldLink("SOS-1");
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(sms).send(eq("0912345678"), text.capture());
+        assertThat(text.getValue()).contains("SOS-1").endsWith("/f/" + r.getToken())
+                .matches("\\p{ASCII}+").hasSizeLessThanOrEqualTo(160);
+        assertThat(r.getSms().isSent()).isTrue();
+        assertThat(r.getSms().getPhoneMasked()).doesNotContain("2345");
+
+        assertThatThrownBy(() -> service.issueFieldLink("SOS-1")).isInstanceOf(SosException.class)
+                .extracting(e -> ((SosException) e).getHttpStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(service.getFieldPlan(r.getToken()).getIncidentId()).isEqualTo("SOS-1"); // link cũ vẫn dùng được
+    }
+
+    /** Không có số / cổng SMS lỗi: vẫn cấp link (cán bộ sao chép), báo lý do, không chặn cấp lại. */
+    @Test
+    void noPhoneOrGatewayError_linkStillIssued_noCooldown() {
+        FieldLinkResponse r = service.issueFieldLink("SOS-1");
+        assertThat(r.getSms().isSent()).isFalse();
+        assertThat(r.getSms().getError()).contains("chưa có số điện thoại");
+        verifyNoInteractions(sms);
+
+        goer.setPhone("0912345678");
+        when(sms.send(any(), any())).thenReturn(new com.sosvietnam.service.SmsService.Result(false, "Cổng SMS lỗi (HTTP 500)"));
+        assertThat(service.issueFieldLink("SOS-1").getSms().getError()).contains("HTTP 500");
+        assertThat(service.issueFieldLink("SOS-1").getToken()).isNotBlank(); // gửi hỏng thì không tính lượt chặn
     }
 
     @Test

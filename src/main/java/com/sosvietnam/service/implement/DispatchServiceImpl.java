@@ -54,6 +54,11 @@ public class DispatchServiceImpl implements DispatchService {
     private final com.sosvietnam.service.DispatchTrackingService dispatchTrackingService;
     private final com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
     private final com.sosvietnam.service.RoutingService routingService;
+    private final com.sosvietnam.service.SmsService smsService;
+
+    // địa chỉ trang web (FE) ghép vào link trong SMS: https://sosvie.site/f/{token}
+    @org.springframework.beans.factory.annotation.Value("${app.public-url:http://localhost:5173}")
+    private String publicUrl = "http://localhost:5173";
 
 
     @Transactional(readOnly = true)
@@ -621,6 +626,13 @@ public class DispatchServiceImpl implements DispatchService {
                 || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ARRIVED)) {
             throw new SosException(HttpStatus.CONFLICT, "Chỉ cấp link khi lực lượng đã xuất phát và có người phụ trách");
         }
+        // vừa gửi SMS cho lượt này: chặn bấm liên tục (mỗi lần cấp lại là 1 tin, tốn cước + dễ bị nhà mạng coi là spam)
+        java.time.Instant lastSms = fieldSmsSent.get(d.getId());
+        long wait = lastSms == null ? 0
+                : FIELD_SMS_COOLDOWN_SECONDS - java.time.Duration.between(lastSms, java.time.Instant.now()).getSeconds();
+        if (wait > 0) {
+            throw new SosException(HttpStatus.TOO_MANY_REQUESTS, "Vừa gửi SMS link, thử lại sau " + wait + " giây");
+        }
         byte[] bytes = new byte[24];
         FIELD_TOKEN_RANDOM.nextBytes(bytes);
         String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -637,8 +649,35 @@ public class DispatchServiceImpl implements DispatchService {
                 .issuedAt(now.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime())
                 .fieldMember(DispatchPlanResponse.Officer.builder().memberId(m.getId()).fullName(m.displayName())
                         .phone(m.getPhone()).badgeNumber(m.getBadgeNumber()).build())
+                .sms(sendFieldLinkSms(d, incidentId, token))
                 .build();
     }
+
+    /**
+     * SMS link cho người phụ trách (số trong hồ sơ cán bộ). Không dấu để vừa 1 tin 160 ký tự. Không có số / chưa cấu
+     * hình cổng SMS thì không gửi: cán bộ vẫn sao chép link như cũ.
+     */
+    private com.sosvietnam.model.payload.response.FieldLinkResponse.Sms sendFieldLinkSms(IncidentDispatch d,
+                                                                                         String incidentId, String token) {
+        String phone = d.getFieldMember().getPhone();
+        if (phone == null || phone.isBlank()) {
+            return com.sosvietnam.model.payload.response.FieldLinkResponse.Sms.builder()
+                    .sent(false).error("Người phụ trách chưa có số điện thoại trong hồ sơ").build();
+        }
+        String text = "SOS VN: Ca " + incidentId + " - ban la nguoi phu trach hien truong. Mo link: "
+                + publicUrl.replaceAll("/+$", "") + "/f/" + token;
+        com.sosvietnam.service.SmsService.Result r = smsService.send(phone, text);
+        if (r.sent()) fieldSmsSent.put(d.getId(), java.time.Instant.now());
+        return com.sosvietnam.model.payload.response.FieldLinkResponse.Sms.builder()
+                .sent(r.sent())
+                .phoneMasked(com.sosvietnam.model.payload.response.IncidentLookupResponse.maskPhone(phone))
+                .error(r.error())
+                .build();
+    }
+
+    private static final long FIELD_SMS_COOLDOWN_SECONDS = 60;
+    // lượt -> lúc gửi SMS link gần nhất (RAM, chỉ đúng 1 instance; mất khi khởi động lại cũng không sao)
+    private final java.util.Map<Long, java.time.Instant> fieldSmsSent = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final java.security.SecureRandom FIELD_TOKEN_RANDOM = new java.security.SecureRandom();
 

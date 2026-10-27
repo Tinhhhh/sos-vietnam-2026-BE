@@ -40,7 +40,7 @@ class DispatchSimulationTest {
             new com.sosvietnam.security.CurrentOfficer(), mock(IncidentNotifier.class),
             mock(com.sosvietnam.service.OfficerService.class), mock(IncidentClaimRepository.class),
             mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches, mock(com.sosvietnam.service.RouteRecalcService.class)),
-            simulation, routing);
+            simulation, routing, mock(com.sosvietnam.service.SmsService.class));
 
     Incident incident;
     IncidentDispatch trip;

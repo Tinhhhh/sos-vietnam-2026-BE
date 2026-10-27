@@ -25,4 +25,26 @@ public class FieldLinkResponse {
     /** Người cầm link (họ tên, số hiệu) để cán bộ biết gửi cho ai. */
     @JsonProperty("field_member")
     private DispatchPlanResponse.Officer fieldMember;
+
+    /** Kết quả gửi link qua SMS tới số của người phụ trách. */
+    @JsonProperty("sms")
+    private Sms sms;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Sms {
+        /** Cổng SMS đã nhận tin (điện thoại gửi đi sau vài giây). */
+        @JsonProperty("sent")
+        private boolean sent;
+
+        /** "091****678" */
+        @JsonProperty("phone_masked")
+        private String phoneMasked;
+
+        /** Lý do không gửi: chưa có số, chưa cấu hình cổng SMS, cổng lỗi... */
+        @JsonProperty("error")
+        private String error;
+    }
 }
