@@ -208,6 +208,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .status(IncidentStatus.PENDING)
                 .description(request.getDescription())
                 .incidentTag(firstTag(request.getIncidentTags()))
+                .reportType(reportTypeOf(request))
                 .address(request.getAddress())
                 .ward(area.ward())
                 .province(area.province())
@@ -229,6 +230,15 @@ public class IncidentServiceImpl implements IncidentService {
         escalationService.schedule(saved);
         notifier.notify(saved.getId(), IncidentEvent.INCIDENT_NEW);
         return new CreateIncidentResponse(IncidentResponse.from(saved, List.of(), List.of()), citizenAccessToken, false);
+    }
+
+    /** Bỏ trống = tự báo; báo hộ chưa mở. */
+    private static com.sosvietnam.model.payload.enums.ReportType reportTypeOf(CreateIncidentRequest request) {
+        var type = request.getReportType() == null ? com.sosvietnam.model.payload.enums.ReportType.SELF : request.getReportType();
+        if (!type.isAvailable()) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Báo hộ chưa được hỗ trợ, vui lòng chọn Tự báo");
+        }
+        return type;
     }
 
     /** Tên FE tự điền khi người dân không khai (sos-request-modal DEFAULT_REPORTER_NAME, bản gốc), dạng AreaNames.key */

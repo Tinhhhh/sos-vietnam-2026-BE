@@ -25,6 +25,9 @@ public class CreateIncidentRequest {
     @NotNull
     @JsonProperty("emergency_type")
     private EmergencyType emergencyType;
+    /** Tự báo (mặc định khi bỏ trống) / báo hộ (chưa mở, 400). */
+    @JsonProperty("report_type")
+    private com.sosvietnam.model.payload.enums.ReportType reportType;
     @Size(max = 10)
     @JsonProperty("incident_tags")
     private List<@Size(max = 200) String> incidentTags;

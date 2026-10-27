@@ -113,6 +113,12 @@ public class IncidentDetailResponse {
     @JsonProperty("escalation_reason_label")
     private String escalationReasonLabel;
 
+    @JsonProperty("report_type")
+    private com.sosvietnam.model.payload.enums.ReportType reportType;
+
+    @JsonProperty("report_type_label")
+    private String reportTypeLabel;
+
     /** Lý do cán bộ xã ghi khi tự chuyển lên tỉnh */
     @JsonProperty("escalation_note")
     private String escalationNote;
@@ -220,6 +226,8 @@ public class IncidentDetailResponse {
                 .transferReason(i.getTransferReason())
                 .escalationReason(i.getEscalationReason())
                 .escalationReasonLabel(i.getEscalationReason() == null ? null : i.getEscalationReason().getLabel())
+                .reportType(i.getReportType())
+                .reportTypeLabel(i.getReportType() == null ? null : i.getReportType().getLabel())
                 .escalationNote(i.getEscalationNote())
                 .cancelledAt(withZone(i.getCancelledAt()))
                 .cancelReason(i.getCancelReason())

@@ -100,6 +100,20 @@ class IncidentRoutingTest {
     }
 
     @Test
+    void reportType_defaultsToSelf_proxyIsNotOpenYet() {
+        when(geo.resolveArea(anyDouble(), anyDouble())).thenReturn(new GeoService.Area(TestGeo.CAN_THO, TestGeo.CAI_KHE));
+        assertThat(create(EmergencyType.FIRE).getReportType()).isEqualTo(com.sosvietnam.model.payload.enums.ReportType.SELF);
+
+        CreateIncidentRequest proxy = new CreateIncidentRequest();
+        proxy.setEmergencyType(EmergencyType.FIRE);
+        proxy.setLatitude(10.03);
+        proxy.setLongitude(105.78);
+        proxy.setReportType(com.sosvietnam.model.payload.enums.ReportType.PROXY);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createIncident(proxy))
+                .hasMessageContaining("Báo hộ chưa được hỗ trợ");
+    }
+
+    @Test
     void police_goesToWardWithOfficer_andEscalatesAfter15Minutes() {
         Incident inc = create(EmergencyType.POLICE);
         assertThat(inc.getRoutedAgency()).isEqualTo(AgencyType.POLICE);

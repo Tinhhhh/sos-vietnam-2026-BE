@@ -252,6 +252,11 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - `GET /incidents/{id}/document/citizen` và `POST /incidents/lookup/document`: ca RESOLVED mà cán bộ chưa lưu văn bản thì trả bản nháp tự điền (`saved=false`) thay vì 404; ký (`/citizen-sign`, `/lookup/document/sign`) vẫn chỉ khi đã lưu (404). Ca chưa xong vẫn 404.
 - FE: màn theo dõi của dân tự mở cửa sổ văn bản 1 lần khi ca RESOLVED (`CitizenDocumentButton autoOpen`, nhớ theo ca ở localStorage `sos_document_shown_{id}`), bản nháp ghi "Bản nháp: lực lượng chức năng đang hoàn thiện..." và ẩn nút ký; cửa sổ tự hỏi lại 8 giây nên cán bộ lưu xong là hiện nút "Ký xác nhận". 211 unit test, e2e 8/8.
 
+## Tự báo / Báo hộ (27/10/2026) — ĐỔI API
+- V18 `incidents.report_type` varchar(10) NOT NULL DEFAULT 'SELF' (enum `ReportType` SELF "Tự báo" / PROXY "Báo hộ", `available`); V18 điền SELF cho mọi ca cũ (DB local: 916 ca). ĐÃ chạy trên DB local, CHƯA lên VPS.
+- `POST /incidents` thêm `report_type` tuỳ chọn (trống = SELF); PROXY -> 400 "Báo hộ chưa được hỗ trợ" (làm sau). Queue + chi tiết ca trả `report_type` + `report_type_label`.
+- FE: form SOS có ô "Người báo tin" (Tự báo chọn sẵn, Báo hộ mờ "Sắp có"), gửi `report_type: 'SELF'`; thẻ hàng đợi có nhãn "Tự báo"; Chi tiết ca có dòng "Hình thức báo". 226 unit test, e2e 7/7.
+
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
 2. ~~Dashboard "Thống Kê"~~ (xong 15/10/2026, CHƯA commit): `GET /api/v1/dashboard/summary?from&to` (ADMIN thêm `province`, `agency`), phạm vi giống quyền xem hàng đợi. SQL gộp nhóm trong `repository/DashboardRepository` (NamedParameterJdbcTemplate; so tỉnh/xã bằng unaccent + bỏ "TP."; đổi giờ server → giờ VN qua `:serverZone`). `fake_alarm_count`/`resolved_count` = null tới khi có module đóng ca. `by_day` có `accepted` + `within_sla_rate` (biểu đồ tỷ lệ nhận 15' theo ngày, admin). `by_agency` (cấp tỉnh + toàn quốc) đếm MỌI lực lượng trong địa bàn cho biểu đồ tròn "Tỷ trọng" (tỉnh: Lực lượng / Xã-phường; admin: Tỉnh / Lực lượng; cấp xã không có). Không làm `/dashboard/escalating` (FE lấy từ `/incidents/queue`). FE: trang `/officer/statistics`, mở bằng nút "Thống kê" trên bản đồ (bỏ thanh thống kê cũ). Xuất Excel làm sau.

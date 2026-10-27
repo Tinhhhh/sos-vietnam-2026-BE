@@ -53,6 +53,12 @@ public class Incident {
     @Column(name = "incident_tag", length = 200)
     private String incidentTag;
 
+    // Tự báo / báo hộ (V18); ca cũ = SELF
+    @Enumerated(EnumType.STRING)
+    @Column(name = "report_type", length = 10, nullable = false)
+    @Builder.Default
+    private com.sosvietnam.model.payload.enums.ReportType reportType = com.sosvietnam.model.payload.enums.ReportType.SELF;
+
     @Column(columnDefinition = "TEXT")
     private String address;
 
