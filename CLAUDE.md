@@ -273,7 +273,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - IP: controller lấy `request.getRemoteAddr()` (`server.forward-headers-strategy=framework`); `deploy/nginx-sos.conf` đổi `X-Forwarded-For $remote_addr` (ghi đè, không tin header client gửi) — áp dụng khi deploy. Queue + chi tiết ca trả `ip_false_alarm_count` (ca báo khống 24h cùng IP).
 - ADMIN: `GET /api/v1/admin/phone-locks?phone&active(=true)&pageNo&pageSize`, `POST /api/v1/admin/phone-locks/{id}/lift { note >= 5 }`. Chưa có giao diện ADMIN.
 - `PhoneLockService` inject bằng field `@Autowired(required = false)` ở IncidentServiceImpl / IncidentNotifierImpl / DispatchServiceImpl (test dựng tay không phải đổi constructor).
-- FE: nút "Báo khống" cạnh "Huỷ ca" trên thẻ đang giữ (hộp thoại có lý do, nói rõ luật khoá), cờ "⚠ IP: N ca báo khống" trên thẻ, dòng "Cảnh báo IP" ở Chi tiết ca; form SOS hiện câu 403. 238 unit test (`PhoneLockServiceTest`), e2e 20/20.
+- FE: "Báo khống" là nút thứ 2 trong hộp "Huỷ ca" (cùng ô lý do, nói rõ luật khoá; trên thẻ không còn nút riêng, 27/10), cờ "⚠ IP: N ca báo khống" trên thẻ, dòng "Cảnh báo IP" ở Chi tiết ca; form SOS hiện câu 403. 238 unit test (`PhoneLockServiceTest`), e2e 20/20.
 
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
