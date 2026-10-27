@@ -49,7 +49,8 @@ class FieldLinkTest {
             mock(IncidentClaimRepository.class), mock(IncidentReportRepository.class), tracking,
             mock(DispatchSimulationService.class), mock(com.sosvietnam.service.RoutingService.class));
     final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    final CallServiceImpl calls = new CallServiceImpl(incidents, messaging, new ObjectMapper(), dispatches);
+    final CallServiceImpl calls = new CallServiceImpl(incidents, messaging, new ObjectMapper(), dispatches,
+            mock(org.springframework.beans.factory.ObjectProvider.class));
 
     Account me;
     Incident incident;

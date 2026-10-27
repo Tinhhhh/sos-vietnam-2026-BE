@@ -75,7 +75,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse startSimulation(String incidentId) {
         Incident incident = findIncident(incidentId);
-        IncidentDispatch d = requireViewer(incident);
+        IncidentDispatch d = requireSimulator(incident);
         if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa trên đường tới hiện trường");
         }
@@ -97,7 +97,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse stopSimulation(String incidentId) {
         Incident incident = findIncident(incidentId);
-        IncidentDispatch d = requireViewer(incident);
+        IncidentDispatch d = requireSimulator(incident);
         if (d != null) dispatchSimulationService.stop(d.getId());
         return planView(incident, d, true);
     }
@@ -106,7 +106,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse detourSimulation(String incidentId) {
         Incident incident = findIncident(incidentId);
-        IncidentDispatch d = requireViewer(incident);
+        IncidentDispatch d = requireSimulator(incident);
         if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa trên đường tới hiện trường");
         }
@@ -151,6 +151,24 @@ public class DispatchServiceImpl implements DispatchService {
         return latest;
     }
 
+    /**
+     * Chỉ người của đơn vị đang đi mô phỏng được: lượt uỷ quyền thì cán bộ được giao, đơn vị tự đi thì người giữ ca.
+     * Cán bộ tỉnh đã uỷ quyền cho xã chỉ còn theo dõi.
+     */
+    private IncidentDispatch requireSimulator(Incident incident) {
+        IncidentDispatch d = requireViewer(incident);
+        if (d != null && !isGoer(currentOfficer(), incident, d)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi hiện trường mới mô phỏng được");
+        }
+        return d;
+    }
+
+    private static boolean isGoer(OfficerPrincipal me, Incident incident, IncidentDispatch d) {
+        if (me == null) return false;
+        java.util.UUID goer = d.getAssignedTo() != null ? d.getAssignedTo().getId() : incident.getHandlerId();
+        return me.memberId().equals(goer);
+    }
+
     private DispatchPlanResponse planView(Incident incident, IncidentDispatch latest, boolean officer) {
         if (latest == null) return null;
         DispatchPlanResponse plan = DispatchPlanResponse.of(latest, currentRoute(latest));
@@ -164,7 +182,8 @@ public class DispatchServiceImpl implements DispatchService {
             plan.setFieldLinkIssuedAt(latest.getFieldTokenIssuedAt() == null ? null
                     : latest.getFieldTokenIssuedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime());
             plan.setSimulation(DispatchPlanResponse.Simulation.builder()
-                    .available(enRoute && badgeOfTracker(latest) != null)
+                    .available(enRoute && badgeOfTracker(latest) != null
+                            && isGoer(currentOfficer.orNull(), incident, latest))
                     .running(dispatchSimulationService.running(latest.getId()))
                     .build());
         }

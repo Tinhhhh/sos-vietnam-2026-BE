@@ -26,7 +26,7 @@ public class CallSignalMessage {
     @JsonProperty("call_id")
     private String callId;
 
-    /** ring | accept | reject | offer | answer | ice | quality | end */
+    /** ring | accept | reject | offer | answer | ice | quality | end; server gửi thêm dismiss (đã nghe / từ chối ở máy khác) */
     @JsonProperty("action")
     private String action;
 
@@ -40,18 +40,18 @@ public class CallSignalMessage {
     @JsonProperty("quality")
     private String quality;
 
-    /** Lý do kết thúc / từ chối (network, busy, not_handler, closed...) */
+    /** Lý do kết thúc / từ chối (network, busy, offline, not_handler, no_field, no_delegate, closed...) */
     @JsonProperty("reason")
     private String reason;
 
     /**
-     * Bên nhận: officer (cán bộ giữ ca) | citizen (người báo tin) | field (người phụ trách hiện trường).
-     * Bỏ trống thì như cũ: cán bộ -> dân, dân -> cán bộ, người phụ trách -> cán bộ.
+     * Bên nhận: officer (cán bộ giữ ca) | citizen (người báo tin) | field (người phụ trách hiện trường)
+     * | delegate (cán bộ xã được uỷ quyền). Bỏ trống thì như cũ: cán bộ -> dân, dân -> cán bộ, người phụ trách -> cán bộ.
      */
     @JsonProperty("to")
     private String to;
 
-    /** Bên gửi, server điền: officer | citizen | field | server */
+    /** Bên gửi, server điền: officer | citizen | field | delegate | server */
     @JsonProperty("from")
     private String from;
 
