@@ -192,7 +192,8 @@ class IncidentStatusFlowTest {
         incident.setStatus(IncidentStatus.RESOLVING);
         incident.setFieldMemberId(UUID.randomUUID());
         var d = com.sosvietnam.model.entity.IncidentDispatch.builder()
-                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED).build();
+                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED)
+                .fieldTokenHash("hash-of-the-sms-link").fieldTokenIssuedAt(LocalDateTime.now()).build();
         when(dispatchRepo.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc("SOS-1",
                 com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY,
                 com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED)).thenReturn(Optional.of(d));
@@ -202,6 +203,7 @@ class IncidentStatusFlowTest {
 
         assertThat(d.getStatus()).isEqualTo(com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED);
         assertThat(d.getRejectReason()).isEqualTo("Ca đã chuyển lên cấp tỉnh");
+        assertThat(d.getFieldTokenHash()).isNull(); // link SMS của người đi hiện trường hết hiệu lực
         assertThat(incident.getFieldMemberId()).isNull();
         verify(dispatchRepo).save(d);
     }

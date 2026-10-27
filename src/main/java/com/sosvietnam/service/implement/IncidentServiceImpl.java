@@ -896,6 +896,9 @@ public class IncidentServiceImpl implements IncidentService {
                     // REJECTED: tỉnh bắt đầu lại từ bước 1, lượt cũ vẫn giữ để tra cứu; mô phỏng tự dừng khi hết EN_ROUTE
                     d.setStatus(DispatchStatus.REJECTED);
                     d.setRejectReason(ESCALATED_DISPATCH_REASON);
+                    // link đã gửi cho người phụ trách của xã hết hiệu lực (cả STOMP, ice-servers), người đi vẫn lưu để tra cứu
+                    d.setFieldTokenHash(null);
+                    d.setFieldTokenIssuedAt(null);
                     d.setRespondedAt(now);
                     d.setUpdatedAt(now);
                     incidentDispatchRepository.save(d);
