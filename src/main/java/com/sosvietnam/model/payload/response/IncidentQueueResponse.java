@@ -112,6 +112,10 @@ public class IncidentQueueResponse {
     @JsonProperty("report_type_label")
     private String reportTypeLabel;
 
+    /** Số ca báo khống 24 giờ qua từ cùng IP (cờ cảnh báo, không chặn); 0 = không có. */
+    @JsonProperty("ip_false_alarm_count")
+    private long ipFalseAlarmCount;
+
     /** Lý do cán bộ xã ghi khi tự chuyển lên tỉnh */
     @JsonProperty("escalation_note")
     private String escalationNote;

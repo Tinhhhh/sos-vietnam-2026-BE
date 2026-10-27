@@ -36,6 +36,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IncidentNotifierImpl implements IncidentNotifier {
 
+    // Chống báo tin giả (khoá SĐT, V20). Field không bắt buộc để test dựng tay service không phải đổi constructor.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.PhoneLockService phoneLockService;
+
     public static final String QUEUE_DESTINATION = "/queue/incidents";
     /** Người báo tin (CitizenPrincipal) nhận trạng thái ca của mình ở /user/queue/incident. */
     public static final String CITIZEN_DESTINATION = "/queue/incident";
@@ -184,6 +188,9 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                         .collect(Collectors.toMap(d -> d.getIncident().getId(), d -> d,
                                 (a, b) -> a.getDispatchedAt().isAfter(b.getDispatchedAt()) ? a : b));
         Map<String, List<Incident>> openByPhone = openByPhone(incidents);
+        Map<String, Long> ipFalseAlarms = phoneLockService == null ? Map.of()
+                : phoneLockService.falseAlarmsByIp(incidents.stream().map(Incident::getClientIp)
+                        .filter(ip -> ip != null && !ip.isBlank()).collect(Collectors.toSet()));
         return incidents.stream()
                 .map(i -> {
                     IncidentQueueResponse view = toView(i, viewer, names.get(i.getHandlerId()),
@@ -192,6 +199,7 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                             : openByPhone.getOrDefault(i.getPhone(), List.of()).stream()
                                     .filter(o -> !o.getId().equals(i.getId()))
                                     .map(IncidentQueueResponse.OpenCase::of).toList());
+                    view.setIpFalseAlarmCount(i.getClientIp() == null ? 0 : ipFalseAlarms.getOrDefault(i.getClientIp(), 0L));
                     return view;
                 })
                 .toList();

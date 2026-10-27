@@ -59,6 +59,10 @@ public class Incident {
     @Builder.Default
     private com.sosvietnam.model.payload.enums.ReportType reportType = com.sosvietnam.model.payload.enums.ReportType.SELF;
 
+    // IP người gửi SOS (V20): chỉ để cảnh báo cán bộ, không dùng để chặn (4G dùng chung IP)
+    @Column(name = "client_ip", length = 45)
+    private String clientIp;
+
     @Column(columnDefinition = "TEXT")
     private String address;
 

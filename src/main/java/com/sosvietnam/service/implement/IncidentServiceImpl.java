@@ -105,6 +105,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IncidentServiceImpl implements IncidentService {
 
+    // Chống báo tin giả (khoá SĐT, V20). Field không bắt buộc để test dựng tay service không phải đổi constructor.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.PhoneLockService phoneLockService;
+
     private static final int MAX_MEDIA_PER_INCIDENT = 10;
     private static final int MAX_QUEUE_PAGE_SIZE = 100;
     // Bộ lọc thời gian của hàng đợi / lịch sử (FE dùng 1 / 7 / 30 ngày)
@@ -182,6 +186,9 @@ public class IncidentServiceImpl implements IncidentService {
                     "Cấp cứu y tế không gửi qua SOS: vui lòng gọi 115 hoặc bệnh viện gần nhất trong danh bạ");
         }
 
+        // SĐT đang bị khoá vì báo tin giả: 403 trước mọi việc khác
+        if (phoneLockService != null) phoneLockService.checkCanReport(request.getPhone());
+
         guardOpenCases(request);
 
         String id = "SOS-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
@@ -213,6 +220,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .description(request.getDescription())
                 .incidentTag(firstTag(request.getIncidentTags()))
                 .reportType(reportTypeOf(request))
+                .clientIp(request.getClientIp())
                 .address(request.getAddress())
                 .ward(area.ward())
                 .province(area.province())
@@ -501,6 +509,10 @@ public class IncidentServiceImpl implements IncidentService {
                 : incidentRepository.findByPhoneAndStatusInOrderByCreatedAtDesc(incident.getPhone(), IncidentStatus.ACTIVE)
                         .stream().filter(o -> !o.getId().equals(id))
                         .map(IncidentQueueResponse.OpenCase::of).toList());
+        if (phoneLockService != null && incident.getClientIp() != null) {
+            detail.setIpFalseAlarmCount(phoneLockService.falseAlarmsByIp(List.of(incident.getClientIp()))
+                    .getOrDefault(incident.getClientIp(), 0L));
+        }
         return detail;
     }
 
@@ -992,6 +1004,8 @@ public class IncidentServiceImpl implements IncidentService {
             throw new SosException(HttpStatus.CONFLICT, "Tin báo đã kết thúc hoặc đã được huỷ trước đó");
         }
         log.info("🛑 [CANCEL] Incident {} cancelled by citizen ({})", id, reason);
+        // bấm nhầm lần thứ 4 trong 24 giờ -> khoá SĐT
+        if (reason == CancelReason.MISTAKE && phoneLockService != null) phoneLockService.onMistakeCancel(incident.getPhone());
         return tracking(findIncident(id));
     }
 
@@ -1031,19 +1045,22 @@ public class IncidentServiceImpl implements IncidentService {
      */
     @Transactional
     @Override
-    public void cancelByOfficer(String id, String reason) {
+    public void cancelByOfficer(String id, String reason, boolean falseAlarm) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới huỷ ca được");
         }
         LocalDateTime now = LocalDateTime.now();
-        if (incidentRepository.cancel(id, CancelReason.OFFICER_CANCELLED, IncidentStatus.HELD, now) == 0) {
+        CancelReason cancelReason = falseAlarm ? CancelReason.FALSE_ALARM : CancelReason.OFFICER_CANCELLED;
+        if (incidentRepository.cancel(id, cancelReason, IncidentStatus.HELD, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
         }
+        String prefix = falseAlarm ? "Báo khống: " : "Cán bộ huỷ ca: ";
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
-                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, "Cán bộ huỷ ca: " + reason.trim()));
-        log.info("🗑️ [OFFICER CANCEL] Incident {} by {}: {}", id, me.email(), reason.trim());
+                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, prefix + reason.trim()));
+        log.info("🗑️ [OFFICER CANCEL] Incident {} by {} ({}): {}", id, me.email(), cancelReason, reason.trim());
+        if (falseAlarm && phoneLockService != null) phoneLockService.onFalseAlarm(incident.getPhone());
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
     }
 

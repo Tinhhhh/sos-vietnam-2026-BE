@@ -42,6 +42,10 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class DispatchServiceImpl implements DispatchService {
 
+    // Chống báo tin giả (khoá SĐT, V20). Field không bắt buộc để test dựng tay service không phải đổi constructor.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.PhoneLockService phoneLockService;
+
     private final IncidentRepository incidentRepository;
     private final IncidentDispatchRepository incidentDispatchRepository;
     private final IncidentRouteRepository incidentRouteRepository;
@@ -930,6 +934,7 @@ public class DispatchServiceImpl implements DispatchService {
         }
         close(incident, d, report, now);
         log.info("🏁 [FINISH] Incident {} -> RESOLVED ({}) by {}", incidentId, result, me.email());
+        if (result == ReportResult.FALSE_ALARM && phoneLockService != null) phoneLockService.onFalseAlarm(incident.getPhone());
         return true;
     }
 
