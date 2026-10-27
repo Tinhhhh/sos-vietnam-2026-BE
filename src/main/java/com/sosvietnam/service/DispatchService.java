@@ -82,7 +82,11 @@ public interface DispatchService {
      * cán bộ được giao (đơn vị được uỷ quyền), người giữ ca khi chính đơn vị mình đi, người phụ trách hiện trường,
      * hoặc người dân (citizenAccessToken).
      */
-    DispatchPlanResponse arrive(String incidentId, String citizenAccessToken);
+    /** reason: người giữ ca xác nhận đã đến không theo GPS (>= 5 ký tự); null = kiểm GPS (dân: không kiểm). */
+    DispatchPlanResponse arrive(String incidentId, String citizenAccessToken, String reason);
+
+    /** "Khởi hành" từ trang link của người phụ trách hiện trường. */
+    DispatchPlanResponse fieldDepart(String fieldToken);
 
     /**
      * "Mô phỏng": giả lập điện thoại người đi hiện trường chạy dọc tuyến tới gần hiện trường (mọi ca, 25/10/2026).

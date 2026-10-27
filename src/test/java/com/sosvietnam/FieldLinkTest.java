@@ -163,19 +163,39 @@ class FieldLinkTest {
     }
 
     @Test
-    void notMovingYet_orStranger_cannotIssue() {
-        trip.setStatus(DispatchStatus.ACCEPTED);
+    void noFieldOfficerYet_orStranger_cannotIssue() {
+        trip.setFieldMember(null);
         assertThatThrownBy(() -> service.issueFieldLink("SOS-1")).isInstanceOf(SosException.class)
-                .hasMessageContaining("đã xuất phát");
+                .hasMessageContaining("đã chọn người phụ trách");
+        trip.setFieldMember(goer);
         trip.setStatus(DispatchStatus.EN_ROUTE);
         incident.setHandlerId(UUID.randomUUID());
         assertThatThrownBy(() -> service.issueFieldLink("SOS-1")).isInstanceOf(SosException.class)
                 .hasMessageContaining("người giữ ca");
     }
 
+    /** Link cấp được lúc chờ khởi hành; người đi bấm "Khởi hành" trên link; GPS chỉ nhận sau khi khởi hành. */
+    @Test
+    void fieldOfficer_departsFromTheLink_gpsOnlyAfterwards() {
+        trip.setStatus(DispatchStatus.ACCEPTED);
+        String token = service.issueFieldLink("SOS-1").getToken();
+        FieldPositionRequest p = FieldPositionRequest.builder().latitude(10.03).longitude(105.76).build();
+        assertThat(service.fieldPosition(token, p)).isFalse(); // chưa khởi hành: bỏ điểm
+
+        assertThat(service.fieldDepart(token).getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
+        assertThat(trip.getDepartedAt()).isNotNull();
+        assertThat(service.fieldPosition(token, p)).isTrue();
+        assertThatThrownBy(() -> service.fieldDepart(token)).isInstanceOf(SosException.class); // đã đi rồi
+    }
+
     @Test
     void closedCase_410_andArriveFromTheLink() {
         String token = service.issueFieldLink("SOS-1").getToken();
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.of(
+                com.sosvietnam.model.entity.IncidentRoute.builder().id(5L).dispatch(trip).destLat(10.03).destLng(105.76).build()));
+        assertThatThrownBy(() -> service.fieldArrive(token)).isInstanceOf(SosException.class)
+                .hasMessageContaining("Chưa có tín hiệu GPS");
+        service.fieldPosition(token, FieldPositionRequest.builder().latitude(10.0301).longitude(105.76).accuracyM(8.0).build());
         assertThat(service.fieldArrive(token).getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         incident.setStatus(IncidentStatus.RESOLVED);
         assertThatThrownBy(() -> service.getFieldPlan(token)).isInstanceOf(SosException.class)

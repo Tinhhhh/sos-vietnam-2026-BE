@@ -76,12 +76,15 @@ public class DispatchController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Rejected", dispatchService.reject(id, request.getReason()));
     }
 
-    @Operation(summary = "The delegated unit sets off (\"Lập tức điều động\"): step 3 tracking",
-            description = "Body { member_id }: the field officer of my unit (carries the GPS phone, needs a badge number, "
-                    + "not on another open trip; online not required). Role required: OFFICER (the assigned officer, after accepting)")
+    @Operation(summary = "\"Khởi hành\": the chosen field officer sets off (ACCEPTED -> EN_ROUTE), GPS taken from now",
+            description = "Optional body { member_id } chooses the field officer in the same call; empty = the one chosen "
+                    + "before (PUT /field-member). Allowed: the officer who chose (holder when their unit goes or for a "
+                    + "PCCC / CSGT team, the assigned officer) or the field officer. Role required: OFFICER, ADMIN")
     @PostMapping("/depart")
-    public ResponseEntity<Object> depart(@PathVariable String id, @RequestBody @Valid FieldMemberRequest request) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Departed", dispatchService.depart(id, request.getMemberId()));
+    public ResponseEntity<Object> depart(@PathVariable String id,
+                                         @RequestBody(required = false) @Valid com.sosvietnam.model.payload.request.DepartRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Departed",
+                dispatchService.depart(id, request == null ? null : request.getMemberId()));
     }
 
     @Operation(summary = "Officers of the unit that goes, to pick the field officer (người phụ trách hiện trường)",
@@ -102,7 +105,7 @@ public class DispatchController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Field link issued", dispatchService.issueFieldLink(id));
     }
 
-    @Operation(summary = "Change the field officer while the force is on the way (EN_ROUTE)",
+    @Operation(summary = "Choose / change the field officer (unit accepted, not arrived yet)",
             description = "Same rules as choosing it; a running simulation stops. Role required: OFFICER, ADMIN")
     @PutMapping("/field-member")
     public ResponseEntity<Object> changeFieldMember(@PathVariable String id, @RequestBody @Valid FieldMemberRequest request) {
@@ -116,8 +119,10 @@ public class DispatchController {
                     + "Role required: OFFICER, ADMIN or citizen token")
     @PostMapping("/arrive")
     public ResponseEntity<Object> arrive(@PathVariable String id,
-                                         @RequestHeader(value = IncidentController.CITIZEN_TOKEN_HEADER, required = false) String citizenToken) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.arrive(id, citizenToken));
+                                         @RequestHeader(value = IncidentController.CITIZEN_TOKEN_HEADER, required = false) String citizenToken,
+                                         @RequestBody(required = false) @Valid com.sosvietnam.model.payload.request.ArriveRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived",
+                dispatchService.arrive(id, citizenToken, request == null ? null : request.getReason()));
     }
 
     @Operation(summary = "DEMO ONLY: simulate the field officer's phone driving along the route",

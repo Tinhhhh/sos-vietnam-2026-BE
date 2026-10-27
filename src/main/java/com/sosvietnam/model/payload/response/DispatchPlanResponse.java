@@ -41,6 +41,36 @@ public class DispatchPlanResponse {
     @JsonProperty("field_link_issued_at")
     private OffsetDateTime fieldLinkIssuedAt;
 
+    /**
+     * Khi đang trên đường: GPS mới nhất cách điểm đến bao xa, "Đã đến" được bấm khi within (<= threshold_m =
+     * 30 m + sai số GPS tối đa 50 m). null = chưa có điểm GPS.
+     */
+    @JsonProperty("arrival_check")
+    private ArrivalCheck arrivalCheck;
+
+    /** Đã đến bằng cách nào (GPS / HOLDER_OVERRIDE / CITIZEN) + lý do khi người giữ ca xác nhận không theo GPS. */
+    @JsonProperty("arrival_source")
+    private com.sosvietnam.model.payload.enums.ArrivalSource arrivalSource;
+
+    @JsonProperty("arrival_source_label")
+    private String arrivalSourceLabel;
+
+    @JsonProperty("arrival_note")
+    private String arrivalNote;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ArrivalCheck {
+        @JsonProperty("distance_m")
+        private int distanceM;
+        @JsonProperty("threshold_m")
+        private int thresholdM;
+        @JsonProperty("within")
+        private boolean within;
+    }
+
     /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
     @JsonProperty("simulation")
     private Simulation simulation;
@@ -224,7 +254,10 @@ public class DispatchPlanResponse {
         return DispatchPlanResponse.builder()
                 .dispatchId(d.getId())
                 .status(d.getStatus())
-                .statusLabel(d.getStatus().getLabel())
+                .statusLabel(d.statusLabel())
+                .arrivalSource(d.getArrivalSource())
+                .arrivalSourceLabel(d.getArrivalSource() == null ? null : d.getArrivalSource().getLabel())
+                .arrivalNote(d.getArrivalNote())
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
                 .assignedTo(officer(d.getAssignedTo()))

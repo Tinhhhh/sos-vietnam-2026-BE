@@ -210,7 +210,7 @@ public class IncidentNotifierImpl implements IncidentNotifier {
         return IncidentQueueResponse.Delegation.builder()
                 .dispatchId(d.getId())
                 .status(d.getStatus())
-                .statusLabel(d.getStatus().getLabel())
+                .statusLabel(d.statusLabel())
                 .step(d.getStatus().getStep())
                 .stationName(d.getStation().getName())
                 .fromUnit(by == null || by.getAgencyType() == null ? null

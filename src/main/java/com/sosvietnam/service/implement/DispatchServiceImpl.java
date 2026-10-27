@@ -25,6 +25,7 @@ import java.util.UUID;
 import com.sosvietnam.util.CitizenTokens;
 import com.sosvietnam.util.IncidentAccess;
 import com.sosvietnam.util.Polylines;
+import com.sosvietnam.model.payload.enums.ArrivalSource;
 import com.sosvietnam.util.RouteSimulation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -143,8 +144,8 @@ public class DispatchServiceImpl implements DispatchService {
     private static final double DETOUR_AHEAD_M = 150;
     private static final double DETOUR_SIDE_M = 350;
 
-    /** Xe giả dừng cách hiện trường 30 m: người vẫn phải bấm "Tới nơi". */
-    private static final double SIMULATION_STOP_BEFORE_M = 30;
+    /** Xe giả dừng cách điểm đến 5 m (trong bán kính "Đã đến"): người vẫn phải bấm "Đã đến". */
+    private static final double SIMULATION_STOP_BEFORE_M = 5;
 
     /** Cán bộ xem được ca (hoặc đơn vị được uỷ quyền); trả lượt chủ trì mới nhất. */
     private IncidentDispatch requireViewer(Incident incident) {
@@ -183,6 +184,7 @@ public class DispatchServiceImpl implements DispatchService {
         if (enRoute || latest.getStatus() == DispatchStatus.ARRIVED || latest.getStatus() == DispatchStatus.DONE) {
             plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
         }
+        if (enRoute) plan.setArrivalCheck(arrivalCheck(latest));
         // "Người nhận ca" trên thẻ theo dõi (trên "Người đi hiện trường"); dân / link không thấy SĐT cá nhân
         if (incident.getHandlerId() != null) {
             unitMemberRepository.findById(incident.getHandlerId()).ifPresent(h -> plan.setReceiver(
@@ -245,11 +247,12 @@ public class DispatchServiceImpl implements DispatchService {
             throw new SosException(HttpStatus.BAD_REQUEST, "Trạm chưa có toạ độ");
         }
 
-        // Đơn vị mình tự đi: bước 2 "Điều động" chọn người phụ trách hiện trường rồi mới xuất phát (/depart).
-        // Đang trên đường mà đổi điểm xuất phát / điểm đến thì vẫn đi tiếp với người cũ.
+        // Đơn vị mình tự đi: bước 2 "Điều động" chọn người phụ trách hiện trường, rồi "Khởi hành" (/depart).
+        // Đã chọn người (chờ khởi hành / đang trên đường) mà đổi điểm xuất phát / điểm đến thì giữ người + trạng thái.
         IncidentDispatch current = currentPrimary(incidentId).orElse(null);
         boolean keepTrip = !request.isDelegate() && current != null && current.getAssignedTo() == null
-                && current.getStatus() == DispatchStatus.EN_ROUTE && current.getFieldMember() != null;
+                && (current.getStatus() == DispatchStatus.EN_ROUTE || current.getStatus() == DispatchStatus.ACCEPTED)
+                && current.getFieldMember() != null;
         UnitMember field = keepTrip ? current.getFieldMember() : null;
         if (!request.isDelegate() && request.getFieldMemberId() != null) {
             field = requireFieldMember(me, request.getFieldMemberId(), incidentId);
@@ -258,7 +261,8 @@ public class DispatchServiceImpl implements DispatchService {
 
         LocalDateTime now = LocalDateTime.now();
         DispatchStatus status = request.isDelegate() ? DispatchStatus.PENDING_ACCEPT
-                : field != null ? DispatchStatus.EN_ROUTE : DispatchStatus.ACCEPTED;
+                : keepTrip && current.getStatus() == DispatchStatus.EN_ROUTE ? DispatchStatus.EN_ROUTE
+                : DispatchStatus.ACCEPTED;
         LocalDateTime departedAt = keepTrip ? current.getDepartedAt() : now;
         IncidentDispatch dispatch = current != null ? current : IncidentDispatch.builder()
                 .incident(incident)
@@ -379,11 +383,11 @@ public class DispatchServiceImpl implements DispatchService {
         d.setRejectReason(null);
         d.setUpdatedAt(now);
         if (appointsFieldOfficer(st)) {
-            // PCCC / CSGT: người được chỉ định cũng là người phụ trách hiện trường (cầm GPS), đi luôn không chờ nhận
+            // PCCC / CSGT: người được chỉ định cũng là người phụ trách hiện trường (cầm GPS), không chờ nhận;
+            // vẫn phải "Khởi hành" (người giữ ca hoặc chính người đó trên link) mới tính đang đi
             d.setFieldMember(requireFieldReady(target, incidentId));
-            d.setStatus(DispatchStatus.EN_ROUTE);
+            d.setStatus(DispatchStatus.ACCEPTED);
             d.setRespondedAt(now);
-            d.setDepartedAt(now);
         } else {
             d.setRespondedAt(null);
         }
@@ -432,38 +436,62 @@ public class DispatchServiceImpl implements DispatchService {
         }, "⛔ [REJECT]");
     }
 
+    /**
+     * "Khởi hành": lượt đã chọn người phụ trách hiện trường (ACCEPTED) -> EN_ROUTE; từ đây BE mới nhận GPS và cho
+     * mô phỏng. Bấm được: người đã chọn người (người giữ ca khi đơn vị mình đi hoặc PCCC / CSGT chỉ định đội,
+     * cán bộ được uỷ quyền), hoặc chính người đi hiện trường. fieldMemberId (tuỳ chọn) = chọn luôn người rồi đi.
+     */
     @Transactional
     @Override
     public DispatchPlanResponse depart(String incidentId, UUID fieldMemberId) {
         OfficerPrincipal me = currentOfficer();
-        IncidentDispatch current = latestPrimary(incidentId);
-        if (current != null && current.getAssignedTo() == null) {
-            // đơn vị của người giữ ca tự đi: bước 2 "Điều động" -> chọn người phụ trách -> "Lập tức điều động"
-            Incident incident = findIncident(incidentId);
-            if (!me.memberId().equals(incident.getHandlerId())) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới điều động được");
-            }
-            if (incident.getStatus() != IncidentStatus.RESOLVING || current.getStatus() != DispatchStatus.ACCEPTED) {
-                throw new SosException(HttpStatus.CONFLICT, "Trạng thái điều động đã thay đổi, tải lại cửa sổ");
-            }
-            LocalDateTime now = LocalDateTime.now();
-            current.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
-            current.setStatus(DispatchStatus.EN_ROUTE);
-            current.setDepartedAt(now);
-            current.setUpdatedAt(now);
-            incident.setFieldMemberId(fieldMemberId);
-            incidentRepository.save(incident);
-            IncidentDispatch saved = incidentDispatchRepository.save(current);
-            log.info("🚓 [DEPART] Incident {} by {} (own unit), field {}", incidentId, me.email(),
-                    saved.getFieldMember().getFullName());
-            notifier.notify(incidentId, IncidentEvent.INCIDENT_UPDATED);
-            return planView(incident, saved, true);
-        }
-        return respond(incidentId, DispatchStatus.ACCEPTED, d -> {
+        Incident incident = findIncident(incidentId);
+        IncidentDispatch d = latestPrimary(incidentId);
+        requireAwaitingDeparture(incident, d, fieldMemberId != null);
+        if (fieldMemberId != null) {
+            requireFieldChooser(me, incident, d);
             d.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
-            d.setStatus(DispatchStatus.EN_ROUTE);
-            d.setDepartedAt(LocalDateTime.now());
-        }, "🚓 [DEPART]");
+        }
+        boolean holderChose = me.memberId().equals(incident.getHandlerId())
+                && (d.getAssignedTo() == null || appointsFieldOfficer(d.getStation()));
+        boolean allowed = holderChose || IncidentAccess.isAssignee(me, d) || me.memberId().equals(d.getFieldMember().getId());
+        if (!allowed) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người chọn người đi hoặc chính người đi hiện trường mới khởi hành được");
+        }
+        return startTrip(incident, d, me.email(), true);
+    }
+
+    @Transactional
+    @Override
+    public DispatchPlanResponse fieldDepart(String fieldToken) {
+        IncidentDispatch d = requireFieldDispatch(fieldToken);
+        requireAwaitingDeparture(d.getIncident(), d, false);
+        return startTrip(d.getIncident(), d, "field link", false);
+    }
+
+    /** Ca đang điều động, lượt ACCEPTED, đã có người phụ trách (hoặc sắp chọn ngay trong lần gọi này). */
+    private static void requireAwaitingDeparture(Incident incident, IncidentDispatch d, boolean choosingNow) {
+        if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getStatus() != DispatchStatus.ACCEPTED) {
+            throw new SosException(HttpStatus.CONFLICT, "Lượt điều động không ở bước chờ khởi hành, tải lại");
+        }
+        if (d.getFieldMember() == null && !choosingNow) {
+            throw new SosException(HttpStatus.CONFLICT, "Chưa chọn người phụ trách hiện trường");
+        }
+    }
+
+    private DispatchPlanResponse startTrip(Incident incident, IncidentDispatch d, String who, boolean officerView) {
+        LocalDateTime now = LocalDateTime.now();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        d.setDepartedAt(now);
+        d.setUpdatedAt(now);
+        if (d.getAssignedTo() == null) {
+            incident.setFieldMemberId(d.getFieldMember().getId());
+            incidentRepository.save(incident);
+        }
+        IncidentDispatch saved = incidentDispatchRepository.save(d);
+        log.info("🚓 [DEPART] Incident {} by {}, field {}", incident.getId(), who, saved.getFieldMember().getFullName());
+        notifier.notify(incident.getId(), IncidentEvent.INCIDENT_UPDATED);
+        return planView(incident, saved, officerView);
     }
 
     @Transactional(readOnly = true)
@@ -516,8 +544,9 @@ public class DispatchServiceImpl implements DispatchService {
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
         requireFieldChooser(me, incident, d);
-        if (incident.getStatus() != IncidentStatus.RESOLVING || d == null || d.getStatus() != DispatchStatus.EN_ROUTE) {
-            throw new SosException(HttpStatus.CONFLICT, "Chỉ đổi người phụ trách được khi lực lượng đang trên đường");
+        if (incident.getStatus() != IncidentStatus.RESOLVING || d == null
+                || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ACCEPTED)) {
+            throw new SosException(HttpStatus.CONFLICT, "Chỉ chọn / đổi người phụ trách khi đơn vị đã nhận ca, chưa tới nơi");
         }
         d.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
         d.setFieldTokenHash(null); // link cũ là của người cũ
@@ -574,44 +603,88 @@ public class DispatchServiceImpl implements DispatchService {
     private List<IncidentDispatch> activeFieldTrips(List<UUID> memberIds) {
         if (memberIds.isEmpty()) return List.of();
         return incidentDispatchRepository.findActiveFieldTrips(memberIds,
-                java.util.EnumSet.of(DispatchStatus.EN_ROUTE, DispatchStatus.ARRIVED), IncidentStatus.ACTIVE);
+                java.util.EnumSet.of(DispatchStatus.ACCEPTED, DispatchStatus.EN_ROUTE, DispatchStatus.ARRIVED),
+                IncidentStatus.ACTIVE);
     }
 
     @Transactional
     @Override
-    public DispatchPlanResponse arrive(String incidentId, String citizenAccessToken) {
+    public DispatchPlanResponse arrive(String incidentId, String citizenAccessToken, String reason) {
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
-        String who;
         if (citizenAccessToken != null && !citizenAccessToken.isBlank()) {
             if (!CitizenTokens.matches(incident, citizenAccessToken)) {
                 throw new SosException(HttpStatus.FORBIDDEN, "Mã truy cập không hợp lệ cho sự cố này");
             }
-            who = "citizen";
-        } else {
-            OfficerPrincipal me = currentOfficer();
-            // một bên bấm "Đã đến" là đủ: đơn vị đi xử lý hoặc chính người phụ trách hiện trường
-            boolean allowed = d != null && (isOnSite(me, incident, d)
-                    || (d.getFieldMember() != null && me.memberId().equals(d.getFieldMember().getId())));
-            if (!allowed) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi xử lý mới báo tới hiện trường được");
-            }
-            who = me.email();
+            // người báo tin thấy xe tới là đủ, không cần GPS
+            return markArrived(incident, d, "citizen", false, ArrivalSource.CITIZEN, null, null);
         }
-        return markArrived(incident, d, who, !"citizen".equals(who));
+        OfficerPrincipal me = currentOfficer();
+        boolean holder = me.memberId().equals(incident.getHandlerId());
+        if (reason != null && !reason.isBlank()) {
+            // mất GPS / điện thoại hỏng: chỉ người giữ ca được xác nhận không theo GPS, ghi lý do
+            if (!holder) {
+                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca mới xác nhận đã đến không theo GPS");
+            }
+            if (reason.trim().length() < 5) {
+                throw new SosException(HttpStatus.BAD_REQUEST, "Lý do ít nhất 5 ký tự");
+            }
+            return markArrived(incident, d, me.email(), true, ArrivalSource.HOLDER_OVERRIDE, reason.trim(), me.memberId());
+        }
+        // theo GPS: đơn vị đi xử lý, chính người phụ trách hiện trường, hoặc người giữ ca
+        boolean allowed = d != null && (holder || isOnSite(me, incident, d)
+                || (d.getFieldMember() != null && me.memberId().equals(d.getFieldMember().getId())));
+        if (!allowed) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ đơn vị đang đi xử lý mới báo tới hiện trường được");
+        }
+        return markArrived(incident, d, me.email(), true, ArrivalSource.GPS, null, me.memberId());
     }
 
-    private DispatchPlanResponse markArrived(Incident incident, IncidentDispatch d, String who, boolean officerView) {
+    /** GPS mới nhất của lượt so với điểm đến hiện hành; null khi chưa có điểm GPS / chưa có điểm đến. */
+    private DispatchPlanResponse.ArrivalCheck arrivalCheck(IncidentDispatch d) {
+        DispatchPlanResponse.LivePosition p = dispatchTrackingService.lastPosition(d.getId());
+        IncidentRoute route = currentRoute(d);
+        if (p == null || route == null || route.getDestLat() == null || route.getDestLng() == null) return null;
+        int distance = (int) Math.round(RouteSimulation.distanceM(
+                new double[]{p.getLatitude(), p.getLongitude()}, new double[]{route.getDestLat(), route.getDestLng()}));
+        double accuracy = p.getAccuracyM() == null ? 0 : Math.max(0, p.getAccuracyM());
+        int threshold = (int) Math.round(ARRIVAL_RADIUS_M + Math.min(accuracy, ARRIVAL_MAX_ACCURACY_M));
+        return DispatchPlanResponse.ArrivalCheck.builder()
+                .distanceM(distance).thresholdM(threshold).within(distance <= threshold).build();
+    }
+
+    /** "Đã đến" theo GPS: trong 30 m quanh điểm đến, cộng sai số của điểm GPS (tính tối đa 50 m). */
+    private static final double ARRIVAL_RADIUS_M = 30;
+    private static final double ARRIVAL_MAX_ACCURACY_M = 50;
+
+    private DispatchPlanResponse markArrived(Incident incident, IncidentDispatch d, String who, boolean officerView,
+                                             ArrivalSource source, String note, UUID byMemberId) {
         if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getStatus() != DispatchStatus.EN_ROUTE) {
             throw new SosException(HttpStatus.CONFLICT, "Lực lượng chưa ở bước đang di chuyển");
+        }
+        DispatchPlanResponse.ArrivalCheck check = arrivalCheck(d);
+        if (source == ArrivalSource.GPS) {
+            if (check == null) {
+                throw new SosException(HttpStatus.CONFLICT, "Chưa có tín hiệu GPS của người đi hiện trường: bật gửi vị trí "
+                        + "(app Traccar hoặc trang link), hoặc người giữ ca xác nhận đã đến kèm lý do");
+            }
+            if (!check.isWithin()) {
+                throw new SosException(HttpStatus.CONFLICT, "Còn " + check.getDistanceM() + " m tới điểm đến (cần trong "
+                        + check.getThresholdM() + " m)");
+            }
         }
         LocalDateTime now = LocalDateTime.now();
         d.setStatus(DispatchStatus.ARRIVED);
         d.setArrivedAt(now);
         d.setUpdatedAt(now);
+        d.setArrivalSource(source);
+        d.setArrivalNote(note);
+        d.setArrivalBy(byMemberId == null ? null : unitMemberRepository.getReferenceById(byMemberId));
+        d.setArrivalDistanceM(check == null ? null : check.getDistanceM());
         IncidentDispatch saved = incidentDispatchRepository.save(d);
         dispatchSimulationService.stop(saved.getId()); // xe giả dừng ở điểm cuối, chấm xe vẫn hiện ở đó
-        log.info("📍 [ARRIVED] Incident {} by {}", incident.getId(), who);
+        log.info("📍 [ARRIVED] Incident {} by {} ({}{})", incident.getId(), who, source,
+                check == null ? ", no GPS" : ", " + check.getDistanceM() + " m");
         notifier.notify(incident.getId(), IncidentEvent.INCIDENT_UPDATED);
         return planView(incident, saved, officerView);
     }
@@ -629,8 +702,9 @@ public class DispatchServiceImpl implements DispatchService {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới cấp link được");
         }
         if (d == null || incident.getStatus() != IncidentStatus.RESOLVING || d.getFieldMember() == null
-                || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ARRIVED)) {
-            throw new SosException(HttpStatus.CONFLICT, "Chỉ cấp link khi lực lượng đã xuất phát và có người phụ trách");
+                || (d.getStatus() != DispatchStatus.ACCEPTED && d.getStatus() != DispatchStatus.EN_ROUTE
+                && d.getStatus() != DispatchStatus.ARRIVED)) {
+            throw new SosException(HttpStatus.CONFLICT, "Chỉ cấp link khi đã chọn người phụ trách hiện trường");
         }
         // vừa gửi SMS cho lượt này: chặn bấm liên tục (mỗi lần cấp lại là 1 tin, tốn cước + dễ bị nhà mạng coi là spam)
         java.time.Instant lastSms = fieldSmsSent.get(d.getId());
@@ -738,7 +812,7 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     public DispatchPlanResponse fieldArrive(String fieldToken) {
         IncidentDispatch d = requireFieldDispatch(fieldToken);
-        return markArrived(d.getIncident(), d, "field link", false);
+        return markArrived(d.getIncident(), d, "field link", false, ArrivalSource.GPS, null, d.getFieldMember().getId());
     }
 
     @Transactional

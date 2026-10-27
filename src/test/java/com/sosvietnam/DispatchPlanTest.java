@@ -100,15 +100,17 @@ class DispatchPlanTest {
     }
 
     @Test
-    void ownStation_goesToTracking_andStoresRouteAndDestination() {
+    void ownStation_personChosen_waitsForDeparture_andStoresRouteAndDestination() {
         when(dispatches.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(any(), any(), any()))
                 .thenReturn(Optional.empty());
         when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
 
         DispatchPlanResponse plan = service.savePlan("SOS-1", request(false));
 
-        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
-        assertThat(plan.getStep()).isEqualTo(3);
+        // đã chọn người phụ trách nhưng chưa "Khởi hành": vẫn bước 2, chưa nhận GPS
+        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
+        assertThat(plan.getStatusLabel()).contains("chờ khởi hành");
+        assertThat(plan.getStep()).isEqualTo(2);
         assertThat(plan.getStation().getName()).isEqualTo("Công An Phường Tân An");
         assertThat(plan.getRoute().getDistanceM()).isEqualTo(2700);
         assertThat(plan.getRoute().getOrigin().getLatitude()).isEqualTo(10.03); // điểm đi = toạ độ trạm
@@ -235,7 +237,7 @@ class DispatchPlanTest {
 
         when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.empty());
         service.savePlan("SOS-1", request(false)); // mở khoá: đổi sang trạm của mình được
-        assertThat(d.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.ACCEPTED); // chờ khởi hành
 
         assertThatThrownBy(() -> service.withdraw("SOS-1")) // không còn gì để thu hồi
                 .isInstanceOf(SosException.class).hasMessageContaining("thu hồi");
@@ -252,28 +254,74 @@ class DispatchPlanTest {
         assertThat(d.getAssignedTo().getId()).isEqualTo(free.getId());
     }
 
+    /** Điểm đến của lượt 11 = (10.0281, 105.7579). */
+    void destinationAt(IncidentDispatch d) {
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.of(
+                IncidentRoute.builder().id(5L).dispatch(d).destLat(10.0281).destLng(105.7579).build()));
+    }
+
+    /** Một điểm Traccar của người đi (số hiệu 123) cho lượt d. */
+    void gps(IncidentDispatch d, double lat, double lng, Double accuracy) {
+        when(dispatches.findEnRouteByTrackerBadge("123")).thenReturn(List.of(d));
+        tracking.accept(com.sosvietnam.model.payload.request.TraccarPositionRequest.builder()
+                .device(com.sosvietnam.model.payload.request.TraccarPositionRequest.Device.builder().uniqueId("123").build())
+                .position(com.sosvietnam.model.payload.request.TraccarPositionRequest.Position.builder()
+                        .latitude(lat).longitude(lng).accuracy(accuracy).build())
+                .build());
+    }
+
     @Test
-    void arrive_ownUnit_holderMovesToStep4() {
+    void arrive_needsGpsWithin30mPlusAccuracy() {
         IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE); // chính đơn vị mình đi (không có người được giao)
-        DispatchPlanResponse plan = service.arrive("SOS-1", null);
+        destinationAt(d);
+        assertThatThrownBy(() -> service.arrive("SOS-1", null, null)).isInstanceOf(SosException.class)
+                .hasMessageContaining("Chưa có tín hiệu GPS");
+
+        gps(d, 10.0285, 105.7579, 5.0); // ~44 m, sai số 5 m -> cần trong 35 m
+        assertThatThrownBy(() -> service.arrive("SOS-1", null, null)).isInstanceOf(SosException.class)
+                .hasMessageContaining("Còn 44 m").hasMessageContaining("35 m");
+        assertThat(service.getPlan("SOS-1", null).getArrivalCheck().isWithin()).isFalse();
+
+        gps(d, 10.0285, 105.7579, 200.0); // sai số tính tối đa 50 m -> cần trong 80 m
+        assertThat(service.getPlan("SOS-1", null).getArrivalCheck().getThresholdM()).isEqualTo(80);
+        DispatchPlanResponse plan = service.arrive("SOS-1", null, null);
         assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         assertThat(plan.getStep()).isEqualTo(4);
-        assertThat(d.getArrivedAt()).isNotNull();
+        assertThat(d.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.GPS);
+        assertThat(d.getArrivalDistanceM()).isEqualTo(44);
+    }
+
+    @Test
+    void arrive_withoutGps_onlyTheHolderWithAReason() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        Account assignee = wardOfficer("ha@sos.vn");
+        d.setAssignedTo(TestGeo.member(assignee));
+        destinationAt(d);
+
+        TestGeo.signIn(assignee); // cán bộ được uỷ quyền: không có quyền bỏ qua GPS
+        assertThatThrownBy(() -> service.arrive("SOS-1", null, "Điện thoại hết pin")).isInstanceOf(SosException.class)
+                .hasMessageContaining("Chỉ người giữ ca");
+
+        TestGeo.signIn(me);
+        assertThatThrownBy(() -> service.arrive("SOS-1", null, "pin")).isInstanceOf(SosException.class)
+                .hasMessageContaining("5 ký tự");
+        DispatchPlanResponse plan = service.arrive("SOS-1", null, "  Điện thoại hết pin  ");
+        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        assertThat(plan.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.HOLDER_OVERRIDE);
+        assertThat(plan.getArrivalNote()).isEqualTo("Điện thoại hết pin");
+        assertThat(d.getArrivalDistanceM()).isNull();
     }
 
     @Test
     void arrive_keepsTheLastGpsPoint_andStopsTheSimulation() {
         IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE);
-        when(dispatches.findEnRouteByTrackerBadge("123")).thenReturn(List.of(d));
-        tracking.accept(com.sosvietnam.model.payload.request.TraccarPositionRequest.builder()
-                .device(com.sosvietnam.model.payload.request.TraccarPositionRequest.Device.builder().uniqueId("123").build())
-                .position(com.sosvietnam.model.payload.request.TraccarPositionRequest.Position.builder()
-                        .latitude(10.0281).longitude(105.7579).build())
-                .build());
+        destinationAt(d);
+        gps(d, 10.0281, 105.7579, null);
 
-        DispatchPlanResponse plan = service.arrive("SOS-1", null);
+        DispatchPlanResponse plan = service.arrive("SOS-1", null, null);
         assertThat(plan.getLastPosition()).isNotNull(); // chấm xe vẫn ở điểm cuối sau khi "Đã đến"
         assertThat(plan.getLastPosition().getLatitude()).isEqualTo(10.0281);
         verify(simulation).stop(11L);
@@ -306,11 +354,34 @@ class DispatchPlanTest {
         assertThat(off.getTracker().getMemberId()).isEqualTo(me.getId());
         assertThat(d.getDepartedAt()).isNotNull();
 
-        // người khác (không giữ ca) không điều động thay được
+        // người khác (không giữ ca, không phải người đi) không chọn / khởi hành thay được
         d.setStatus(DispatchStatus.ACCEPTED);
         TestGeo.signIn(wardOfficer("khac2@sos.vn"));
         assertThatThrownBy(() -> service.depart("SOS-1", me.getId())).isInstanceOf(SosException.class)
-                .hasMessageContaining("đang giữ ca");
+                .hasMessageContaining("Chỉ người");
+        assertThatThrownBy(() -> service.depart("SOS-1", null)).isInstanceOf(SosException.class)
+                .hasMessageContaining("Chỉ người");
+    }
+
+    /** Chọn người (PUT /field-member) không xuất phát; "Khởi hành" mới EN_ROUTE, chưa chọn người thì 409. */
+    @Test
+    void ownUnit_choosingThePerson_doesNotSetOff_departDoes() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.ACCEPTED);
+        assertThatThrownBy(() -> service.depart("SOS-1", null)).isInstanceOf(SosException.class)
+                .hasMessageContaining("Chưa chọn người");
+
+        DispatchPlanResponse chosen = service.changeFieldMember("SOS-1", me.getId());
+        assertThat(chosen.getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
+        assertThat(chosen.getStatusLabel()).contains("chờ khởi hành");
+        assertThat(d.getDepartedAt()).isNull();
+        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isFalse(); // chưa đi: chưa mô phỏng
+
+        DispatchPlanResponse off = service.depart("SOS-1", null);
+        assertThat(off.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
+        assertThat(d.getDepartedAt()).isNotNull();
+        assertThatThrownBy(() -> service.depart("SOS-1", null)).isInstanceOf(SosException.class)
+                .hasMessageContaining("chờ khởi hành");
     }
 
     @Test
@@ -322,9 +393,13 @@ class DispatchPlanTest {
         team.setAgencyType(AgencyType.FIRE);
 
         DispatchPlanResponse plan = service.delegate("SOS-1", team.getId());
-        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.EN_ROUTE); // không chờ Chấp nhận
+        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ACCEPTED); // không chờ Chấp nhận, chờ khởi hành
         assertThat(d.getAssignedTo().getId()).isEqualTo(team.getId());
         assertThat(d.getFieldMember().getId()).isEqualTo(team.getId()); // người được chỉ định = người cầm GPS
+        assertThat(d.getDepartedAt()).isNull();
+
+        // người giữ ca (đã chỉ định) bấm "Khởi hành"
+        assertThat(service.depart("SOS-1", null).getStatus()).isEqualTo(DispatchStatus.EN_ROUTE);
         assertThat(d.getDepartedAt()).isNotNull();
     }
 
@@ -333,11 +408,13 @@ class DispatchPlanTest {
         IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE);
         incident.setCitizenTokenHash(CitizenTokens.sha256("tok"));
-        assertThatThrownBy(() -> service.arrive("SOS-1", "sai")).isInstanceOf(SosException.class)
+        assertThatThrownBy(() -> service.arrive("SOS-1", "sai", null)).isInstanceOf(SosException.class)
                 .hasMessageContaining("Mã truy cập");
-        assertThat(service.arrive("SOS-1", "tok").getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        // dân xác nhận: không cần GPS
+        assertThat(service.arrive("SOS-1", "tok", null).getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        assertThat(d.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.CITIZEN);
         // đã tới rồi thì bấm lại -> 409
-        assertThatThrownBy(() -> service.arrive("SOS-1", "tok")).isInstanceOf(SosException.class)
+        assertThatThrownBy(() -> service.arrive("SOS-1", "tok", null)).isInstanceOf(SosException.class)
                 .hasMessageContaining("chưa ở bước đang di chuyển");
     }
 
@@ -571,10 +648,10 @@ class DispatchPlanTest {
     }
 
     @Test
-    void changeFieldMember_onlyWhileEnRoute_stopsSimulation() {
+    void changeFieldMember_onlyBeforeArrival_stopsSimulation() {
         IncidentDispatch d = pending();
         assertThatThrownBy(() -> service.changeFieldMember("SOS-1", me.getId()))
-                .isInstanceOf(SosException.class).hasMessageContaining("đang trên đường");
+                .isInstanceOf(SosException.class).hasMessageContaining("đã nhận ca, chưa tới nơi");
         d.setStatus(DispatchStatus.EN_ROUTE);
         DispatchPlanResponse plan = service.changeFieldMember("SOS-1", me.getId());
         assertThat(plan.getTracker().getMemberId()).isEqualTo(me.getId());

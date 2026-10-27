@@ -305,7 +305,8 @@ public class CallServiceImpl implements CallService {
         return incidentDispatchRepository.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(
                         incidentId, com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
                 .filter(d -> d.getFieldMember() != null
-                        && (d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
+                        && (d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED
+                        || d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
                         || d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.ARRIVED))
                 .orElse(null);
     }

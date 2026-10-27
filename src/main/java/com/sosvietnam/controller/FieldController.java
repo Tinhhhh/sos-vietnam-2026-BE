@@ -42,8 +42,16 @@ public class FieldController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Position", dispatchService.fieldPosition(token, request));
     }
 
+    @Operation(summary = "\"Khởi hành\" pressed by the field officer (ACCEPTED -> EN_ROUTE)",
+            description = "Public (field token); 409 when the trip is not waiting to set off")
+    @PostMapping("/depart")
+    public ResponseEntity<Object> depart(@RequestHeader(value = FIELD_TOKEN_HEADER, required = false) String token) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Departed", dispatchService.fieldDepart(token));
+    }
+
     @Operation(summary = "\"Đã đến\" pressed by the field officer (EN_ROUTE -> ARRIVED)",
-            description = "Public (field token); 409 when the force is not on the way")
+            description = "Public (field token); 409 when the force is not on the way, has no GPS point, or the last "
+                    + "point is farther than 30 m (+ GPS accuracy, max 50 m) from the destination")
     @PostMapping("/arrive")
     public ResponseEntity<Object> arrive(@RequestHeader(value = FIELD_TOKEN_HEADER, required = false) String token) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.fieldArrive(token));
