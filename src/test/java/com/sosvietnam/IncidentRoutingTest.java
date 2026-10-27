@@ -54,10 +54,12 @@ class IncidentRoutingTest {
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
+    final com.sosvietnam.service.CitizenSmsService citizenSms = mock(com.sosvietnam.service.CitizenSmsService.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(), geo,
             mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
-            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode,
+            citizenSms, new com.sosvietnam.security.LookupAttemptLimiter());
 
     final Role officerRole = Role.builder().id(2L).roleName("OFFICER").build();
     final Account caTanAn = officerAccount("congan.tanan@sos.vn", AgencyType.POLICE, UnitLevel.WARD, "Phường Tân An");
@@ -216,6 +218,7 @@ class IncidentRoutingTest {
 
         verify(claimRepo).save(any(IncidentClaim.class));
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
+        verify(citizenSms).scheduleReceived("SOS-1"); // SMS "đã tiếp nhận" + mã ca cho người báo tin
     }
 
     @Test

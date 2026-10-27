@@ -140,6 +140,28 @@ public class IncidentQueueResponse {
     @JsonProperty("delegation")
     private Delegation delegation;
 
+    /** Ca khác đang mở của cùng số điện thoại (tối đa 2 ca / số): cán bộ biết để tránh xử lý trùng. */
+    @JsonProperty("other_open_cases")
+    private List<OpenCase> otherOpenCases;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OpenCase {
+        @JsonProperty("id")
+        private String id;
+        @JsonProperty("type_label")
+        private String typeLabel;
+        @JsonProperty("status_label")
+        private String statusLabel;
+
+        public static OpenCase of(Incident i) {
+            return new OpenCase(i.getId(), i.getEmergencyType() == null ? null : i.getEmergencyType().getLabel(),
+                    i.getStatus() == null ? null : i.getStatus().getLabel());
+        }
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

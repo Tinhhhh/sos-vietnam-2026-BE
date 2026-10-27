@@ -69,6 +69,8 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     private final IncidentDocumentRepository documentRepository;
     private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
     private final com.sosvietnam.service.IncidentNotifier notifier;
+    // cùng giới hạn sai với Tra cứu (5 lần / 10 phút / mã ca): đọc / ký văn bản bằng mã không lách được
+    private final com.sosvietnam.security.LookupAttemptLimiter lookupAttemptLimiter;
 
     // ---------------------------------------------------------------- cán bộ
 
@@ -445,10 +447,15 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
 
     private Incident lookupIncident(String lookupCode, String phoneLast4) {
         SosException notFound = new SosException(HttpStatus.NOT_FOUND, "Mã tra cứu hoặc số điện thoại không đúng");
+        lookupAttemptLimiter.check(lookupCode);
         String code = LookupCodes.normalize(lookupCode);
-        if (code == null || phoneLast4 == null) throw notFound;
-        Incident incident = incidentRepository.findByLookupCode(code).orElseThrow(() -> notFound);
-        if (incident.getPhone() == null || !incident.getPhone().endsWith(phoneLast4)) throw notFound;
+        Incident incident = code == null || phoneLast4 == null ? null
+                : incidentRepository.findByLookupCode(code).orElse(null);
+        if (incident == null || incident.getPhone() == null || !incident.getPhone().endsWith(phoneLast4)) {
+            lookupAttemptLimiter.failed(lookupCode);
+            throw notFound;
+        }
+        lookupAttemptLimiter.succeeded(lookupCode);
         return incident;
     }
 

@@ -257,8 +257,14 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - `POST /incidents` thêm `report_type` tuỳ chọn (trống = SELF); PROXY -> 400 "Báo hộ chưa được hỗ trợ" (làm sau). Queue + chi tiết ca trả `report_type` + `report_type_label`.
 - FE: form SOS có ô "Người báo tin" (Tự báo chọn sẵn, Báo hộ mờ "Sắp có"), gửi `report_type: 'SELF'`; thẻ hàng đợi có nhãn "Tự báo"; Chi tiết ca có dòng "Hình thức báo". 226 unit test, e2e 7/7.
 
-## Đã chốt, CHƯA làm: SMS "đã tiếp nhận" + tra cứu vào lại ca + 2 ca / SĐT (27/10/2026)
-- Spec: `docs/spec-multi-case.md` (migration dành sẵn V19). Mục 8 của spec là đề xuất chờ user duyệt (giới hạn sai tra cứu, chống spam SMS, mã ca hiện lúc tạo ca).
+## SMS "đã tiếp nhận" + tra cứu vào lại ca + 2 ca / SĐT (27/10/2026) — ĐỔI API
+- Spec: `docs/spec-multi-case.md`. V19 `incidents.received_sms_at` (+ index `(phone, received_sms_at)`). ĐÃ chạy trên DB local, CHƯA lên VPS.
+- `POST /incidents`: SĐT có 1 ca ACTIVE (tạo trong `resume-hours=24`, tính cả Báo hộ) -> 409 body lỗi `data { code: OPEN_CASE_EXISTS, open_count: "1" }`, gửi lại với `new_case: true` thì tạo ca thứ 2; có 2 ca -> 409 `OPEN_CASE_LIMIT`. Không còn trả lại ca cũ (`resumed` luôn false). Vẫn chặn khai tên thật khác (409). `SosException` có `data` (Map) -> đặt vào `data` của body lỗi.
+- Mã ca: response tạo ca có `incident.lookup_code`, `/tracking` trả `lookup_code` ở mọi trạng thái.
+- SMS cho người báo tin (`CitizenSmsService`, `incidentTaskScheduler`): lần nhận ca ĐẦU TIÊN -> hẹn `app.sms.received-delay-seconds=10`, tới giờ ca còn ACTIVE, chưa có `received_sms_at`, không phải demo, có SĐT, số đó < `app.sms.max-per-phone-per-day=20` tin / 24h -> gửi rồi ghi `received_sms_at`. Nhả / giao / lên tỉnh / nhận lại không gửi thêm. Tin không dấu, không link (đỡ bị lọc spam): "...Ma ca: XXXX-XXXX. Mat ket noi: vao sosvie.site > Tra cuu..." (site = `APP_PUBLIC_URL` bỏ scheme). Cổng chưa cấu hình = không hẹn; gửi lỗi = không ghi mốc.
+- `POST /incidents/lookup`: ca đang mở -> đổi citizen token (mã cũ 403), trả thêm `open: true`, `incident` (như response tạo ca), `citizen_access_token`; ca đóng `open: false` như cũ. `security/LookupAttemptLimiter` (RAM, 1 instance): 5 lần sai / 10 phút / mã ca -> 429 "thử lại sau N phút", áp cho cả `/lookup/document` (+ `/lookup/document/sign`).
+- Queue + `GET /incidents/{id}`: `other_open_cases` [{ id, type_label, status_label }] = ca khác đang mở cùng SĐT (queue 1 câu SQL / trang).
+- Đã test: 233 unit test (`CitizenSmsTest` mới, `IncidentLookupTest`); e2e 17/17 (8081/5199, cổng SMS giả): 409 hai mã, new_case, ca thứ 3, other_open_cases, SMS sau 10 giây đúng 1 tin, nhả nhận lại không gửi, huỷ trong 10 giây không gửi, demo không gửi, khoá 429, Tra cứu máy khác vào lại `/sos/{id}` + token cũ 403, form SOS -> "Báo sự việc khác".
 
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.

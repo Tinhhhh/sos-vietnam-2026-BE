@@ -183,10 +183,27 @@ public class IncidentNotifierImpl implements IncidentNotifier {
                         // mới nhất của mỗi ca
                         .collect(Collectors.toMap(d -> d.getIncident().getId(), d -> d,
                                 (a, b) -> a.getDispatchedAt().isAfter(b.getDispatchedAt()) ? a : b));
+        Map<String, List<Incident>> openByPhone = openByPhone(incidents);
         return incidents.stream()
-                .map(i -> toView(i, viewer, names.get(i.getHandlerId()),
-                        media.getOrDefault(i.getId(), IncidentQueueResponse.MediaCounts.NONE), dispatches.get(i.getId())))
+                .map(i -> {
+                    IncidentQueueResponse view = toView(i, viewer, names.get(i.getHandlerId()),
+                            media.getOrDefault(i.getId(), IncidentQueueResponse.MediaCounts.NONE), dispatches.get(i.getId()));
+                    view.setOtherOpenCases(i.getPhone() == null ? List.of()
+                            : openByPhone.getOrDefault(i.getPhone(), List.of()).stream()
+                                    .filter(o -> !o.getId().equals(i.getId()))
+                                    .map(IncidentQueueResponse.OpenCase::of).toList());
+                    return view;
+                })
                 .toList();
+    }
+
+    /** Ca còn mở theo số điện thoại của các ca này (1 câu SQL): thẻ ca "SĐT này đang có ca khác". */
+    private Map<String, List<Incident>> openByPhone(Collection<Incident> incidents) {
+        Set<String> phones = incidents.stream().map(Incident::getPhone)
+                .filter(p -> p != null && !p.isBlank()).collect(Collectors.toSet());
+        if (phones.isEmpty()) return Map.of();
+        return incidentRepository.findByPhoneInAndStatusIn(phones, com.sosvietnam.model.payload.enums.IncidentStatus.ACTIVE)
+                .stream().collect(Collectors.groupingBy(Incident::getPhone));
     }
 
     private static IncidentQueueResponse toView(Incident incident, OfficerPrincipal viewer, String handlerName,

@@ -26,6 +26,9 @@ public class IncidentResponse {
     private EmergencyType emergencyType;
     @JsonProperty("status")
     private IncidentStatus status;
+    /** Mã ca (XXXX-XXXX): dân dùng để Tra cứu vào lại ca / xem kết quả (hiện ngay trên màn chờ) */
+    @JsonProperty("lookup_code")
+    private String lookupCode;
     @JsonProperty("description")
     private String description;
     @JsonProperty("incident_tags")
@@ -115,6 +118,7 @@ public class IncidentResponse {
                 .phone(incident.getPhone())
                 .emergencyType(incident.getEmergencyType())
                 .status(incident.getStatus())
+                .lookupCode(com.sosvietnam.util.LookupCodes.format(incident.getLookupCode()))
                 .description(incident.getDescription())
                 .incidentTags(incident.tags())
                 .address(incident.getAddress())

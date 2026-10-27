@@ -149,5 +149,11 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     /** Ca còn mở của 1 số điện thoại (chặn gửi trùng + người dân quay lại ca đang mở), mới nhất trước */
     List<Incident> findByPhoneAndStatusInOrderByCreatedAtDesc(String phone, Collection<IncidentStatus> statuses);
 
+    /** Ca còn mở của nhiều số một lần (thẻ hàng đợi: "SĐT này đang có ca khác") */
+    List<Incident> findByPhoneInAndStatusIn(Collection<String> phones, Collection<IncidentStatus> statuses);
+
+    /** Số tin SMS "đã tiếp nhận" đã gửi tới 1 số từ mốc này (giới hạn tin / số / 24 giờ) */
+    long countByPhoneAndReceivedSmsAtAfter(String phone, LocalDateTime after);
+
     boolean existsByLookupCode(String lookupCode);
 }

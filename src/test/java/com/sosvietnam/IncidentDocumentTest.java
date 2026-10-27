@@ -62,7 +62,7 @@ class IncidentDocumentTest {
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final IncidentDocumentServiceImpl service = new IncidentDocumentServiceImpl(incidentRepo,
             new com.sosvietnam.security.CurrentOfficer(), claimRepo, dispatchRepo, reportRepo, docRepo, members,
-            mock(com.sosvietnam.service.IncidentNotifier.class));
+            mock(com.sosvietnam.service.IncidentNotifier.class), new com.sosvietnam.security.LookupAttemptLimiter());
 
     final Map<String, IncidentDocument> store = new HashMap<>();
     Account officer;

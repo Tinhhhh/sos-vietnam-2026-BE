@@ -97,6 +97,10 @@ public class Incident {
     @Column(name = "lookup_code", length = 8, nullable = false, unique = true)
     private String lookupCode;
 
+    // SMS "đã tiếp nhận" (mã ca) gửi lúc cán bộ nhận ca lần đầu; null = chưa gửi (V19)
+    @Column(name = "received_sms_at")
+    private LocalDateTime receivedSmsAt;
+
     // ---- Phân luồng (module 5) ----
     // Lực lượng đang giữ ca (từ loại sự cố: TRAFFIC -> CSGT...)
     @Enumerated(EnumType.STRING)

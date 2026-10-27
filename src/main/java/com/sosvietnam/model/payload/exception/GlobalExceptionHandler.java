@@ -55,6 +55,7 @@ public class GlobalExceptionHandler {
                                 .httpStatus(exception.getHttpStatus().value())
                                 .timestamp(DateUtil.formatTimestamp(DateUtil.convertUtcToIctDate(Instant.now()), DateUtil.DATE_TIME_FORMAT))
                                 .message(exception.getMessage())
+                                .data(exception.getData())
                                 .build()
                 );
     }

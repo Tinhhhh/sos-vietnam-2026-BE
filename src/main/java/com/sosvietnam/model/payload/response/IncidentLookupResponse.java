@@ -40,6 +40,19 @@ public class IncidentLookupResponse {
     @JsonProperty("lookup_code")
     private String lookupCode;
 
+    /**
+     * Ca còn mở (PENDING / VERIFYING / RESOLVING): dân vào lại màn hình theo dõi / gọi bằng `incident` +
+     * `citizen_access_token` mới (mã cũ hết hiệu lực, tab cũ mất quyền). Ca đã đóng: false, 2 trường kia null.
+     */
+    @JsonProperty("open")
+    private boolean open;
+
+    @JsonProperty("incident")
+    private IncidentResponse incident;
+
+    @JsonProperty("citizen_access_token")
+    private String citizenAccessToken;
+
     @JsonProperty("emergency_type")
     private EmergencyType emergencyType;
 

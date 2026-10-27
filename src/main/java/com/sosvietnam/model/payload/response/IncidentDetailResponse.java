@@ -144,6 +144,10 @@ public class IncidentDetailResponse {
     @JsonProperty("claims")
     private List<Claim> claims;
 
+    /** Ca khác đang mở của cùng số điện thoại. */
+    @JsonProperty("other_open_cases")
+    private List<IncidentQueueResponse.OpenCase> otherOpenCases;
+
     @Data
     @Builder
     @AllArgsConstructor
