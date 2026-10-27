@@ -257,6 +257,9 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - `POST /incidents` thêm `report_type` tuỳ chọn (trống = SELF); PROXY -> 400 "Báo hộ chưa được hỗ trợ" (làm sau). Queue + chi tiết ca trả `report_type` + `report_type_label`.
 - FE: form SOS có ô "Người báo tin" (Tự báo chọn sẵn, Báo hộ mờ "Sắp có"), gửi `report_type: 'SELF'`; thẻ hàng đợi có nhãn "Tự báo"; Chi tiết ca có dòng "Hình thức báo". 226 unit test, e2e 7/7.
 
+## Đã chốt, CHƯA làm: SMS "đã tiếp nhận" + tra cứu vào lại ca + 2 ca / SĐT (27/10/2026)
+- Spec: `docs/spec-multi-case.md` (migration dành sẵn V19). Còn 4 câu hỏi mở ở mục 7 của spec, hỏi user khi bắt tay làm.
+
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.
 2. ~~Dashboard "Thống Kê"~~ (xong 15/10/2026, CHƯA commit): `GET /api/v1/dashboard/summary?from&to` (ADMIN thêm `province`, `agency`), phạm vi giống quyền xem hàng đợi. SQL gộp nhóm trong `repository/DashboardRepository` (NamedParameterJdbcTemplate; so tỉnh/xã bằng unaccent + bỏ "TP."; đổi giờ server → giờ VN qua `:serverZone`). `fake_alarm_count`/`resolved_count` = null tới khi có module đóng ca. `by_day` có `accepted` + `within_sla_rate` (biểu đồ tỷ lệ nhận 15' theo ngày, admin). `by_agency` (cấp tỉnh + toàn quốc) đếm MỌI lực lượng trong địa bàn cho biểu đồ tròn "Tỷ trọng" (tỉnh: Lực lượng / Xã-phường; admin: Tỉnh / Lực lượng; cấp xã không có). Không làm `/dashboard/escalating` (FE lấy từ `/incidents/queue`). FE: trang `/officer/statistics`, mở bằng nút "Thống kê" trên bản đồ (bỏ thanh thống kê cũ). Xuất Excel làm sau.
