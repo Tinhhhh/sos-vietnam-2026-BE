@@ -258,7 +258,7 @@ Spring Boot 3.4, Java 21, PostgreSQL + PostGIS (hibernate-spatial, `ddl-auto=upd
 - FE: form SOS có ô "Người báo tin" (Tự báo chọn sẵn, Báo hộ mờ "Sắp có"), gửi `report_type: 'SELF'`; thẻ hàng đợi có nhãn "Tự báo"; Chi tiết ca có dòng "Hình thức báo". 226 unit test, e2e 7/7.
 
 ## Đã chốt, CHƯA làm: SMS "đã tiếp nhận" + tra cứu vào lại ca + 2 ca / SĐT (27/10/2026)
-- Spec: `docs/spec-multi-case.md` (migration dành sẵn V19). Còn 4 câu hỏi mở ở mục 7 của spec, hỏi user khi bắt tay làm.
+- Spec: `docs/spec-multi-case.md` (migration dành sẵn V19). Mục 8 của spec là đề xuất chờ user duyệt (giới hạn sai tra cứu, chống spam SMS, mã ca hiện lúc tạo ca).
 
 ## Việc tiếp theo (thứ tự đã chốt 15/10/2026)
 1. ~~Module 5~~ (xong, xem trên). Nhận ca/khoá ca đã gộp vào module 5.

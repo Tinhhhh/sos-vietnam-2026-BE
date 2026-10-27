@@ -44,12 +44,18 @@ BE kiểm số đang có bao nhiêu ca mở. **Không trả chi tiết ca** (lo�
 - Ca **đã đóng**: trả kết quả + văn bản như hiện nay.
 - Sai mã / sai số: cùng 1 lỗi (404) như hiện nay. Giới hạn sai: 5 lần / 10 phút / mã ca.
 
-## 7. Còn mở (hỏi user khi bắt tay làm)
-- Có để chữ `sosvie.site` trong SMS không (ít bị lọc spam hơn nếu bỏ, nhưng dân không biết vào đâu)?
-- Giới hạn sai 5 lần / 10 phút: giữ hay đổi?
-- Ca **Báo hộ** (Chat 2, đang khoá) có tính vào giới hạn 2 ca / số không?
-- Ca PENDING chưa có ai nhận thì chưa có SMS: dân mất tab lúc đó lấy mã ca ở đâu? (Gợi ý: hiện "Mã ca" ngay khi tạo ca trên màn chờ, không đợi nhận.)
+## 7. Đã chốt thêm (27/10/2026)
+- SMS **có** chữ `sosvie.site` (không `https://`, không mã truy cập).
+- Ca **Báo hộ** có tính vào giới hạn 2 ca / số.
 
-## 8. Ngoài phạm vi
+## 8. Đề xuất chờ user duyệt
+- **Giới hạn sai Tra cứu** (chống dò 4 số cuối khi biết mã ca): 5 lần sai / 10 phút / mã ca, quá thì mã đó khoá tra cứu 10 phút.
+- **Chống spam đốt tiền SMS** (ai cũng báo được, tin giả):
+  - SMS chỉ gửi khi cán bộ nhận ca (đã có): tin giả không ai nhận thì tự huỷ sau 60', không tốn tin.
+  - Tối đa 2 SMS / số / 24 giờ (khớp giới hạn 2 ca).
+  - Tin xếp hàng vài giây sau khi nhận ca; ca bị huỷ / báo khống trước khi tin đi thì không gửi.
+- **Mã ca hiện trên màn chờ ngay lúc tạo ca** (miễn phí, không SMS): dân mất tab trước khi có người nhận vẫn có mã để Tra cứu.
+
+## 9. Ngoài phạm vi
 - OTP xác minh SĐT ("gửi SOS trước, xác minh sau").
 - Gộp ca trùng.
