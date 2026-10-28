@@ -59,7 +59,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
 
                         // ── Geo / Station: tra cứu công khai, đồng bộ ranh giới chỉ ADMIN ─
-                        .requestMatchers("/api/v1/geo/sync-status", "/api/v1/geo/sync-now").hasAuthority(ADMIN)
+                        .requestMatchers("/api/v1/geo/sync-status", "/api/v1/geo/sync-now", "/api/v1/geo/sync-boundaries").hasAuthority(ADMIN)
                         // phiên bản dữ liệu + thời tiết tại đơn vị: chỉ màn hình trực ban dùng
                         .requestMatchers(HttpMethod.GET, "/api/v1/geo/data-status", "/api/v1/weather/**")
                                 .hasAnyAuthority(STAFF)

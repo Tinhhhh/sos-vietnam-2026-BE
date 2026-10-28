@@ -42,6 +42,8 @@ public class WardDataSeeder implements CommandLineRunner {
 
     // Ngày bộ file ranh giới geo/*.geojson cập nhật (tỉnh + nhãn tỉnh + xã). Thay file thì sửa ngày này.
     static final String BOUNDARY_FILES_VERSION = "2026.10.10";
+    // Tiền tố checksum của seed_versions "boundaries" khi ranh giới gốc đã tải từ bando (BandoSyncServiceImpl)
+    public static final String BOUNDARY_SOURCE_BANDO = "bando:";
     private static final String[] BOUNDARY_FILES = {
             "geo/vn-provinces.geojson", "geo/vn-province-labels.geojson", "geo/vn-wards-simplified.geojson"};
 
@@ -79,6 +81,10 @@ public class WardDataSeeder implements CommandLineRunner {
             String checksum = HexFormat.of().formatHex(digest.digest());
             Instant now = Instant.now();
             SeedVersion seed = seedVersionRepository.findById(SeedVersion.BOUNDARIES).orElse(null);
+            // Đã có ranh giới gốc từ bando (BandoSyncService ghi checksum "bando:...") thì mốc là của lần đồng bộ đó
+            if (seed != null && seed.getChecksum().startsWith(BOUNDARY_SOURCE_BANDO)) {
+                return;
+            }
             if (seed == null || !checksum.equals(seed.getChecksum())) {
                 seed = SeedVersion.builder()
                         .name(SeedVersion.BOUNDARIES)

@@ -80,4 +80,12 @@ public class GeoController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Boundary sync finished",
                 bandoSyncService.syncFromNationalDatabase());
     }
+
+    @Operation(summary = "Download original province / ward boundaries from bando in the background",
+            description = "Takes about 20 minutes; progress in GET /geo/sync-status (boundary). Role required: ADMIN")
+    @PostMapping("/sync-boundaries")
+    public ResponseEntity<Object> triggerBoundarySync() {
+        return ResponseBuilder.returnData(HttpStatus.ACCEPTED, "Boundary download started",
+                bandoSyncService.startBoundarySync());
+    }
 }

@@ -75,22 +75,14 @@ public class DataSeeder implements CommandLineRunner {
     // Tên tỉnh -> khoá so sánh (bỏ dấu, chữ thường, bỏ "TP." / "Tỉnh"), giống AreaNames.provinceKey
     private static final String PROVINCE_KEY_SQL =
             "regexp_replace(trim(regexp_replace(unaccent(lower(%s)), '\\s+', ' ', 'g')), '^(tp\\.?|thanh pho|tinh) ', '')";
-    private static final String POINT_SQL = "ST_SetSRID(ST_MakePoint(?, ?), 4326)";
+    // Tỉnh tạm theo tên trong file; xã / tỉnh theo toạ độ gán sau bằng RescueStationRepository.reassignAreas()
+    // (một câu UPDATE dùng index ranh giới, chạy được cả khi ranh giới đổi)
     private static final String UPSERT_STATION_SQL =
             "INSERT INTO rescue_stations (code, name, agency_type, level, phone, address, province_id, ward_id, "
             + "officer, email, services, facility_type, latitude, longitude, auto_generated) "
             + "VALUES (?, ?, ?, ?, ?, ?, "
-            + "COALESCE((SELECT w.province_id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1), "
             + "(SELECT p.code FROM provinces p WHERE " + PROVINCE_KEY_SQL.formatted("p.name") + " = "
-            + PROVINCE_KEY_SQL.formatted("?") + " LIMIT 1)), "
-            // xã của trạm: tên trạm có "phường X" / "xã X" (Công an phường X - Cơ sở 2) thì theo tên trong cùng tỉnh
-            // (cơ sở có thể nằm ở xã bên cạnh), không thì xã chứa toạ độ
-            + "COALESCE((SELECT w.id FROM wards w WHERE w.province_id = (SELECT w2.province_id FROM wards w2 "
-            + "WHERE ST_Contains(w2.geometry, " + POINT_SQL + ") LIMIT 1) "
-            // tên xã đứng trọn ("xã An Phú" không khớp "xã An Phú Tân"), sau nó là hết chuỗi hoặc " - Cơ sở 2"...
-            + "AND unaccent(lower(?)) ~ ('(^|\\s)' || unaccent(lower(w.name)) || '\\s*($|[-,(–])') "
-            + "ORDER BY length(w.name) DESC LIMIT 1), "
-            + "(SELECT w.id FROM wards w WHERE ST_Contains(w.geometry, " + POINT_SQL + ") LIMIT 1)), "
+            + PROVINCE_KEY_SQL.formatted("?") + " LIMIT 1), NULL, "
             + "?, ?, ?, ?, ?, ?, ?) "
             + "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, agency_type = EXCLUDED.agency_type, "
             + "level = EXCLUDED.level, phone = EXCLUDED.phone, address = EXCLUDED.address, "
@@ -277,6 +269,7 @@ public class DataSeeder implements CommandLineRunner {
             //    ghi checksum mới. Tất cả trong 1 transaction, lỗi giữa chừng thì DB giữ dữ liệu cũ.
             transactionTemplate.executeWithoutResult(status -> {
                 jdbcTemplate.batchUpdate(UPSERT_STATION_SQL, batchArgs);
+                rescueStationRepository.reassignAreas();
                 List<String> kept = jdbcTemplate.query(
                         "SELECT code FROM rescue_stations WHERE (code IS NULL OR code <> ALL (?)) AND " + STATION_IN_USE_SQL,
                         ps -> ps.setArray(1, ps.getConnection().createArrayOf("varchar", codes.toArray())),
@@ -318,10 +311,7 @@ public class DataSeeder implements CommandLineRunner {
                 level == null ? null : level.name(),
                 normalizePhoneNumber(sn.path("phone").asText(null)),
                 sn.path("address").asText(null),
-                lng, lat,                               // province: ward containing the point (ST_MakePoint(lng, lat))
-                sn.path("province").asText(null),       // ... else province by name
-                lng, lat, name,                         // ward named in the station name, in the point's province
-                lng, lat,                               // ... else ward containing the point
+                sn.path("province").asText(null),       // province by name until reassignAreas() places the point
                 truncate(cleanText(sn, "officer"), 200),
                 truncate(cleanText(sn, "email"), 150),
                 cleanText(sn, "services"),

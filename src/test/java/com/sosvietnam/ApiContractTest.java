@@ -370,6 +370,15 @@ class ApiContractTest {
         verify(bandoSyncService, never()).syncFromNationalDatabase();
     }
 
+    @Test
+    void geoSyncBoundaries_requiresAdmin() throws Exception {
+        mvc.perform(post("/api/v1/geo/sync-boundaries")).andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        mvc.perform(post("/api/v1/geo/sync-boundaries").header("Authorization", "Bearer " + access))
+                .andExpect(status().isForbidden());
+        verify(bandoSyncService, never()).startBoundarySync();
+    }
+
     private String officerBearer() throws Exception {
         return "Bearer " + login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
     }
