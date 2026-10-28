@@ -19,4 +19,10 @@ public interface DispatchTrackingService {
 
     /** Điểm mới nhất của lượt điều động, null nếu chưa có. */
     DispatchPlanResponse.LivePosition lastPosition(Long dispatchId);
+
+    /**
+     * Điểm GPS từ trình duyệt của người phụ trách hiện trường (trang link). App Traccar chính xác hơn nên được ưu tiên:
+     * app đã gửi điểm trong 20 giây gần nhất thì bỏ điểm trình duyệt (trả false).
+     */
+    boolean acceptBrowser(Long dispatchId, com.sosvietnam.model.payload.request.FieldPositionRequest point);
 }

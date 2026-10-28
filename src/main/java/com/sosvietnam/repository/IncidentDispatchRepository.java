@@ -81,6 +81,14 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
             @org.springframework.data.repository.query.Param("statuses") java.util.Collection<DispatchStatus> statuses,
             @org.springframework.data.repository.query.Param("incidentStatuses") java.util.Collection<com.sosvietnam.model.payload.enums.IncidentStatus> incidentStatuses);
 
+    /**
+     * Lượt điều động của link người phụ trách hiện trường (theo SHA-256 của mã), kèm ca: STOMP CONNECT và gọi video
+     * đọc trạng thái ca ngoài transaction.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT d FROM IncidentDispatch d JOIN FETCH d.incident WHERE d.fieldTokenHash = :hash")
+    Optional<IncidentDispatch> findByFieldTokenHash(@org.springframework.data.repository.query.Param("hash") String fieldTokenHash);
+
     /** Lượt chủ trì đang hoạt động của ca (không tính lượt đã bị từ chối). */
     Optional<IncidentDispatch> findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(
             String incidentId, DispatchRole role, DispatchStatus status);

@@ -53,6 +53,16 @@ public class Incident {
     @Column(name = "incident_tag", length = 200)
     private String incidentTag;
 
+    // Tự báo / báo hộ (V18); ca cũ = SELF
+    @Enumerated(EnumType.STRING)
+    @Column(name = "report_type", length = 10, nullable = false)
+    @Builder.Default
+    private com.sosvietnam.model.payload.enums.ReportType reportType = com.sosvietnam.model.payload.enums.ReportType.SELF;
+
+    // IP người gửi SOS (V20): chỉ để cảnh báo cán bộ, không dùng để chặn (4G dùng chung IP)
+    @Column(name = "client_ip", length = 45)
+    private String clientIp;
+
     @Column(columnDefinition = "TEXT")
     private String address;
 
@@ -90,6 +100,10 @@ public class Incident {
     @JsonIgnore
     @Column(name = "lookup_code", length = 8, nullable = false, unique = true)
     private String lookupCode;
+
+    // SMS "đã tiếp nhận" (mã ca) gửi lúc cán bộ nhận ca lần đầu; null = chưa gửi (V19)
+    @Column(name = "received_sms_at")
+    private LocalDateTime receivedSmsAt;
 
     // ---- Phân luồng (module 5) ----
     // Lực lượng đang giữ ca (từ loại sự cố: TRAFFIC -> CSGT...)

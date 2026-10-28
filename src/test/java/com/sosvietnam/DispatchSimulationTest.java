@@ -40,7 +40,7 @@ class DispatchSimulationTest {
             new com.sosvietnam.security.CurrentOfficer(), mock(IncidentNotifier.class),
             mock(com.sosvietnam.service.OfficerService.class), mock(IncidentClaimRepository.class),
             mock(IncidentReportRepository.class), new DispatchTrackingServiceImpl(dispatches, mock(com.sosvietnam.service.RouteRecalcService.class)),
-            simulation, routing);
+            simulation, routing, mock(com.sosvietnam.service.SmsService.class));
 
     Incident incident;
     IncidentDispatch trip;
@@ -74,6 +74,20 @@ class DispatchSimulationTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** Tỉnh uỷ quyền cho xã: chỉ cán bộ xã được giao (người đi) mô phỏng được, người giữ ca ở tỉnh chỉ theo dõi. */
+    @Test
+    void delegatedTrip_onlyTheDelegateSimulates() {
+        UnitMember ward = new UnitMember();
+        ward.setId(UUID.randomUUID());
+        trip.setAssignedTo(ward);
+
+        assertThat(service.getPlan("SOS-1", null).getSimulation().isAvailable()).isFalse();
+        assertThatThrownBy(() -> service.startSimulation("SOS-1")).isInstanceOf(SosException.class)
+                .extracting(e -> ((SosException) e).getHttpStatus()).isEqualTo(org.springframework.http.HttpStatus.FORBIDDEN);
+        assertThatThrownBy(() -> service.detourSimulation("SOS-1")).isInstanceOf(SosException.class);
+        verify(simulation, never()).start(org.mockito.ArgumentMatchers.anyLong(), any(), any());
     }
 
     @Test

@@ -41,7 +41,12 @@ class CallServiceTest {
 
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final SimpMessagingTemplate messaging = mock(SimpMessagingTemplate.class);
-    final CallServiceImpl service = new CallServiceImpl(incidents, messaging, new ObjectMapper());
+    final com.sosvietnam.repository.IncidentDispatchRepository dispatches =
+            mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
+    @SuppressWarnings("unchecked")
+    final org.springframework.beans.factory.ObjectProvider<org.springframework.messaging.simp.user.SimpUserRegistry> registry =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+    final CallServiceImpl service = new CallServiceImpl(incidents, messaging, new ObjectMapper(), dispatches, registry);
 
     final UUID handlerId = UUID.randomUUID();
     final OfficerPrincipal handler = TestGeo.officer(handlerId, "congan.tanan@sos.vn", "Cán Bộ A",
@@ -99,6 +104,70 @@ class CallServiceTest {
         CallSignalMessage out = sentTo(other.getName()); // phiên STOMP của cán bộ = member id
         assertThat(out.getAction()).isEqualTo("reject");
         assertThat(out.getReason()).isEqualTo("not_handler");
+        verify(messaging, never()).convertAndSendToUser(eq("citizen:SOS-1"), anyString(), any());
+    }
+
+    /** Cán bộ xã được uỷ quyền (D) gọi được người báo tin; người báo tin trả lời về "delegate" tới đúng D. */
+    @Test
+    void delegatedOfficer_callsTheCitizen_andGetsTheAnswer() {
+        UUID delegateId = UUID.randomUUID();
+        OfficerPrincipal delegate = TestGeo.officer(delegateId, "congan.tanan@sos.vn", "Cán Bộ D", RoleName.OFFICER,
+                AgencyType.POLICE, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");
+        com.sosvietnam.model.entity.UnitMember d = new com.sosvietnam.model.entity.UnitMember();
+        d.setId(delegateId);
+        com.sosvietnam.model.entity.IncidentDispatch trip = com.sosvietnam.model.entity.IncidentDispatch.builder()
+                .id(5L).assignedTo(d).role(com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
+                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED).build();
+        when(dispatches.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc("SOS-1",
+                com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)).thenReturn(Optional.of(trip));
+
+        service.relay(delegate, signal("ring").toBuilder().to("citizen").build());
+        CallSignalMessage out = sentTo("citizen:SOS-1");
+        assertThat(out.getFrom()).isEqualTo("delegate");
+        assertThat(out.getPeerName()).isEqualTo("Cán Bộ D");
+
+        reset(messaging);
+        service.relay(new CitizenPrincipal("SOS-1"), signal("accept").toBuilder().to("delegate").build());
+        assertThat(sentTo(delegateId.toString()).getFrom()).isEqualTo("citizen");
+
+        // uỷ quyền bị từ chối: D không còn là một bên của ca
+        trip.setStatus(com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED);
+        reset(messaging);
+        service.relay(delegate, signal("ring").toBuilder().to("citizen").build());
+        assertThat(sentTo(delegateId.toString()).getReason()).isEqualTo("not_handler");
+    }
+
+    /** Đổ chuông tới người không có phiên STOMP: máy gọi nhận reject "offline" ngay, không chờ 45 giây. */
+    @Test
+    void ringingSomeoneOffline_bouncesAtOnce() {
+        org.springframework.messaging.simp.user.SimpUserRegistry users =
+                mock(org.springframework.messaging.simp.user.SimpUserRegistry.class);
+        when(registry.getIfAvailable()).thenReturn(users);
+        when(users.getUser("citizen:SOS-1")).thenReturn(null);
+
+        service.relay(handler, signal("ring"));
+        CallSignalMessage out = sentTo(handlerId.toString());
+        assertThat(out.getAction()).isEqualTo("reject");
+        assertThat(out.getReason()).isEqualTo("offline");
+
+        // trực tuyến thì chuông đi bình thường
+        reset(messaging);
+        when(users.getUser("citizen:SOS-1")).thenReturn(mock(org.springframework.messaging.simp.user.SimpUser.class));
+        service.relay(handler, signal("ring"));
+        assertThat(sentTo("citizen:SOS-1").getAction()).isEqualTo("ring");
+    }
+
+    /** Người nhận mở ở 2 máy: máy này Từ chối / Nghe thì các máy khác của chính họ nhận dismiss (thôi đổ chuông). */
+    @Test
+    void answeringOrRejecting_dismissesTheRingOnOtherDevices() {
+        service.relay(new CitizenPrincipal("SOS-1"), signal("reject"));
+        assertThat(sentTo(handlerId.toString()).getAction()).isEqualTo("reject");
+        CallSignalMessage self = sentTo("citizen:SOS-1");
+        assertThat(self.getAction()).isEqualTo("dismiss");
+        assertThat(self.getCallId()).isEqualTo("c-1");
+
+        reset(messaging);
+        service.relay(new CitizenPrincipal("SOS-1"), signal("offer"));
         verify(messaging, never()).convertAndSendToUser(eq("citizen:SOS-1"), anyString(), any());
     }
 

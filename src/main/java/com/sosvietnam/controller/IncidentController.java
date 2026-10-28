@@ -48,7 +48,10 @@ public class IncidentController {
     @Operation(summary = "Report a new SOS incident",
             description = "Returns the incident and a citizen_access_token (shown only once). Role required: none")
     @PostMapping
-    public ResponseEntity<Object> reportIncident(@Valid @RequestBody CreateIncidentRequest request) {
+    public ResponseEntity<Object> reportIncident(@Valid @RequestBody CreateIncidentRequest request,
+                                                 jakarta.servlet.http.HttpServletRequest http) {
+        // forward-headers-strategy=framework: remoteAddr = X-Forwarded-For do nginx trên VPS ghi đè bằng IP thật
+        request.setClientIp(http.getRemoteAddr());
         return ResponseBuilder.returnData(HttpStatus.CREATED, "Tiếp nhận tin báo SOS thành công",
                 incidentService.createIncident(request));
     }
@@ -212,8 +215,8 @@ public class IncidentController {
     @PostMapping("/{id}/officer-cancel")
     public ResponseEntity<Object> cancelByOfficer(@PathVariable("id") String id,
                                                   @Valid @RequestBody OfficerCancelRequest request) {
-        incidentService.cancelByOfficer(id, request.getReason());
-        return ResponseBuilder.returnMessage(HttpStatus.OK, "Đã huỷ ca");
+        incidentService.cancelByOfficer(id, request.getReason(), request.isFalseAlarm());
+        return ResponseBuilder.returnMessage(HttpStatus.OK, request.isFalseAlarm() ? "Đã huỷ ca: báo khống" : "Đã huỷ ca");
     }
 
     @Operation(summary = "Download an attached photo/video",

@@ -22,14 +22,20 @@ public interface UnitMemberRepository extends JpaRepository<UnitMember, UUID>,
 
     boolean existsByAccount_IdAndBadgeNumberAndActiveTrueAndIdNot(UUID accountId, String badgeNumber, UUID id);
 
-    /** Cán bộ đang hoạt động của tài khoản đơn vị đang hoạt động (đơn vị đúng lực lượng, cấp). */
+    /**
+     * Cán bộ đang hoạt động của 1 đơn vị (lực lượng, cấp, tỉnh; cấp xã thêm xã), lọc ngay trong SQL (index
+     * accounts.province_id / ward_id) và nạp sẵn tỉnh / xã: danh sách uỷ quyền và giao ca không tải cả nước nữa.
+     * wardId null = mọi xã của tỉnh (đơn vị cấp tỉnh).
+     */
     @Query("""
-        SELECT m FROM UnitMember m JOIN FETCH m.account a
-        WHERE m.active = true AND a.isActive = true AND a.agencyType = :agency
-          AND a.unitLevel = :level
+        SELECT m FROM UnitMember m JOIN FETCH m.account a LEFT JOIN FETCH a.province LEFT JOIN FETCH a.ward
+        WHERE m.active = true AND a.isActive = true AND a.agencyType = :agency AND a.unitLevel = :level
+          AND a.province.code = :provinceId AND (:wardId IS NULL OR a.ward.id = :wardId)
         """)
-    List<UnitMember> findActiveOfficers(@Param("agency") com.sosvietnam.model.payload.enums.AgencyType agency,
-                                       @Param("level") com.sosvietnam.model.payload.enums.UnitLevel level);
+    List<UnitMember> findActiveOfficersOfUnit(@Param("agency") com.sosvietnam.model.payload.enums.AgencyType agency,
+                                              @Param("level") com.sosvietnam.model.payload.enums.UnitLevel level,
+                                              @Param("provinceId") String provinceId,
+                                              @Param("wardId") Long wardId);
 
     /** Cán bộ đang hoạt động của các tài khoản OFFICER để xuất Excel, cùng bộ lọc với AccountRepository.findForExport. */
     @Query("""

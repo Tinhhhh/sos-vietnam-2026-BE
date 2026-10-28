@@ -113,6 +113,16 @@ public class IncidentDetailResponse {
     @JsonProperty("escalation_reason_label")
     private String escalationReasonLabel;
 
+    @JsonProperty("report_type")
+    private com.sosvietnam.model.payload.enums.ReportType reportType;
+
+    @JsonProperty("report_type_label")
+    private String reportTypeLabel;
+
+    /** Số ca báo khống 24 giờ qua từ cùng IP (cờ cảnh báo, không chặn); 0 = không có. */
+    @JsonProperty("ip_false_alarm_count")
+    private long ipFalseAlarmCount;
+
     /** Lý do cán bộ xã ghi khi tự chuyển lên tỉnh */
     @JsonProperty("escalation_note")
     private String escalationNote;
@@ -137,6 +147,10 @@ public class IncidentDetailResponse {
 
     @JsonProperty("claims")
     private List<Claim> claims;
+
+    /** Ca khác đang mở của cùng số điện thoại. */
+    @JsonProperty("other_open_cases")
+    private List<IncidentQueueResponse.OpenCase> otherOpenCases;
 
     @Data
     @Builder
@@ -220,6 +234,8 @@ public class IncidentDetailResponse {
                 .transferReason(i.getTransferReason())
                 .escalationReason(i.getEscalationReason())
                 .escalationReasonLabel(i.getEscalationReason() == null ? null : i.getEscalationReason().getLabel())
+                .reportType(i.getReportType())
+                .reportTypeLabel(i.getReportType() == null ? null : i.getReportType().getLabel())
                 .escalationNote(i.getEscalationNote())
                 .cancelledAt(withZone(i.getCancelledAt()))
                 .cancelReason(i.getCancelReason())

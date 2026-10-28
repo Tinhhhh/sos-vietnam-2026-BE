@@ -72,7 +72,7 @@ public class IncidentTrackingResponse {
     @JsonProperty("handler")
     private Handler handler;
 
-    /** Mã tra cứu (XXXX-XXXX), chỉ có khi ca đã hoàn tất (RESOLVED) */
+    /** Mã ca (XXXX-XXXX) ở mọi trạng thái: dân lưu lại để Tra cứu vào lại ca nếu lỡ đóng trang */
     @JsonProperty("lookup_code")
     private String lookupCode;
 
@@ -114,7 +114,7 @@ public class IncidentTrackingResponse {
                 .cancelReason(i.getCancelReason())
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())
                 .handler(handlerName == null ? null : new Handler(handlerName))
-                .lookupCode(i.getStatus() == IncidentStatus.RESOLVED ? LookupCodes.format(i.getLookupCode()) : null)
+                .lookupCode(LookupCodes.format(i.getLookupCode()))
                 .documentStatus(documentStatus)
                 .resolvedAt(i.getStatus() == IncidentStatus.RESOLVED ? withZone(i.getUpdatedAt()) : null)
                 .build();

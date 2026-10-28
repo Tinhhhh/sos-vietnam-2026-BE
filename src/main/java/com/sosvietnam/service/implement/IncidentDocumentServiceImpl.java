@@ -69,6 +69,8 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     private final IncidentDocumentRepository documentRepository;
     private final com.sosvietnam.repository.UnitMemberRepository unitMemberRepository;
     private final com.sosvietnam.service.IncidentNotifier notifier;
+    // cùng giới hạn sai với Tra cứu (5 lần / 10 phút / mã ca): đọc / ký văn bản bằng mã không lách được
+    private final com.sosvietnam.security.LookupAttemptLimiter lookupAttemptLimiter;
 
     // ---------------------------------------------------------------- cán bộ
 
@@ -169,7 +171,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     @Transactional(readOnly = true)
     public IncidentDocumentResponse citizenGet(String incidentId, String citizenToken) {
         Incident incident = citizenIncident(incidentId, citizenToken);
-        return citizenView(citizenDocument(incidentId), incident);
+        return citizenRead(incident);
     }
 
     @Override
@@ -183,7 +185,7 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     @Transactional(readOnly = true)
     public IncidentDocumentResponse lookupGet(IncidentLookupRequest request) {
         Incident incident = lookupIncident(request.getLookupCode(), request.getPhoneLast4());
-        return citizenView(citizenDocument(incident.getId()), incident);
+        return citizenRead(incident);
     }
 
     @Override
@@ -336,8 +338,27 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
     }
 
     /** Người dân: không sửa được, SĐT chỉ hiện bản che, không lộ toạ độ */
+    /**
+     * Dân xem văn bản ngay khi ca xong: cán bộ chưa lưu thì trả bản nháp tự điền (saved = false, chưa ký được),
+     * để người báo tin đối chiếu thông tin luôn.
+     */
+    private IncidentDocumentResponse citizenRead(Incident incident) {
+        return documentRepository.findById(incident.getId())
+                .map(doc -> citizenView(doc, incident))
+                .orElseGet(() -> {
+                    if (incident.getStatus() != IncidentStatus.RESOLVED) {
+                        throw new SosException(HttpStatus.NOT_FOUND, "Cán bộ chưa lập văn bản báo cáo cho ca này");
+                    }
+                    return citizenView(draft(incident), incident, false);
+                });
+    }
+
     private IncidentDocumentResponse citizenView(IncidentDocument doc, Incident incident) {
-        IncidentDocumentResponse res = IncidentDocumentResponse.from(doc, true, false, null, null, nameLookup());
+        return citizenView(doc, incident, true);
+    }
+
+    private IncidentDocumentResponse citizenView(IncidentDocument doc, Incident incident, boolean saved) {
+        IncidentDocumentResponse res = IncidentDocumentResponse.from(doc, saved, false, null, null, nameLookup());
         res.getFields().setReporterPhone(IncidentLookupResponse.maskPhone(doc.getReporterPhone()));
         res.getFields().setCoordinates(null);
         return res;
@@ -426,10 +447,15 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
 
     private Incident lookupIncident(String lookupCode, String phoneLast4) {
         SosException notFound = new SosException(HttpStatus.NOT_FOUND, "Mã tra cứu hoặc số điện thoại không đúng");
+        lookupAttemptLimiter.check(lookupCode);
         String code = LookupCodes.normalize(lookupCode);
-        if (code == null || phoneLast4 == null) throw notFound;
-        Incident incident = incidentRepository.findByLookupCode(code).orElseThrow(() -> notFound);
-        if (incident.getPhone() == null || !incident.getPhone().endsWith(phoneLast4)) throw notFound;
+        Incident incident = code == null || phoneLast4 == null ? null
+                : incidentRepository.findByLookupCode(code).orElse(null);
+        if (incident == null || incident.getPhone() == null || !incident.getPhone().endsWith(phoneLast4)) {
+            lookupAttemptLimiter.failed(lookupCode);
+            throw notFound;
+        }
+        lookupAttemptLimiter.succeeded(lookupCode);
         return incident;
     }
 

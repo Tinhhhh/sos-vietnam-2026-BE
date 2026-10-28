@@ -37,7 +37,8 @@ class StompAuthChannelInterceptorTest {
     final JwtTokenProvider jwt = mock(JwtTokenProvider.class);
     final IncidentRepository incidents = mock(IncidentRepository.class);
     final StompAuthChannelInterceptor interceptor =
-            new StompAuthChannelInterceptor(jwt, mock(OfficerPrincipalLoader.class), incidents);
+            new StompAuthChannelInterceptor(jwt, mock(OfficerPrincipalLoader.class), incidents,
+            mock(com.sosvietnam.repository.IncidentDispatchRepository.class));
     final MessageChannel channel = mock(MessageChannel.class);
     final OfficerPrincipal officer = TestGeo.officer(UUID.randomUUID(), "o@sos.vn", "O", RoleName.OFFICER,
             null, UnitLevel.WARD, "Cần Thơ", "Phường Tân An");

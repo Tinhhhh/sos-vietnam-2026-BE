@@ -3,6 +3,7 @@ package com.sosvietnam;
 import com.sosvietnam.model.entity.AppSetting;
 import com.sosvietnam.model.payload.enums.AppSettingKey;
 import com.sosvietnam.model.payload.enums.IncidentEvent;
+import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.request.DemoSettingsRequest;
 import com.sosvietnam.repository.AppSettingRepository;
 import com.sosvietnam.repository.IncidentRepository;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -44,7 +46,7 @@ class DemoModeServiceTest {
         when(me.email()).thenReturn("congan.tanan@sos.vn");
         when(currentOfficer.require()).thenReturn(me);
         return new DemoModeServiceImpl(settingRepo, incidentRepo, mock(UnitMemberRepository.class), currentOfficer,
-                notifier, envDefault);
+                notifier, envDefault, 50);
     }
 
     @Test
@@ -52,6 +54,20 @@ class DemoModeServiceTest {
         assertThat(service(true).generateEnabled()).isTrue();
         assertThat(service(false).generateEnabled()).isFalse();
         assertThat(service(true).hidden()).isFalse();
+    }
+
+    @Test
+    void simulationSpeed_defaultFromProperty_savedRounded_outOfRange400() {
+        DemoModeServiceImpl service = service(false);
+        assertThat(service.simulationSpeedKmh()).isEqualTo(50);
+        DemoSettingsRequest fast = new DemoSettingsRequest();
+        fast.setSimulationSpeedKmh(80.4);
+        assertThat(service.update(fast).getSimulationSpeedKmh()).isEqualTo(80);
+        assertThat(service.simulationSpeedKmh()).isEqualTo(80);
+        DemoSettingsRequest bad = new DemoSettingsRequest();
+        bad.setSimulationSpeedKmh(300.0);
+        assertThatThrownBy(() -> service.update(bad)).isInstanceOf(SosException.class);
+        assertThat(service.simulationSpeedKmh()).isEqualTo(80);
     }
 
     @Test

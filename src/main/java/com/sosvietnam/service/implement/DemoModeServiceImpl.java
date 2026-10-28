@@ -4,6 +4,7 @@ import com.sosvietnam.model.entity.AppSetting;
 import com.sosvietnam.model.payload.enums.AppSettingKey;
 import com.sosvietnam.model.payload.enums.IncidentEvent;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
+import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.request.DemoSettingsRequest;
 import com.sosvietnam.model.payload.response.DemoSettingsResponse;
 import com.sosvietnam.repository.AppSettingRepository;
@@ -17,6 +18,7 @@ import com.sosvietnam.util.DemoIncidents;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,9 @@ public class DemoModeServiceImpl implements DemoModeService {
     private final CurrentOfficer currentOfficer;
     private final IncidentNotifier notifier;
     private final boolean generateDefault;
+    private final double speedDefault;
+    static final double MIN_SPEED_KMH = 5;
+    static final double MAX_SPEED_KMH = 150;
 
     private volatile Map<AppSettingKey, AppSetting> cache;
 
@@ -47,13 +52,15 @@ public class DemoModeServiceImpl implements DemoModeService {
     public DemoModeServiceImpl(AppSettingRepository appSettingRepository, IncidentRepository incidentRepository,
                                UnitMemberRepository unitMemberRepository, CurrentOfficer currentOfficer,
                                @Lazy IncidentNotifier notifier,
-                               @Value("${app.demo.incidents.enabled:false}") boolean generateDefault) {
+                               @Value("${app.demo.incidents.enabled:false}") boolean generateDefault,
+                               @Value("${app.traccar.simulation.speed-kmh:50}") double speedDefault) {
         this.appSettingRepository = appSettingRepository;
         this.incidentRepository = incidentRepository;
         this.unitMemberRepository = unitMemberRepository;
         this.currentOfficer = currentOfficer;
         this.notifier = notifier;
         this.generateDefault = generateDefault;
+        this.speedDefault = speedDefault;
     }
 
     @Override
@@ -67,6 +74,17 @@ public class DemoModeServiceImpl implements DemoModeService {
     }
 
     @Override
+    public double simulationSpeedKmh() {
+        AppSetting row = settings().get(AppSettingKey.SIMULATION_SPEED_KMH);
+        if (row == null) return speedDefault;
+        try {
+            return Double.parseDouble(row.getValue());
+        } catch (NumberFormatException e) {
+            return speedDefault;
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public DemoSettingsResponse get() {
         AppSetting last = settings().values().stream()
@@ -76,6 +94,7 @@ public class DemoModeServiceImpl implements DemoModeService {
         return DemoSettingsResponse.builder()
                 .generate(generateEnabled())
                 .hidden(hidden())
+                .simulationSpeedKmh(simulationSpeedKmh())
                 .openCount(incidentRepository.findDemoIds(IncidentStatus.ACTIVE, DemoIncidents.LEGACY_NAMES).size())
                 .updatedAt(last == null ? null : last.getUpdatedAt())
                 .updatedByName(by)
@@ -89,6 +108,14 @@ public class DemoModeServiceImpl implements DemoModeService {
         boolean wasHidden = hidden();
         if (request.getGenerate() != null) save(AppSettingKey.DEMO_GENERATE, request.getGenerate(), me);
         if (request.getHidden() != null) save(AppSettingKey.DEMO_HIDDEN, request.getHidden(), me);
+        if (request.getSimulationSpeedKmh() != null) {
+            double v = request.getSimulationSpeedKmh();
+            if (Double.isNaN(v) || v < MIN_SPEED_KMH || v > MAX_SPEED_KMH) {
+                throw new SosException(HttpStatus.BAD_REQUEST,
+                        "Tốc độ mô phỏng từ " + (int) MIN_SPEED_KMH + " đến " + (int) MAX_SPEED_KMH + " km/h");
+            }
+            saveValue(AppSettingKey.SIMULATION_SPEED_KMH, String.valueOf(Math.round(v)), me);
+        }
         cache = null;
         log.info("🧪 [DEMO] {} đổi: tự sinh = {}, ẩn = {}", me.email(), generateEnabled(), hidden());
         // Hàng đợi đang mở ở mọi máy: ẩn -> tin STOMP thành INCIDENT_REMOVED, hiện lại -> thẻ quay về
@@ -100,9 +127,13 @@ public class DemoModeServiceImpl implements DemoModeService {
     }
 
     private void save(AppSettingKey key, boolean value, OfficerPrincipal me) {
+        saveValue(key, Boolean.toString(value), me);
+    }
+
+    private void saveValue(AppSettingKey key, String value, OfficerPrincipal me) {
         appSettingRepository.save(AppSetting.builder()
                 .key(key)
-                .value(Boolean.toString(value))
+                .value(value)
                 .updatedAt(LocalDateTime.now())
                 .updatedBy(me.memberId())
                 .build());

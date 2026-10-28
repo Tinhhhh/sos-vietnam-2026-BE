@@ -16,8 +16,10 @@ import com.sosvietnam.util.CitizenTokens;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,8 +40,9 @@ import java.util.Set;
 
 /**
  * Cuộc gọi video: cấp máy chủ ICE (STUN + TURN Cloudflare) và chuyển tiếp tín hiệu WebRTC qua STOMP.
- * Chỉ 2 bên của một ca được nói chuyện với nhau: người báo tin (CitizenPrincipal) và cán bộ đang giữ ca.
- * Server không lưu SDP / ICE, chỉ chuyển tiếp.
+ * 4 bên của một ca gọi được cho nhau: cán bộ giữ ca (officer), người báo tin (citizen), người phụ trách hiện trường
+ * mở link (field) và cán bộ xã được uỷ quyền (delegate). Server không lưu SDP / ICE, chỉ chuyển tiếp.
+ * Đổ chuông tới người không có phiên STOMP thì trả ngay reject "offline" (không để máy gọi chờ 45 giây vô ích).
  */
 @Service
 @Slf4j
@@ -58,6 +61,9 @@ public class CallServiceImpl implements CallService {
     private final IncidentRepository incidentRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
+    private final com.sosvietnam.repository.IncidentDispatchRepository incidentDispatchRepository;
+    // ai đang có phiên STOMP (lấy muộn: bean do cấu hình WebSocket tạo); không có thì bỏ qua bước kiểm trực tuyến
+    private final ObjectProvider<SimpUserRegistry> userRegistry;
     // Tạo lúc gọi Cloudflare lần đầu: không cấu hình TURN thì không mở kết nối nào
     private volatile HttpClient httpClient;
 
@@ -77,8 +83,8 @@ public class CallServiceImpl implements CallService {
     // ------------------------------------------------------------------ ICE servers
 
     @Override
-    public IceServersResponse getIceServers(String incidentId, String citizenAccessToken) {
-        requireCaller(incidentId, citizenAccessToken);
+    public IceServersResponse getIceServers(String incidentId, String citizenAccessToken, String fieldToken) {
+        requireCaller(incidentId, citizenAccessToken, fieldToken);
         if (!StringUtils.hasText(turnKeyId) || !StringUtils.hasText(turnApiToken)) {
             return IceServersResponse.builder().iceServers(STUN_ONLY).ttlSeconds(turnTtlSeconds).relay(false).build();
         }
@@ -152,8 +158,14 @@ public class CallServiceImpl implements CallService {
         return servers;
     }
 
-    /** Cán bộ đã đăng nhập, hoặc người dân có đúng mã truy cập của một ca còn mở. */
-    private void requireCaller(String incidentId, String citizenAccessToken) {
+    /** Cán bộ đã đăng nhập, người dân có đúng mã truy cập, hoặc người phụ trách hiện trường có link còn hiệu lực. */
+    private void requireCaller(String incidentId, String citizenAccessToken, String fieldToken) {
+        if (StringUtils.hasText(fieldToken)) {
+            boolean ok = incidentDispatchRepository.findByFieldTokenHash(CitizenTokens.sha256(fieldToken.trim()))
+                    .filter(d -> IncidentStatus.ACTIVE.contains(d.getIncident().getStatus())).isPresent();
+            if (!ok) throw new SosException(HttpStatus.UNAUTHORIZED, "Link người phụ trách hiện trường không còn hiệu lực");
+            return;
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean loggedIn = auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
         if (loggedIn) {
@@ -186,28 +198,117 @@ public class CallServiceImpl implements CallService {
             return;
         }
 
+        // bên gửi: vai trò + tên hiện trên máy bên nhận
+        String from;
+        String peerName;
+        String unitName;
+        String defaultTo;
         if (sender instanceof OfficerPrincipal officer) {
-            if (!officer.memberId().equals(incident.getHandlerId())) {
+            if (officer.memberId().equals(incident.getHandlerId())) {
+                from = ROLE_OFFICER;
+            } else if (isDelegate(incident.getId(), officer.memberId())) {
+                from = ROLE_DELEGATE;
+            } else {
                 bounce(sender, signal, "not_handler");
                 return;
             }
-            send(CitizenPrincipal.nameOf(incident.getId()), signal.toBuilder()
-                    .from("officer").peerName(officer.fullName()).unitName(unitName(officer)).build());
+            peerName = officer.fullName();
+            unitName = unitName(officer);
+            defaultTo = ROLE_CITIZEN;
         } else if (sender instanceof CitizenPrincipal citizen) {
             if (!citizen.incidentId().equals(incident.getId())) {
                 return; // chỉ được gọi trong ca của chính mình
             }
-            if (incident.getHandlerId() == null) {
-                bounce(sender, signal, "no_handler");
+            from = ROLE_CITIZEN;
+            peerName = incident.getCitizenName();
+            unitName = null;
+            defaultTo = ROLE_OFFICER;
+        } else if (sender instanceof com.sosvietnam.security.FieldPrincipal field) {
+            com.sosvietnam.model.entity.IncidentDispatch trip = currentFieldTrip(incident.getId());
+            if (!field.incidentId().equals(incident.getId()) || trip == null || !trip.getId().equals(field.dispatchId())) {
+                bounce(sender, signal, "closed"); // link đã đổi người / cấp lại
                 return;
             }
+            from = ROLE_FIELD;
+            peerName = trip.getFieldMember().displayName();
+            unitName = trip.getStation() == null ? null : trip.getStation().getName();
+            defaultTo = ROLE_OFFICER;
+        } else {
+            return;
+        }
+
+        String to = StringUtils.hasText(signal.getTo()) ? signal.getTo() : defaultTo;
+        String target = switch (to) {
             // tên phiên STOMP của cán bộ = member id (OfficerPrincipal.getName)
-            send(incident.getHandlerId().toString(), signal.toBuilder()
-                    .from("citizen").peerName(incident.getCitizenName()).unitName(null).build());
+            case ROLE_OFFICER -> incident.getHandlerId() == null ? null : incident.getHandlerId().toString();
+            case ROLE_CITIZEN -> CitizenPrincipal.nameOf(incident.getId());
+            case ROLE_FIELD -> {
+                com.sosvietnam.model.entity.IncidentDispatch trip = currentFieldTrip(incident.getId());
+                yield trip == null ? null : com.sosvietnam.security.FieldPrincipal.nameOf(trip.getId());
+            }
+            case ROLE_DELEGATE -> {
+                com.sosvietnam.model.entity.IncidentDispatch trip = currentDelegateTrip(incident.getId());
+                yield trip == null ? null : trip.getAssignedTo().getId().toString();
+            }
+            default -> null;
+        };
+        if (target == null || to.equals(from)) {
+            bounce(sender, signal, switch (to) {
+                case ROLE_FIELD -> "no_field";
+                case ROLE_DELEGATE -> "no_delegate";
+                default -> "no_handler";
+            });
+            return;
+        }
+        if ("ring".equals(action) && !online(target)) {
+            bounce(sender, signal, "offline"); // vd người phụ trách chưa mở link, cán bộ đã tắt trang
+            return;
+        }
+        // to = bên nhận thấy ai gọi tới nó; bên nhận trả lời về "from"
+        send(target, signal.toBuilder().from(from).to(to).peerName(peerName).unitName(unitName).build());
+        if ("accept".equals(action) || "reject".equals(action)) {
+            // cùng người mở ở máy khác (laptop + điện thoại): các máy đó thôi đổ chuông
+            send(sender.getName(), CallSignalMessage.builder().incidentId(signal.getIncidentId())
+                    .callId(signal.getCallId()).action("dismiss").from("server").build());
         }
         if ("ring".equals(action) || "end".equals(action) || "reject".equals(action)) {
             log.info("📞 [CALL] {} {} on {} by {}", action, signal.getCallId(), incident.getId(), sender.getName());
         }
+    }
+
+    static final String ROLE_OFFICER = "officer";
+    static final String ROLE_CITIZEN = "citizen";
+    static final String ROLE_FIELD = "field";
+    static final String ROLE_DELEGATE = "delegate";
+
+    private boolean online(String user) {
+        SimpUserRegistry registry = userRegistry == null ? null : userRegistry.getIfAvailable();
+        return registry == null || registry.getUser(user) != null;
+    }
+
+    /** Lượt chủ trì đang uỷ quyền cho 1 cán bộ (chưa từ chối, chưa xong); null nếu không có. */
+    private com.sosvietnam.model.entity.IncidentDispatch currentDelegateTrip(String incidentId) {
+        return incidentDispatchRepository.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(
+                        incidentId, com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
+                .filter(d -> d.getAssignedTo() != null
+                        && com.sosvietnam.model.payload.enums.DispatchStatus.DELEGATED.contains(d.getStatus()))
+                .orElse(null);
+    }
+
+    private boolean isDelegate(String incidentId, java.util.UUID memberId) {
+        com.sosvietnam.model.entity.IncidentDispatch trip = currentDelegateTrip(incidentId);
+        return trip != null && trip.getAssignedTo().getId().equals(memberId);
+    }
+
+    /** Lượt chủ trì hiện tại có người phụ trách hiện trường (đang đi / đã tới); null nếu chưa có. */
+    private com.sosvietnam.model.entity.IncidentDispatch currentFieldTrip(String incidentId) {
+        return incidentDispatchRepository.findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(
+                        incidentId, com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
+                .filter(d -> d.getFieldMember() != null
+                        && (d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED
+                        || d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE
+                        || d.getStatus() == com.sosvietnam.model.payload.enums.DispatchStatus.ARRIVED))
+                .orElse(null);
     }
 
     private void send(String user, CallSignalMessage signal) {

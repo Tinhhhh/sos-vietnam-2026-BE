@@ -62,7 +62,12 @@ public interface IncidentService {
 
 
     /** Cán bộ đang giữ ca huỷ ca ở bất kỳ bước nào (xác minh, điều động), kèm lý do. */
-    void cancelByOfficer(String id, String reason);
+    default void cancelByOfficer(String id, String reason) {
+        cancelByOfficer(id, reason, false);
+    }
+
+    /** Như trên; falseAlarm = kết luận báo khống (tính vào khoá SĐT của người báo). */
+    void cancelByOfficer(String id, String reason, boolean falseAlarm);
 
     /** Người báo tin tự huỷ ca còn mở (kể cả khi đã có cán bộ nhận). */
     IncidentTrackingResponse cancelByCitizen(String id, String citizenAccessToken, CancelIncidentRequest request);

@@ -25,6 +25,18 @@ public class CreateIncidentRequest {
     @NotNull
     @JsonProperty("emergency_type")
     private EmergencyType emergencyType;
+    /** IP người gửi, controller điền từ request (không nhận từ JSON). */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String clientIp;
+    /** Tự báo (mặc định khi bỏ trống) / báo hộ (chưa mở, 400). */
+    @JsonProperty("report_type")
+    private com.sosvietnam.model.payload.enums.ReportType reportType;
+    /**
+     * Số đã có 1 tin báo đang mở (409 OPEN_CASE_EXISTS) mà dân chọn "Báo sự việc khác": true = tạo ca mới.
+     * Tối đa 2 ca mở / số (docs/spec-multi-case.md).
+     */
+    @JsonProperty("new_case")
+    private Boolean newCase;
     @Size(max = 10)
     @JsonProperty("incident_tags")
     private List<@Size(max = 200) String> incidentTags;

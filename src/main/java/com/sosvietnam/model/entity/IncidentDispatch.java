@@ -64,6 +64,13 @@ public class IncidentDispatch {
     @JoinColumn(name = "field_member_id")
     private UnitMember fieldMember;
 
+    // Link của người phụ trách hiện trường (/f/{token}): chỉ lưu SHA-256; null = chưa cấp / đã huỷ (đổi người)
+    @Column(name = "field_token_hash", length = 64)
+    private String fieldTokenHash;
+
+    @Column(name = "field_token_issued_at")
+    private LocalDateTime fieldTokenIssuedAt;
+
     @Column(length = 500)
     private String note;
 
@@ -82,6 +89,36 @@ public class IncidentDispatch {
     @Column(name = "arrived_at")
     private LocalDateTime arrivedAt;
 
+    // "Đã đến" xác nhận thế nào: GPS trong bán kính / người giữ ca kèm lý do / người báo tin (V17)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "arrival_source", length = 20)
+    private com.sosvietnam.model.payload.enums.ArrivalSource arrivalSource;
+
+    @Column(name = "arrival_note", length = 255)
+    private String arrivalNote;
+
+    @ManyToOne
+    @JoinColumn(name = "arrival_by_member_id")
+    private UnitMember arrivalBy;
+
+    // khoảng cách GPS tới điểm đến lúc xác nhận (m); null = không có GPS
+    @Column(name = "arrival_distance_m")
+    private Integer arrivalDistanceM;
+
+    // SMS "lực lượng sắp tới" đã gửi cho người báo tin (V21), 1 lần / lượt
+    @Column(name = "approach_sms_at")
+    private LocalDateTime approachSmsAt;
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** Đã chọn người phụ trách hiện trường nhưng chưa bấm "Khởi hành". */
+    public boolean awaitingDeparture() {
+        return status == com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED && fieldMember != null;
+    }
+
+    /** Nhãn trạng thái cho giao diện ("Chờ khởi hành" khi đã chọn người mà chưa đi). */
+    public String statusLabel() {
+        return awaitingDeparture() ? "Đã chọn người đi, chờ khởi hành" : status.getLabel();
+    }
 }

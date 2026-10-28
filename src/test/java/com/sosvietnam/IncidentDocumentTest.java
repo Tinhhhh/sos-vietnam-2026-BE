@@ -62,7 +62,7 @@ class IncidentDocumentTest {
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final IncidentDocumentServiceImpl service = new IncidentDocumentServiceImpl(incidentRepo,
             new com.sosvietnam.security.CurrentOfficer(), claimRepo, dispatchRepo, reportRepo, docRepo, members,
-            mock(com.sosvietnam.service.IncidentNotifier.class));
+            mock(com.sosvietnam.service.IncidentNotifier.class), new com.sosvietnam.security.LookupAttemptLimiter());
 
     final Map<String, IncidentDocument> store = new HashMap<>();
     Account officer;
@@ -172,9 +172,9 @@ class IncidentDocumentTest {
 
     @Test
     void citizenSignsViaLookup_thenBothSigned_locksTheDocument() {
-        assertThatThrownBy(() -> service.lookupGet(IncidentLookupRequest.builder().lookupCode("K7M2-QX9P")
-                .phoneLast4("5678").build())).isInstanceOf(SosException.class)
-                .extracting("httpStatus").isEqualTo(HttpStatus.NOT_FOUND);
+        // not saved yet: the citizen already reads the auto-filled draft
+        assertThat(service.lookupGet(IncidentLookupRequest.builder().lookupCode("K7M2-QX9P")
+                .phoneLast4("5678").build()).isSaved()).isFalse();
 
         service.save(incident.getId(), service.get(incident.getId()).getFields());
         IncidentDocumentResponse seen = service.lookupGet(IncidentLookupRequest.builder().lookupCode("k7m2-qx9p")
@@ -204,6 +204,15 @@ class IncidentDocumentTest {
         assertThatThrownBy(() -> service.citizenGet(incident.getId(), "wrong")).isInstanceOf(SosException.class)
                 .extracting("httpStatus").isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(service.citizenSign(incident.getId(), TOKEN, typed("Võ Văn Tịnh")).getCitizenSignature()).isNotNull();
+    }
+
+    @Test
+    void citizen_seesTheDraftBeforeOfficersSaveIt_butCannotSignYet() {
+        IncidentDocumentResponse draft = service.citizenGet(incident.getId(), TOKEN);
+        assertThat(draft.isSaved()).isFalse();
+        assertThat(draft.getFields()).isNotNull();
+        assertThatThrownBy(() -> service.citizenSign(incident.getId(), TOKEN, typed("Võ Văn Tịnh")))
+                .isInstanceOf(SosException.class);
     }
 
     @Test

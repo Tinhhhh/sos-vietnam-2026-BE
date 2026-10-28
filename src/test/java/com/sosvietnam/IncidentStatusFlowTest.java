@@ -51,11 +51,13 @@ class IncidentStatusFlowTest {
     final IncidentEscalationService escalation = mock(IncidentEscalationService.class);
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
+    final com.sosvietnam.service.CitizenSmsService citizenSms = mock(com.sosvietnam.service.CitizenSmsService.class);
     final com.sosvietnam.repository.IncidentDispatchRepository dispatchRepo = mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
     final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
             mock(GeoService.class), mock(MediaStorageService.class), notifier, escalation,
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
-            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode,
+            citizenSms, new com.sosvietnam.security.LookupAttemptLimiter());
 
     final Account officer = Account.builder().id(UUID.randomUUID()).email("congan.tanan@sos.vn").firstName("Cán")
             .lastName("Bộ").role(Role.builder().id(2L).roleName("OFFICER").build()).agencyType(AgencyType.POLICE)
@@ -192,7 +194,8 @@ class IncidentStatusFlowTest {
         incident.setStatus(IncidentStatus.RESOLVING);
         incident.setFieldMemberId(UUID.randomUUID());
         var d = com.sosvietnam.model.entity.IncidentDispatch.builder()
-                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED).build();
+                .status(com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED)
+                .fieldTokenHash("hash-of-the-sms-link").fieldTokenIssuedAt(LocalDateTime.now()).build();
         when(dispatchRepo.findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc("SOS-1",
                 com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY,
                 com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED)).thenReturn(Optional.of(d));
@@ -202,6 +205,7 @@ class IncidentStatusFlowTest {
 
         assertThat(d.getStatus()).isEqualTo(com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED);
         assertThat(d.getRejectReason()).isEqualTo("Ca đã chuyển lên cấp tỉnh");
+        assertThat(d.getFieldTokenHash()).isNull(); // link SMS của người đi hiện trường hết hiệu lực
         assertThat(incident.getFieldMemberId()).isNull();
         verify(dispatchRepo).save(d);
     }

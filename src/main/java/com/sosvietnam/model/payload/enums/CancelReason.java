@@ -14,7 +14,9 @@ public enum CancelReason {
     CALLED_HOTLINE("Đã gọi 113 / 114", true),
     OTHER("Lý do khác", true),
     NO_RESPONDER("Quá lâu không có cán bộ tiếp nhận, hệ thống tự huỷ", false),
-    OFFICER_CANCELLED("Cán bộ huỷ ca", false);
+    OFFICER_CANCELLED("Cán bộ huỷ ca", false),
+    /** Cán bộ giữ ca kết luận báo khống (tính vào khoá SĐT). */
+    FALSE_ALARM("Cán bộ kết luận báo khống", false);
 
     private final String label;
     /** Người dân được chọn lý do này khi tự huỷ. */

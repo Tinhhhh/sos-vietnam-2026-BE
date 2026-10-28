@@ -22,6 +22,9 @@ public class DemoSettingsResponse {
     @JsonProperty("hidden")
     private boolean hidden;
 
+    @JsonProperty("simulation_speed_kmh")
+    private double simulationSpeedKmh;
+
     @JsonProperty("open_count")
     private long openCount;
 

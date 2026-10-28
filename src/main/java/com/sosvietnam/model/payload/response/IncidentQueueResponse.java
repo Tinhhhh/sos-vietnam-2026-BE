@@ -106,6 +106,16 @@ public class IncidentQueueResponse {
     @JsonProperty("escalation_reason_label")
     private String escalationReasonLabel;
 
+    @JsonProperty("report_type")
+    private com.sosvietnam.model.payload.enums.ReportType reportType;
+
+    @JsonProperty("report_type_label")
+    private String reportTypeLabel;
+
+    /** Số ca báo khống 24 giờ qua từ cùng IP (cờ cảnh báo, không chặn); 0 = không có. */
+    @JsonProperty("ip_false_alarm_count")
+    private long ipFalseAlarmCount;
+
     /** Lý do cán bộ xã ghi khi tự chuyển lên tỉnh */
     @JsonProperty("escalation_note")
     private String escalationNote;
@@ -133,6 +143,28 @@ public class IncidentQueueResponse {
     /** Bước 2 uỷ quyền: ca được giao cho một đơn vị cấp xã (null nếu không có). */
     @JsonProperty("delegation")
     private Delegation delegation;
+
+    /** Ca khác đang mở của cùng số điện thoại (tối đa 2 ca / số): cán bộ biết để tránh xử lý trùng. */
+    @JsonProperty("other_open_cases")
+    private List<OpenCase> otherOpenCases;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OpenCase {
+        @JsonProperty("id")
+        private String id;
+        @JsonProperty("type_label")
+        private String typeLabel;
+        @JsonProperty("status_label")
+        private String statusLabel;
+
+        public static OpenCase of(Incident i) {
+            return new OpenCase(i.getId(), i.getEmergencyType() == null ? null : i.getEmergencyType().getLabel(),
+                    i.getStatus() == null ? null : i.getStatus().getLabel());
+        }
+    }
 
     @Data
     @Builder
@@ -210,6 +242,8 @@ public class IncidentQueueResponse {
                 .transferReason(i.getTransferReason())
                 .escalationReason(i.getEscalationReason())
                 .escalationReasonLabel(i.getEscalationReason() == null ? null : i.getEscalationReason().getLabel())
+                .reportType(i.getReportType())
+                .reportTypeLabel(i.getReportType() == null ? null : i.getReportType().getLabel())
                 .escalationNote(i.getEscalationNote())
                 .handler(handler)
                 .heldByMe(heldByMe)

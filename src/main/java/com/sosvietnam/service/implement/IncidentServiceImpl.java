@@ -105,6 +105,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IncidentServiceImpl implements IncidentService {
 
+    // Chống báo tin giả (khoá SĐT, V20). Field không bắt buộc để test dựng tay service không phải đổi constructor.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.service.PhoneLockService phoneLockService;
+
     private static final int MAX_MEDIA_PER_INCIDENT = 10;
     private static final int MAX_QUEUE_PAGE_SIZE = 100;
     // Bộ lọc thời gian của hàng đợi / lịch sử (FE dùng 1 / 7 / 30 ngày)
@@ -154,6 +158,11 @@ public class IncidentServiceImpl implements IncidentService {
     private final IncidentRouteRepository incidentRouteRepository;
     private final com.sosvietnam.repository.IncidentDocumentRepository incidentDocumentRepository;
     private final com.sosvietnam.service.DemoModeService demoModeService;
+    private final com.sosvietnam.service.CitizenSmsService citizenSmsService;
+    private final com.sosvietnam.security.LookupAttemptLimiter lookupAttemptLimiter;
+
+    /** Một số điện thoại có tối đa bấy nhiêu ca đang mở (tính cả Báo hộ, docs/spec-multi-case.md) */
+    static final int MAX_OPEN_CASES_PER_PHONE = 2;
 
     // Ca Công an cấp xã quá số phút này chưa ai nhận thì lên cấp tỉnh
     @Value("${app.incident.escalation-minutes:15}")
@@ -161,7 +170,7 @@ public class IncidentServiceImpl implements IncidentService {
     // Ca chờ quá số phút này mà chưa ai nhận thì hệ thống tự huỷ (lý do NO_RESPONDER)
     @Value("${app.incident.auto-cancel-minutes:60}")
     private long autoCancelMinutes;
-    // Bấm SOS lại trong khoảng này khi ca cũ còn mở thì quay lại ca cũ; ca mở cũ hơn coi là bỏ dở
+    // Ca mở tạo trong khoảng này mới tính vào giới hạn 2 ca mở / số; ca mở cũ hơn coi là bỏ dở
     @Value("${app.incident.resume-hours:24}")
     private long resumeHours;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -177,8 +186,10 @@ public class IncidentServiceImpl implements IncidentService {
                     "Cấp cứu y tế không gửi qua SOS: vui lòng gọi 115 hoặc bệnh viện gần nhất trong danh bạ");
         }
 
-        CreateIncidentResponse reopened = reopenOpenSos(request);
-        if (reopened != null) return reopened;
+        // SĐT đang bị khoá vì báo tin giả: 403 trước mọi việc khác
+        if (phoneLockService != null) phoneLockService.checkCanReport(request.getPhone());
+
+        guardOpenCases(request);
 
         String id = "SOS-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
@@ -208,6 +219,8 @@ public class IncidentServiceImpl implements IncidentService {
                 .status(IncidentStatus.PENDING)
                 .description(request.getDescription())
                 .incidentTag(firstTag(request.getIncidentTags()))
+                .reportType(reportTypeOf(request))
+                .clientIp(request.getClientIp())
                 .address(request.getAddress())
                 .ward(area.ward())
                 .province(area.province())
@@ -231,43 +244,58 @@ public class IncidentServiceImpl implements IncidentService {
         return new CreateIncidentResponse(IncidentResponse.from(saved, List.of(), List.of()), citizenAccessToken, false);
     }
 
+    /** Bỏ trống = tự báo; báo hộ chưa mở. */
+    private static com.sosvietnam.model.payload.enums.ReportType reportTypeOf(CreateIncidentRequest request) {
+        var type = request.getReportType() == null ? com.sosvietnam.model.payload.enums.ReportType.SELF : request.getReportType();
+        if (!type.isAvailable()) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Báo hộ chưa được hỗ trợ, vui lòng chọn Tự báo");
+        }
+        return type;
+    }
+
     /** Tên FE tự điền khi người dân không khai (sos-request-modal DEFAULT_REPORTER_NAME, bản gốc), dạng AreaNames.key */
     private static final Set<String> PLACEHOLDER_NAMES = Set.of("nguoi dan can cuu ho", "nguoi dan can ho tro", "nguoi dan");
 
     /**
-     * Mỗi số điện thoại chỉ có 1 SOS đang mở: bấm SOS lại khi ca cũ (tạo trong resume-hours) còn mở thì trả lại ca
-     * đó với citizen token MỚI (token cũ hết hiệu lực) để FE vào thẳng màn hình gọi, không tạo ca mới.
-     * - Ca chờ quá auto-cancel-minutes chưa ai nhận: huỷ (NO_RESPONDER) rồi cho tạo ca mới.
-     * - Ca mở cũ hơn resume-hours (ca bỏ dở) không chặn, không mở lại.
-     * - Lúc báo ca cũ có khai họ tên mà lần này khai tên khác: 409 (không cho người khác chiếm phiên theo dõi).
-     * @return null khi không có ca nào để quay lại
+     * Tối đa 2 ca đang mở / số điện thoại (docs/spec-multi-case.md). Không trả lại ca cũ khi bấm SOS nữa: dân quay
+     * lại ca cũ bằng Tra cứu (mã ca + 4 số cuối SĐT). Không lộ chi tiết ca cũ cho người chỉ gõ số điện thoại.
+     * - Ca mở cũ hơn resume-hours (bỏ dở) không tính; ca chờ quá auto-cancel-minutes chưa ai nhận: huỷ NO_RESPONDER.
+     * - Đã có 1 ca: 409 OPEN_CASE_EXISTS, trừ khi dân chọn "Báo sự việc khác" (new_case = true).
+     * - Đã có 2 ca: 409 OPEN_CASE_LIMIT.
+     * - Ca cũ khai họ tên thật mà lần này khai tên thật khác: 409 (như trước).
      */
-    private CreateIncidentResponse reopenOpenSos(CreateIncidentRequest request) {
+    private void guardOpenCases(CreateIncidentRequest request) {
         String phone = request.getPhone();
-        if (phone == null || phone.isBlank()) return null;
+        if (phone == null || phone.isBlank()) return;
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expired = now.minusMinutes(autoCancelMinutes);
         LocalDateTime oldest = now.minusHours(resumeHours);
-        for (Incident open : incidentRepository.findByPhoneAndStatusInOrderByCreatedAtDesc(phone.trim(), IncidentStatus.ACTIVE)) {
-            if (open.getCreatedAt() == null || open.getCreatedAt().isBefore(oldest)) continue;
-            boolean stale = open.getStatus() == IncidentStatus.PENDING && open.getHandlerId() == null
-                    && open.getCreatedAt().isBefore(expired);
-            if (stale && cancel(open.getId(), CancelReason.NO_RESPONDER, Set.of(IncidentStatus.PENDING))) continue;
-
-            String declared = com.sosvietnam.util.AreaNames.key(open.getCitizenName());
-            String given = com.sosvietnam.util.AreaNames.key(request.getCitizenName());
-            if (declared != null && !PLACEHOLDER_NAMES.contains(declared) && given != null
-                    && !PLACEHOLDER_NAMES.contains(given) && !declared.equals(given)) {
-                throw new SosException(HttpStatus.CONFLICT, "Số điện thoại này đang có một tin báo SOS khác chưa kết thúc. "
-                        + "Nếu cần hỗ trợ ngay, vui lòng gọi 113 / 114 / 115.");
-            }
-            String token = newAccessToken();
-            open.setCitizenTokenHash(CitizenTokens.sha256(token));
-            Incident saved = incidentRepository.save(open);
-            log.info("🔁 [RESUME] SOS again from the phone of open incident {}: back to it (new access token)", saved.getId());
-            return new CreateIncidentResponse(IncidentResponse.from(saved, List.of(), List.of()), token, true);
+        List<Incident> open = new java.util.ArrayList<>();
+        for (Incident o : incidentRepository.findByPhoneAndStatusInOrderByCreatedAtDesc(phone.trim(), IncidentStatus.ACTIVE)) {
+            if (o.getCreatedAt() == null || o.getCreatedAt().isBefore(oldest)) continue;
+            boolean stale = o.getStatus() == IncidentStatus.PENDING && o.getHandlerId() == null
+                    && o.getCreatedAt().isBefore(expired);
+            if (stale && cancel(o.getId(), CancelReason.NO_RESPONDER, Set.of(IncidentStatus.PENDING))) continue;
+            open.add(o);
         }
-        return null;
+        if (open.isEmpty()) return;
+        if (open.size() >= MAX_OPEN_CASES_PER_PHONE) {
+            throw new SosException(HttpStatus.CONFLICT, "Số điện thoại này đã có " + open.size()
+                    + " tin báo đang mở, không thể tạo thêm. Quay lại tin báo bằng Tra cứu, cần hỗ trợ gấp gọi 113 / 114 / 115.",
+                    Map.of("code", "OPEN_CASE_LIMIT", "open_count", String.valueOf(open.size())));
+        }
+        if (!Boolean.TRUE.equals(request.getNewCase())) {
+            throw new SosException(HttpStatus.CONFLICT,
+                    "Số điện thoại này đã có 1 tin báo đang mở. Quay lại bằng Tra cứu hoặc báo một sự việc khác.",
+                    Map.of("code", "OPEN_CASE_EXISTS", "open_count", "1"));
+        }
+        String declared = com.sosvietnam.util.AreaNames.key(open.get(0).getCitizenName());
+        String given = com.sosvietnam.util.AreaNames.key(request.getCitizenName());
+        if (declared != null && !PLACEHOLDER_NAMES.contains(declared) && given != null
+                && !PLACEHOLDER_NAMES.contains(given) && !declared.equals(given)) {
+            throw new SosException(HttpStatus.CONFLICT, "Số điện thoại này đang có một tin báo SOS khác chưa kết thúc. "
+                    + "Nếu cần hỗ trợ ngay, vui lòng gọi 113 / 114 / 115.");
+        }
     }
 
     /** Chạy sau khi transaction commit (ngoài transaction thì chạy ngay) */
@@ -473,10 +501,19 @@ public class IncidentServiceImpl implements IncidentService {
                         .orElse(null))) {
             throw new SosException(HttpStatus.FORBIDDEN, "Ca " + id + " không thuộc phạm vi của đơn vị bạn");
         }
-        return IncidentDetailResponse.from(incident,
+        IncidentDetailResponse detail = IncidentDetailResponse.from(incident,
                 incidentMediaRepository.findByIncident_IdOrderByCreatedAtAsc(id),
                 incidentDispatchRepository.findByIncident_IdOrderByDispatchedAtAsc(id),
                 incidentClaimRepository.findByIncident_IdOrderByClaimedAtAsc(id));
+        detail.setOtherOpenCases(incident.getPhone() == null || incident.getPhone().isBlank() ? List.of()
+                : incidentRepository.findByPhoneAndStatusInOrderByCreatedAtDesc(incident.getPhone(), IncidentStatus.ACTIVE)
+                        .stream().filter(o -> !o.getId().equals(id))
+                        .map(IncidentQueueResponse.OpenCase::of).toList());
+        if (phoneLockService != null && incident.getClientIp() != null) {
+            detail.setIpFalseAlarmCount(phoneLockService.falseAlarmsByIp(List.of(incident.getClientIp()))
+                    .getOrDefault(incident.getClientIp(), 0L));
+        }
+        return detail;
     }
 
     /** Cán bộ cấp xã: thêm các ca cấp trên đang uỷ quyền cho đơn vị mình (bước 2 điều động), mới nhất trước. */
@@ -625,6 +662,8 @@ public class IncidentServiceImpl implements IncidentService {
         log.info("🙋 [CLAIM] Incident {} claimed by {}", id, me.email());
 
         notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
+        // SMS "đã tiếp nhận" + mã ca cho người báo tin (1 lần / ca, sau ~10 giây; tự bỏ qua nếu đã gửi)
+        afterCommit(() -> citizenSmsService.scheduleReceived(id));
         return queueView(id, me);
     }
 
@@ -694,7 +733,8 @@ public class IncidentServiceImpl implements IncidentService {
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        List<com.sosvietnam.model.entity.UnitMember> colleagues = unitMemberRepository.findActiveOfficers(me.agency(), me.level()).stream()
+        List<com.sosvietnam.model.entity.UnitMember> colleagues = unitMemberRepository.findActiveOfficersOfUnit(
+                        me.agency(), me.level(), me.provinceId(), me.level() == UnitLevel.WARD ? me.wardId() : null).stream()
                 .filter(m -> !me.is(m.getId()) && !m.isLocked())
                 .filter(m -> IncidentAccess.sameUnit(me, OfficerPrincipal.of(m)))
                 .toList();
@@ -895,22 +935,33 @@ public class IncidentServiceImpl implements IncidentService {
                     // REJECTED: tỉnh bắt đầu lại từ bước 1, lượt cũ vẫn giữ để tra cứu; mô phỏng tự dừng khi hết EN_ROUTE
                     d.setStatus(DispatchStatus.REJECTED);
                     d.setRejectReason(ESCALATED_DISPATCH_REASON);
+                    // link đã gửi cho người phụ trách của xã hết hiệu lực (cả STOMP, ice-servers), người đi vẫn lưu để tra cứu
+                    d.setFieldTokenHash(null);
+                    d.setFieldTokenIssuedAt(null);
                     d.setRespondedAt(now);
                     d.setUpdatedAt(now);
                     incidentDispatchRepository.save(d);
                 });
     }
 
+    /**
+     * Tra cứu bằng mã ca + 4 số cuối SĐT. Ca đã đóng: thông tin cứu hộ. Ca còn mở: thêm `incident` + mã truy cập MỚI
+     * để dân vào lại màn hình theo dõi / gọi (mã cũ hết hiệu lực). Sai quá 5 lần / 10 phút / mã -> 429.
+     */
     @Override
-    @Transactional(readOnly = true) // handler account + station ward/province are LAZY (open-in-view=false)
+    @Transactional // handler account + station ward/province are LAZY (open-in-view=false); open case: new token saved
     public IncidentLookupResponse lookup(IncidentLookupRequest request) {
         // Sai mã hay sai SĐT đều trả cùng một câu: không cho dò mã nào đang tồn tại
         SosException notFound = new SosException(HttpStatus.NOT_FOUND, "Mã tra cứu hoặc số điện thoại không đúng");
+        lookupAttemptLimiter.check(request.getLookupCode());
         String code = LookupCodes.normalize(request.getLookupCode());
-        if (code == null) throw notFound;
-        Incident incident = incidentRepository.findByLookupCode(code).orElseThrow(() -> notFound);
-        String phone = incident.getPhone();
-        if (phone == null || !phone.endsWith(request.getPhoneLast4())) throw notFound;
+        Incident incident = code == null ? null : incidentRepository.findByLookupCode(code).orElse(null);
+        String phone = incident == null ? null : incident.getPhone();
+        if (phone == null || !phone.endsWith(request.getPhoneLast4())) {
+            lookupAttemptLimiter.failed(request.getLookupCode());
+            throw notFound;
+        }
+        lookupAttemptLimiter.succeeded(request.getLookupCode());
         List<IncidentDispatch> dispatches = incidentDispatchRepository.findByIncident_IdOrderByDispatchedAtAsc(incident.getId());
         Map<Long, IncidentRoute> routes = new HashMap<>();
         for (IncidentDispatch d : dispatches) {
@@ -918,9 +969,19 @@ public class IncidentServiceImpl implements IncidentService {
             incidentRouteRepository.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(d.getId())
                     .ifPresent(r -> routes.put(d.getId(), r));
         }
-        return IncidentLookupResponse.from(incident, dispatches,
+        IncidentLookupResponse res = IncidentLookupResponse.from(incident, dispatches,
                 incidentClaimRepository.findFirstByIncident_IdOrderByClaimedAtDesc(incident.getId()).orElse(null),
                 incidentReportRepository.findById(incident.getId()).orElse(null), routes);
+        if (IncidentStatus.ACTIVE.contains(incident.getStatus())) {
+            String token = newAccessToken();
+            incident.setCitizenTokenHash(CitizenTokens.sha256(token));
+            Incident saved = incidentRepository.save(incident);
+            res.setOpen(true);
+            res.setIncident(IncidentResponse.from(saved, List.of(), List.of()));
+            res.setCitizenAccessToken(token);
+            log.info("🔁 [LOOKUP RESUME] Incident {} re-opened from its code (new access token)", saved.getId());
+        }
+        return res;
     }
 
     @Override
@@ -943,6 +1004,8 @@ public class IncidentServiceImpl implements IncidentService {
             throw new SosException(HttpStatus.CONFLICT, "Tin báo đã kết thúc hoặc đã được huỷ trước đó");
         }
         log.info("🛑 [CANCEL] Incident {} cancelled by citizen ({})", id, reason);
+        // bấm nhầm lần thứ 4 trong 24 giờ -> khoá SĐT
+        if (reason == CancelReason.MISTAKE && phoneLockService != null) phoneLockService.onMistakeCancel(incident.getPhone());
         return tracking(findIncident(id));
     }
 
@@ -982,19 +1045,22 @@ public class IncidentServiceImpl implements IncidentService {
      */
     @Transactional
     @Override
-    public void cancelByOfficer(String id, String reason) {
+    public void cancelByOfficer(String id, String reason, boolean falseAlarm) {
         OfficerPrincipal me = currentOfficer();
         Incident incident = findIncident(id);
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới huỷ ca được");
         }
         LocalDateTime now = LocalDateTime.now();
-        if (incidentRepository.cancel(id, CancelReason.OFFICER_CANCELLED, IncidentStatus.HELD, now) == 0) {
+        CancelReason cancelReason = falseAlarm ? CancelReason.FALSE_ALARM : CancelReason.OFFICER_CANCELLED;
+        if (incidentRepository.cancel(id, cancelReason, IncidentStatus.HELD, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
         }
+        String prefix = falseAlarm ? "Báo khống: " : "Cán bộ huỷ ca: ";
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
-                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, "Cán bộ huỷ ca: " + reason.trim()));
-        log.info("🗑️ [OFFICER CANCEL] Incident {} by {}: {}", id, me.email(), reason.trim());
+                .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, prefix + reason.trim()));
+        log.info("🗑️ [OFFICER CANCEL] Incident {} by {} ({}): {}", id, me.email(), cancelReason, reason.trim());
+        if (falseAlarm && phoneLockService != null) phoneLockService.onFalseAlarm(incident.getPhone());
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
     }
 

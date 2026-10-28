@@ -33,14 +33,16 @@ public class CallController {
     private final CallService callService;
 
     @Operation(summary = "ICE servers (STUN + short-lived Cloudflare TURN) for a call",
-            description = "Officer: JWT. Citizen: header X-SOS-Access-Token + ?incident_id=. "
+            description = "Officer: JWT. Citizen: header X-SOS-Access-Token + ?incident_id=. Field officer link: "
+                    + "header X-SOS-Field-Token. "
                     + "relay=false means STUN only (TURN not configured / unavailable). Role required: OFFICER, ADMIN or citizen token")
     @GetMapping("/ice-servers")
     public ResponseEntity<Object> getIceServers(
             @RequestParam(value = "incident_id", required = false) String incidentId,
-            @RequestHeader(value = CITIZEN_TOKEN_HEADER, required = false) String citizenAccessToken) {
+            @RequestHeader(value = CITIZEN_TOKEN_HEADER, required = false) String citizenAccessToken,
+            @RequestHeader(value = FieldController.FIELD_TOKEN_HEADER, required = false) String fieldToken) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved ICE servers",
-                callService.getIceServers(incidentId, citizenAccessToken));
+                callService.getIceServers(incidentId, citizenAccessToken, fieldToken));
     }
 
     /** STOMP SEND /app/calls: chuyển tiếp tín hiệu tới bên kia của ca (không có phản hồi trực tiếp). */

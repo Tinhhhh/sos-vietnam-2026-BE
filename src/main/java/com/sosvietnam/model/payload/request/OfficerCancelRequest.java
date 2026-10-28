@@ -16,4 +16,8 @@ public class OfficerCancelRequest {
     @Size(min = 5, max = 255, message = "Lý do từ 5 đến 255 ký tự")
     @JsonProperty("reason")
     private String reason;
+
+    /** true = cán bộ kết luận báo khống (CancelReason.FALSE_ALARM, tính vào khoá SĐT). */
+    @JsonProperty("false_alarm")
+    private boolean falseAlarm;
 }

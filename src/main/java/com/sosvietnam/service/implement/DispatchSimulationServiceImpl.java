@@ -3,10 +3,12 @@ package com.sosvietnam.service.implement;
 import com.sosvietnam.model.payload.enums.DispatchStatus;
 import com.sosvietnam.model.payload.request.TraccarPositionRequest;
 import com.sosvietnam.repository.IncidentDispatchRepository;
+import com.sosvietnam.service.DemoModeService;
 import com.sosvietnam.service.DispatchSimulationService;
 import com.sosvietnam.service.DispatchTrackingService;
 import com.sosvietnam.util.RouteSimulation;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.TaskScheduler;
@@ -44,11 +46,19 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
     @Value("${app.traccar.osmand-url:}")
     private String osmandUrl;
 
-    @Value("${app.traccar.simulation.interval-seconds:5}")
+    @Value("${app.traccar.simulation.interval-seconds:3}")
     private long intervalSeconds;
 
     @Value("${app.traccar.simulation.speed-kmh:50}")
     private double speedKmh;
+
+    // tốc độ chỉnh ở Cài đặt (app_settings). Field không bắt buộc: test dựng tay dùng speedKmh
+    @Autowired(required = false)
+    private DemoModeService demoModeService;
+
+    private double speedKmh() {
+        return demoModeService == null ? speedKmh : demoModeService.simulationSpeedKmh();
+    }
 
     public DispatchSimulationServiceImpl(@Qualifier("incidentTaskScheduler") TaskScheduler scheduler,
                                          IncidentDispatchRepository incidentDispatchRepository,
@@ -60,7 +70,7 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
 
     @Override
     public double stepMeters() {
-        return speedKmh / 3.6 * intervalSeconds;
+        return speedKmh() / 3.6 * intervalSeconds;
     }
 
     @Override
@@ -84,7 +94,7 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
             }
         }, Instant.now(), Duration.ofSeconds(intervalSeconds));
         runs.put(dispatchId, run);
-        log.info("🧪 [SIMULATE] Lượt {} chạy {} điểm, {} km/h, qua {}", dispatchId, steps.size(), speedKmh,
+        log.info("🧪 [SIMULATE] Lượt {} chạy {} điểm, {} km/h, qua {}", dispatchId, steps.size(), speedKmh(),
                 hasTraccar() ? "Traccar" : "thẳng vào BE");
     }
 
@@ -104,7 +114,7 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
     }
 
     private void send(String badge, RouteSimulation.Step step) throws Exception {
-        double speedKnot = speedKmh * KMH_TO_KNOT;
+        double speedKnot = speedKmh() * KMH_TO_KNOT;
         if (!hasTraccar()) {
             dispatchTrackingService.accept(TraccarPositionRequest.builder()
                     .device(TraccarPositionRequest.Device.builder().uniqueId(badge).build())

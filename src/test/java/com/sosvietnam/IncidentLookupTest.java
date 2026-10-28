@@ -48,7 +48,8 @@ class IncidentLookupTest {
             mock(AccountRepository.class), members, new com.sosvietnam.security.CurrentOfficer(), geo, mock(MediaStorageService.class),
             mock(IncidentNotifier.class), mock(IncidentEscalationService.class),
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
-            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode);
+            mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode,
+            mock(com.sosvietnam.service.CitizenSmsService.class), new com.sosvietnam.security.LookupAttemptLimiter());
 
     Incident incident;
 
@@ -124,26 +125,88 @@ class IncidentLookupTest {
         return create;
     }
 
+    /** Đã có 1 ca mở: 409 OPEN_CASE_EXISTS (không lộ ca cũ); "Báo sự việc khác" (new_case) thì tạo ca mới. */
     @Test
-    void sosAgainFromAPhoneWithAnOpenSos_goesBackToIt_withANewToken() {
+    void phoneWithOneOpenCase_409Exists_unlessNewCase() {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "resumeHours", 24L);
         incident.setStatus(IncidentStatus.VERIFYING);
         incident.setCitizenName("Võ Văn Tịnh");
-        incident.setCitizenTokenHash("old");
         incident.setCreatedAt(LocalDateTime.now().minusHours(3));
         when(incidentRepo.findByPhoneAndStatusInOrderByCreatedAtDesc("0912345678", IncidentStatus.ACTIVE))
                 .thenReturn(List.of(incident));
+        when(geo.resolveArea(org.mockito.ArgumentMatchers.anyDouble(), org.mockito.ArgumentMatchers.anyDouble())).thenReturn(GeoService.Area.NONE);
         when(incidentRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var res = service.createIncident(sosFrom("vo van tinh"));
-        assertThat(res.isResumed()).isTrue();
+        assertThatThrownBy(() -> service.createIncident(sosFrom("vo van tinh"))).isInstanceOf(SosException.class)
+                .satisfies(e -> {
+                    SosException s = (SosException) e;
+                    assertThat(s.getHttpStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(s.getData()).containsEntry("code", "OPEN_CASE_EXISTS").containsEntry("open_count", "1");
+                    assertThat(s.getMessage()).doesNotContain(incident.getId());
+                });
+
+        var create = sosFrom("vo van tinh");
+        create.setNewCase(true);
+        var res = service.createIncident(create);
+        assertThat(res.getIncident().getId()).isNotEqualTo(incident.getId());
+        assertThat(res.isResumed()).isFalse();
+        assertThat(res.getIncident().getLookupCode()).matches("[A-Z0-9]{4}-[A-Z0-9]{4}"); // mã ca có ngay lúc tạo
+
+        // khai tên thật khác với ca đang mở: vẫn chặn như trước
+        var other = sosFrom("Người khác");
+        other.setNewCase(true);
+        assertThatThrownBy(() -> service.createIncident(other)).isInstanceOf(SosException.class)
+                .extracting("httpStatus").isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** Đã có 2 ca mở (tính cả Báo hộ): 409 OPEN_CASE_LIMIT, kể cả khi gửi new_case. */
+    @Test
+    void phoneWithTwoOpenCases_409Limit() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "resumeHours", 24L);
+        incident.setStatus(IncidentStatus.VERIFYING);
+        incident.setCreatedAt(LocalDateTime.now().minusHours(1));
+        Incident second = Incident.builder().id("SOS-2").phone("0912345678").status(IncidentStatus.PENDING)
+                .reportType(com.sosvietnam.model.payload.enums.ReportType.PROXY)
+                .handlerId(java.util.UUID.randomUUID()).createdAt(LocalDateTime.now().minusMinutes(5)).build();
+        when(incidentRepo.findByPhoneAndStatusInOrderByCreatedAtDesc("0912345678", IncidentStatus.ACTIVE))
+                .thenReturn(List.of(second, incident));
+        var create = sosFrom("Võ Văn Tịnh");
+        create.setNewCase(true);
+        assertThatThrownBy(() -> service.createIncident(create)).isInstanceOf(SosException.class)
+                .satisfies(e -> assertThat(((SosException) e).getData()).containsEntry("code", "OPEN_CASE_LIMIT"));
+    }
+
+    /** Tra cứu ca còn mở: trả incident + mã truy cập mới (mã cũ hết hiệu lực) để vào lại màn hình gọi. */
+    @Test
+    void lookupOfAnOpenCase_givesANewAccessToken() {
+        incident.setStatus(IncidentStatus.VERIFYING);
+        incident.setCitizenTokenHash(com.sosvietnam.util.CitizenTokens.sha256("old"));
+        when(incidentRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        IncidentLookupResponse res = service.lookup(req("K7M2-QX9P", "5678"));
+        assertThat(res.isOpen()).isTrue();
         assertThat(res.getIncident().getId()).isEqualTo(incident.getId());
         assertThat(com.sosvietnam.util.CitizenTokens.matches(incident, res.getCitizenAccessToken())).isTrue();
-        // form left the name empty -> default name: still the same person
-        assertThat(service.createIncident(sosFrom("Người dân cần cứu hộ")).isResumed()).isTrue();
-        // someone else typing that phone cannot take the case over
-        assertThatThrownBy(() -> service.createIncident(sosFrom("Người khác"))).isInstanceOf(SosException.class)
-                .extracting("httpStatus").isEqualTo(HttpStatus.CONFLICT);
+        assertThat(com.sosvietnam.util.CitizenTokens.matches(incident, "old")).isFalse();
+
+        incident.setStatus(IncidentStatus.RESOLVED); // ca đã đóng: chỉ xem, không có mã truy cập
+        IncidentLookupResponse closed = service.lookup(req("K7M2-QX9P", "5678"));
+        assertThat(closed.isOpen()).isFalse();
+        assertThat(closed.getCitizenAccessToken()).isNull();
+        assertThat(closed.getIncident()).isNull();
+    }
+
+    /** Sai 5 lần / 10 phút / mã ca -> 429 (kể cả khi lần 6 nhập đúng); đúng trước đó thì xoá đếm. */
+    @Test
+    void fiveWrongTries_lockTheCode() {
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> service.lookup(req("K7M2-QX9P", "0000"))).extracting("httpStatus").isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        service.lookup(req("k7m2qx9p", "5678")); // đúng: xoá đếm
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> service.lookup(req("K7M2-QX9P", "1111"))).extracting("httpStatus").isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        assertThatThrownBy(() -> service.lookup(req("K7M2-QX9P", "5678"))).isInstanceOf(SosException.class)
+                .hasMessageContaining("Nhập sai quá nhiều lần").extracting("httpStatus").isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @Test
@@ -175,12 +238,10 @@ class IncidentLookupTest {
     }
 
     @Test
-    void tracking_showsCodeOnlyWhenResolved() {
-        assertThat(IncidentTrackingResponse.from(incident, null).getLookupCode()).isEqualTo("K7M2-QX9P");
-        for (IncidentStatus s : List.of(IncidentStatus.PENDING, IncidentStatus.VERIFYING, IncidentStatus.RESOLVING,
-                IncidentStatus.CANCELLED)) {
+    void tracking_showsTheCaseCodeAtEveryStatus() {
+        for (IncidentStatus s : IncidentStatus.values()) {
             incident.setStatus(s);
-            assertThat(IncidentTrackingResponse.from(incident, null).getLookupCode()).as(s.name()).isNull();
+            assertThat(IncidentTrackingResponse.from(incident, null).getLookupCode()).as(s.name()).isEqualTo("K7M2-QX9P");
         }
     }
 }

@@ -25,6 +25,10 @@ public class DispatchPlanResponse {
     @JsonProperty("dispatch_id")
     private Long dispatchId;
 
+    /** Người nhận ca = cán bộ đang giữ ca (incidents.handler_id); SĐT chỉ có ở bản cho cán bộ. */
+    @JsonProperty("receiver")
+    private Officer receiver;
+
     /** Người phụ trách hiện trường (field_member_id), null khi chưa xuất phát. */
     @JsonProperty("tracker")
     private Officer tracker;
@@ -32,6 +36,40 @@ public class DispatchPlanResponse {
     /** Điểm GPS mới nhất của người đi, chỉ khi lượt đang EN_ROUTE và đã có điểm. */
     @JsonProperty("last_position")
     private LivePosition lastPosition;
+
+    /** Chỉ cho cán bộ: lúc cấp link người phụ trách hiện trường gần nhất (null = chưa cấp / đã huỷ). */
+    @JsonProperty("field_link_issued_at")
+    private OffsetDateTime fieldLinkIssuedAt;
+
+    /**
+     * Khi đang trên đường: GPS mới nhất cách điểm đến bao xa, "Đã đến" được bấm khi within (<= threshold_m =
+     * 30 m + sai số GPS tối đa 50 m). null = chưa có điểm GPS.
+     */
+    @JsonProperty("arrival_check")
+    private ArrivalCheck arrivalCheck;
+
+    /** Đã đến bằng cách nào (GPS / HOLDER_OVERRIDE / CITIZEN) + lý do khi người giữ ca xác nhận không theo GPS. */
+    @JsonProperty("arrival_source")
+    private com.sosvietnam.model.payload.enums.ArrivalSource arrivalSource;
+
+    @JsonProperty("arrival_source_label")
+    private String arrivalSourceLabel;
+
+    @JsonProperty("arrival_note")
+    private String arrivalNote;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ArrivalCheck {
+        @JsonProperty("distance_m")
+        private int distanceM;
+        @JsonProperty("threshold_m")
+        private int thresholdM;
+        @JsonProperty("within")
+        private boolean within;
+    }
 
     /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
     @JsonProperty("simulation")
@@ -163,6 +201,9 @@ public class DispatchPlanResponse {
         /** Lúc BE nhận điểm: FE tính "mất tín hiệu" theo mốc này. */
         @JsonProperty("received_at")
         private OffsetDateTime receivedAt;
+        /** TRACCAR (app trên điện thoại, ưu tiên) | BROWSER (trang link người phụ trách) */
+        @JsonProperty("source")
+        private String source;
     }
 
     @Data
@@ -213,7 +254,10 @@ public class DispatchPlanResponse {
         return DispatchPlanResponse.builder()
                 .dispatchId(d.getId())
                 .status(d.getStatus())
-                .statusLabel(d.getStatus().getLabel())
+                .statusLabel(d.statusLabel())
+                .arrivalSource(d.getArrivalSource())
+                .arrivalSourceLabel(d.getArrivalSource() == null ? null : d.getArrivalSource().getLabel())
+                .arrivalNote(d.getArrivalNote())
                 .step(d.getStatus().getStep())
                 .needsDelegation(d.getStatus() == DispatchStatus.PENDING_ACCEPT || d.getStatus() == DispatchStatus.ACCEPTED)
                 .assignedTo(officer(d.getAssignedTo()))
