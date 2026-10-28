@@ -199,6 +199,7 @@ public class GeoServiceImpl implements GeoService {
     public List<DataStatusResponse> getDataStatus() {
         return List.of(
                 toDataStatus(SeedVersion.BOUNDARIES, wardRepository.count()),
+                toDataStatus(SeedVersion.WARD_NAMES, wardRepository.count()),
                 toDataStatus(SeedVersion.RESCUE_STATIONS, rescueStationRepository.count()));
     }
 

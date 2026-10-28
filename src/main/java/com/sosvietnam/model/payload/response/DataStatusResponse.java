@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** Phiên bản một bộ dữ liệu bản đồ (boundaries | rescue_stations). version/updated_at null = chưa nạp lần nào. */
+/**
+ * Phiên bản một bộ dữ liệu bản đồ: boundaries (ranh giới tỉnh / xã) | ward_names (tên xã + sáp nhập, đồng bộ bando)
+ * | rescue_stations. version/updated_at null = chưa nạp lần nào.
+ */
 @Data
 @Builder
 @NoArgsConstructor

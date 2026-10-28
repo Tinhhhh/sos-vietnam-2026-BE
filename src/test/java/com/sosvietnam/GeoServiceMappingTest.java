@@ -161,19 +161,22 @@ class GeoServiceMappingTest {
     }
 
     @Test
-    void dataStatus_listsBothDatasets_evenBeforeFirstSync() throws Exception {
+    void dataStatus_listsAllDatasets_evenBeforeFirstSync() throws Exception {
         Instant applied = Instant.parse("2026-10-15T01:00:00Z");
         when(seedRepo.findById(SeedVersion.RESCUE_STATIONS)).thenReturn(Optional.of(SeedVersion.builder()
                 .name(SeedVersion.RESCUE_STATIONS).checksum("x").version("2026.10.15").appliedAt(applied).checkedAt(applied).build()));
-        when(seedRepo.findById(SeedVersion.BOUNDARIES)).thenReturn(Optional.empty());
+        when(seedRepo.findById(SeedVersion.BOUNDARIES)).thenReturn(Optional.of(SeedVersion.builder()
+                .name(SeedVersion.BOUNDARIES).checksum("y").version("2026.10.10").appliedAt(applied).build()));
+        when(seedRepo.findById(SeedVersion.WARD_NAMES)).thenReturn(Optional.empty());
         when(wardRepo.count()).thenReturn(3321L);
         when(stationRepo.count()).thenReturn(3717L);
 
         var status = service.getDataStatus();
-        assertThat(status).extracting("dataset").containsExactly("boundaries", "rescue_stations");
-        assertThat(status.get(0).getVersion()).isNull();
-        assertThat(status.get(0).getTotal()).isEqualTo(3321);
-        assertThat(json.writeValueAsString(status.get(1)))
+        assertThat(status).extracting("dataset").containsExactly("boundaries", "ward_names", "rescue_stations");
+        assertThat(status.get(0).getVersion()).isEqualTo("2026.10.10");
+        assertThat(status.get(1).getVersion()).isNull();
+        assertThat(status.get(1).getTotal()).isEqualTo(3321);
+        assertThat(json.writeValueAsString(status.get(2)))
                 .contains("\"version\":\"2026.10.15\"", "\"updated_at\":\"2026-10-15T01:00:00Z\"", "\"total\":3717");
     }
 }

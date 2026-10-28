@@ -10,7 +10,9 @@ import java.time.format.DateTimeFormatter;
 /**
  * Phiên bản của từng bộ dữ liệu nạp vào DB (bảng seed_versions, tạo trong schema.sql):
  * - rescue_stations: DataSeeder ghi khi data/rescue_stations.json đổi checksum.
- * - boundaries: BandoSyncService ghi sau mỗi lần đối soát với bando.com.vn.
+ * - boundaries: ranh giới tỉnh / xã từ geo/*.geojson, WardDataSeeder ghi lúc khởi động;
+ *   version + applied_at = ngày bộ file ranh giới cập nhật (WardDataSeeder.BOUNDARY_FILES_VERSION).
+ * - ward_names: tên xã + "sáp nhập từ", BandoSyncService ghi sau mỗi lần đối soát với bando.com.vn.
  * applied_at = lần dữ liệu thật sự đổi, checked_at = lần kiểm tra gần nhất.
  */
 @Entity
@@ -24,6 +26,7 @@ public class SeedVersion {
 
     public static final String RESCUE_STATIONS = "rescue_stations";
     public static final String BOUNDARIES = "boundaries";
+    public static final String WARD_NAMES = "ward_names";
 
     private static final DateTimeFormatter VERSION_FORMAT =
             DateTimeFormatter.ofPattern("yyyy.MM.dd").withZone(ZoneId.of("Asia/Ho_Chi_Minh"));

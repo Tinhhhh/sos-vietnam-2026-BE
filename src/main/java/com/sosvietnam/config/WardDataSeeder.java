@@ -2,8 +2,10 @@ package com.sosvietnam.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sosvietnam.model.entity.SeedVersion;
 import com.sosvietnam.model.entity.Ward;
 import com.sosvietnam.repository.ProvinceRepository;
+import com.sosvietnam.repository.SeedVersionRepository;
 import com.sosvietnam.repository.WardRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +16,13 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,12 +35,19 @@ public class WardDataSeeder implements CommandLineRunner {
 
     private final WardRepository wardRepository;
     private final ProvinceRepository provinceRepository;
+    private final SeedVersionRepository seedVersionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final Pattern CODE_PATTERN = Pattern.compile("^ward-([0-9A-Za-z]+)-");
 
+    // Ngày bộ file ranh giới geo/*.geojson cập nhật (tỉnh + nhãn tỉnh + xã). Thay file thì sửa ngày này.
+    static final String BOUNDARY_FILES_VERSION = "2026.10.10";
+    private static final String[] BOUNDARY_FILES = {
+            "geo/vn-provinces.geojson", "geo/vn-province-labels.geojson", "geo/vn-wards-simplified.geojson"};
+
     @Override
     public void run(String... args) {
+        recordBoundariesVersion();
         if (wardRepository.count() > 0) {
             log.info("🏘️ [INIT WARDS] Dữ liệu xã/phường đã có sẵn ({} xã/phường). Bỏ qua seeding.", wardRepository.count());
             return;
@@ -43,6 +58,40 @@ public class WardDataSeeder implements CommandLineRunner {
             seedWards();
         } catch (Exception e) {
             log.error("❌ [INIT WARDS ERROR] Lỗi khi nạp dữ liệu xã/phường: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Ghi seed_versions "boundaries" cho GET /geo/data-status: version + applied_at = ngày bộ file ranh giới
+     * (BOUNDARY_FILES_VERSION), checked_at = lần khởi động gần nhất. Chỉ là nhãn, không nạp lại ranh giới.
+     */
+    private void recordBoundariesVersion() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(BOUNDARY_FILES_VERSION.getBytes(StandardCharsets.UTF_8));
+            for (String file : BOUNDARY_FILES) {
+                ClassPathResource resource = new ClassPathResource(file);
+                if (!resource.exists()) continue;
+                try (InputStream in = resource.getInputStream()) {
+                    digest.update(in.readAllBytes());
+                }
+            }
+            String checksum = HexFormat.of().formatHex(digest.digest());
+            Instant now = Instant.now();
+            SeedVersion seed = seedVersionRepository.findById(SeedVersion.BOUNDARIES).orElse(null);
+            if (seed == null || !checksum.equals(seed.getChecksum())) {
+                seed = SeedVersion.builder()
+                        .name(SeedVersion.BOUNDARIES)
+                        .checksum(checksum)
+                        .version(BOUNDARY_FILES_VERSION)
+                        .appliedAt(LocalDate.parse(BOUNDARY_FILES_VERSION, DateTimeFormatter.ofPattern("yyyy.MM.dd"))
+                                .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant())
+                        .build();
+            }
+            seed.setCheckedAt(now);
+            seedVersionRepository.save(seed);
+        } catch (Exception e) {
+            log.warn("⚠️ [INIT WARDS] Không ghi được phiên bản ranh giới: {}", e.getMessage());
         }
     }
 

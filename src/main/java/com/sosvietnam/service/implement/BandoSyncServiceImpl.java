@@ -130,7 +130,7 @@ public class BandoSyncServiceImpl implements BandoSyncService {
                 wardRepository.saveAll(toUpdate);
             }
 
-            recordBoundariesVersion(response.body());
+            recordWardNamesVersion(response.body());
 
             int countUpdated = toUpdate.size();
             this.updatedCount = countUpdated;
@@ -159,17 +159,17 @@ public class BandoSyncServiceImpl implements BandoSyncService {
     }
 
     /**
-     * Ghi seed_versions "boundaries" cho GET /geo/data-status: checked_at mỗi lần đồng bộ,
-     * version + applied_at chỉ đổi khi dữ liệu bando trả về khác lần trước.
+     * Ghi seed_versions "ward_names" (tên xã + sáp nhập) cho GET /geo/data-status: checked_at mỗi lần
+     * đồng bộ, version + applied_at chỉ đổi khi dữ liệu bando trả về khác lần trước.
      */
-    private void recordBoundariesVersion(String body) throws NoSuchAlgorithmException {
+    private void recordWardNamesVersion(String body) throws NoSuchAlgorithmException {
         String checksum = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
         Instant now = Instant.now();
-        SeedVersion seed = seedVersionRepository.findById(SeedVersion.BOUNDARIES).orElse(null);
+        SeedVersion seed = seedVersionRepository.findById(SeedVersion.WARD_NAMES).orElse(null);
         if (seed == null || !checksum.equals(seed.getChecksum())) {
             seed = SeedVersion.builder()
-                    .name(SeedVersion.BOUNDARIES)
+                    .name(SeedVersion.WARD_NAMES)
                     .checksum(checksum)
                     .version(SeedVersion.versionOf(now))
                     .appliedAt(now)
