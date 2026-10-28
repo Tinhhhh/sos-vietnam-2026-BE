@@ -9367,7 +9367,7 @@
       "jurisdictionScope": "ward",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9434,7 +9434,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9468,7 +9468,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9481,15 +9481,15 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Phường Cái Khế",
-      "address": "Số 138 Đường Trần Phú, Phường Cái Khế, Thành phố Cần Thơ",
+      "address": "234 Phạm Ngũ Lão, phường Cái Khế, thành phố Cần Thơ",
       "phone": "02923890379",
       "sms": "0903101070",
       "officer": "Trung tá Trần Sơn Lam (SĐT: 0903101070)",
       "officer_name": "Trung tá Trần Sơn Lam",
       "officer_phone": "0903101070",
       "email": "phuongcaikhe@cantho.gov.vn",
-      "lat": 10.0498,
-      "lng": 105.7785,
+      "lat": 10.043366,
+      "lng": 105.773396,
       "wardId": "ward-92-diaphanhanhchinhcapxa_2025_202",
       "services": "Đăng kí cư trú, đăng kí phương tiện giao thông, tiếp nhận tin báo",
       "unit_title": "Phường Cái Khế",
@@ -9503,7 +9503,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9519,7 +9519,7 @@
       "address": "Số 9, đường số 5, Khu trung tâm văn hoá Tây Đô, phường Cái Răng, Thành phố Cần Thơ",
       "phone": "0292 3836205",
       "sms": "091 9313979",
-      "officer": "Trung tá Dương Nhật Thành , cấp bậc: (SĐT: 091 9313979)",
+      "officer": "Thượng tá Dương Nhật Thành (SĐT: 091 9313979)",
       "officer_name": "Trung tá Dương Nhật Thành , cấp bậc:",
       "officer_phone": "091 9313979",
       "email": "phuongcairang@cantho.gov.vn",
@@ -9537,7 +9537,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9571,7 +9571,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9605,7 +9605,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9621,7 +9621,7 @@
       "address": "Khu vực An Hoà, phường Long Bình, thành phố Cần Thơ",
       "phone": "02933871719",
       "sms": "0909558176",
-      "officer": "Trung tá Phạm Hoàng Ân (SĐT: 0909558176)",
+      "officer": "Phạm Hoàng Ân (SĐT: 0909558176)",
       "officer_name": "Trung tá Phạm Hoàng Ân",
       "officer_phone": "0909558176",
       "email": "phuonglongbinh@cantho.gov.vn",
@@ -9639,7 +9639,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9673,7 +9673,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9707,7 +9707,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9723,7 +9723,7 @@
       "address": "1318 khu vực Bình Dương B, phường Long Tuyền, TP. Cần Thơ",
       "phone": "02923845141",
       "sms": "0913870135",
-      "officer": "Trung tá Phạm Minh Trí (SĐT: 0913870135)",
+      "officer": "Phạm Minh Trí (SĐT: 0913870135)",
       "officer_name": "Trung tá Phạm Minh Trí",
       "officer_phone": "0913870135",
       "email": "phuonglongtuyen@cantho.gov.vn",
@@ -9741,7 +9741,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9775,7 +9775,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9809,7 +9809,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9843,7 +9843,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9877,7 +9877,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9893,7 +9893,7 @@
       "address": "Đường Tôn Đức Thắng, Kv Hoà Thạnh A, phường Ô Môn, TP. Cần Thơ",
       "phone": "02923861845",
       "sms": "0939000699",
-      "officer": "Trung tá Đỗ Quốc Hoàng (SĐT: 0939000699)",
+      "officer": "Đỗ Quốc Hoàng (SĐT: 0939000699)",
       "officer_name": "Trung tá Đỗ Quốc Hoàng",
       "officer_phone": "0939000699",
       "email": "phuongomon@cantho.gov.vn",
@@ -9911,7 +9911,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9945,7 +9945,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -9979,7 +9979,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10013,7 +10013,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10029,7 +10029,7 @@
       "address": "02 Nguyễn Tri Phương, Kv.10, phường Tân An, thành phố Cần Thơ",
       "phone": "02923894939",
       "sms": "0919123419",
-      "officer": "Trung tá Nguyễn Minh Hoàng (SĐT: 0919123419)",
+      "officer": "Nguyễn Minh Hoàng (SĐT: 0919123419)",
       "officer_name": "Trung tá Nguyễn Minh Hoàng",
       "officer_phone": "0919123419",
       "email": "phuongtanan@cantho.gov.vn",
@@ -10047,7 +10047,7 @@
       "jurisdictionScope": "ward",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10081,7 +10081,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10097,7 +10097,7 @@
       "address": "49 Lê Hồng phong phường Thới An Đông TP cần Thơ",
       "phone": "02923842907",
       "sms": "0903026565",
-      "officer": "Thượng tá Trần Chí Nguyễn; (SĐT: 0903026565)",
+      "officer": "Thượng tá Trần Chí Nguyễn (SĐT: 0903026565)",
       "officer_name": "Thượng tá Trần Chí Nguyễn;",
       "officer_phone": "0903026565",
       "email": "phuongthoiandong@cantho.gov.vn",
@@ -10115,7 +10115,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10149,7 +10149,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10183,7 +10183,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10199,7 +10199,7 @@
       "address": "QL91 Khu vực Lân Thạnh 2, phường Thuận Hưng, thành phố Cần Thơ, Việt Nam",
       "phone": "02923644725",
       "sms": "0933758999",
-      "officer": "Trung tá Nguyễn Mạnh Hà (SĐT: 0933758999)",
+      "officer": "Nguyễn Mạnh Hà (SĐT: 0933758999)",
       "officer_name": "Trung tá Nguyễn Mạnh Hà",
       "officer_phone": "0933758999",
       "email": "phuongthuanhung@cantho.gov.vn",
@@ -10217,7 +10217,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10251,7 +10251,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10285,7 +10285,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10319,7 +10319,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10335,7 +10335,7 @@
       "address": "Số 191, đường 30.4 khu 2, phường vĩnh châu, thành phố cần thơ.",
       "phone": "02993861340",
       "sms": "0984838286",
-      "officer": "Trung tá Châu Thành Toàn (SĐT: 0984838286)",
+      "officer": "Châu Thành Toàn (SĐT: 0984838286)",
       "officer_name": "Trung tá Châu Thành Toàn",
       "officer_phone": "0984838286",
       "email": "phuongvinhchau@cantho.gov.vn",
@@ -10353,7 +10353,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10366,7 +10366,7 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Phường Vĩnh Phước",
-      "address": "Đường Nam sông hậu, khu vực Xẻo Me, phường Vĩnh Phước, TP Cần Thơ",
+      "address": "Đường Nam sông hậu, khu vực Xẻo Me, phường Vĩnh Phước, TP Cần Thơ\r\nĐường Nam Sông Hậu, khu vực Trà Vôn, phường Vĩnh Phước, TP Cần Thơ",
       "phone": "0299 3863234",
       "sms": "0918827717",
       "officer": "Thượng tá Mai Thanh Cường (SĐT: 0918827717)",
@@ -10387,7 +10387,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10421,7 +10421,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10455,7 +10455,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10489,7 +10489,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10523,7 +10523,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10539,7 +10539,7 @@
       "address": "Đường Nam kỳ khởi nghĩa ấp Thị Trấn, xã Châu Thành",
       "phone": "02933948113",
       "sms": "0939137676",
-      "officer": "Trung tá Nguyễn Quốc Trung (SĐT: 0939137676)",
+      "officer": "Nguyễn Quốc Trung (SĐT: 0939137676)",
       "officer_name": "Trung tá Nguyễn Quốc Trung",
       "officer_phone": "0939137676",
       "email": "xachauthanh@cantho.gov.vn",
@@ -10557,7 +10557,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10591,7 +10591,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10607,7 +10607,7 @@
       "address": "ấp An Bình, xã Cù Lao Dung, thành phố Cần Thơ",
       "phone": "02993848111",
       "sms": "0978094195",
-      "officer": "Trung tá Nguyễn Hoài Nhi (SĐT: 0978094195)",
+      "officer": "Nguyễn Hoài Nhi (SĐT: 0978094195)",
       "officer_name": "Trung tá Nguyễn Hoài Nhi",
       "officer_phone": "0978094195",
       "email": "xaculaodung@cantho.gov.vn",
@@ -10625,7 +10625,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10638,7 +10638,7 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Xã Gia Hòa",
-      "address": "Ấp Bình Hòa, xã Gia Hòa, thành phố Cần Thơ",
+      "address": "co so 1;  Ấp Bình Hòa, xã Gia Hòa, thành phố Cần Thơ; cs2: ap Hoa Khanh, xa Gia Hoa, tp Can Tho",
       "phone": "02993890151",
       "sms": "0919751595",
       "officer": "Thiếu tá Đặng Văn Chiến (SĐT: 0919751595)",
@@ -10659,7 +10659,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10693,7 +10693,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10727,7 +10727,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10743,7 +10743,7 @@
       "address": "Ấp 8, xã Hoà An, thành phố cần thơ",
       "phone": "033 6763113",
       "sms": "093 9936234",
-      "officer": "Trung tá Nguyễn Bá Phương (SĐT: 093 9936234)",
+      "officer": "Nguyễn Bá Phương (SĐT: 093 9936234)",
       "officer_name": "Trung tá Nguyễn Bá Phương",
       "officer_phone": "093 9936234",
       "email": "xahoaan@cantho.gov.vn",
@@ -10761,7 +10761,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10795,7 +10795,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10811,7 +10811,7 @@
       "address": "ấp Hòa Trực, xã Hòa Tú, TP. Cần Thơ",
       "phone": "02993895444",
       "sms": "0826841897",
-      "officer": "Trung tá Bùi Công Thức (SĐT: 0826841897)",
+      "officer": "Bùi Công Thức (SĐT: 0826841897)",
       "officer_name": "Trung tá Bùi Công Thức",
       "officer_phone": "0826841897",
       "email": "xahoatu@cantho.gov.vn",
@@ -10829,7 +10829,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10863,7 +10863,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10897,7 +10897,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10931,7 +10931,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10965,7 +10965,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -10999,7 +10999,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11033,7 +11033,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11049,7 +11049,7 @@
       "address": "ấp 4, xã Long Phú, thành phố Cần Thơ",
       "phone": "0782952113",
       "sms": "094 1728383",
-      "officer": "Trung tá Lương Bá Vũ (SĐT: 094 1728383)",
+      "officer": "Lương Bá Vũ (SĐT: 094 1728383)",
       "officer_name": "Trung tá Lương Bá Vũ",
       "officer_phone": "094 1728383",
       "email": "xalongphu@cantho.gov.vn",
@@ -11067,7 +11067,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11101,7 +11101,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11117,7 +11117,7 @@
       "address": "Tỉnh lộ 939 ấp Xẻo Gừa, xã Mỹ Hương, thành phố Cần Thơ",
       "phone": "02993871188",
       "sms": "0986698989",
-      "officer": "Trung tá Nguyễn Thanh Phong (SĐT: 0986698989)",
+      "officer": "Nguyễn Thanh Phong (SĐT: 0986698989)",
       "officer_name": "Trung tá Nguyễn Thanh Phong",
       "officer_phone": "0986698989",
       "email": "xamyhuong@cantho.gov.vn",
@@ -11135,7 +11135,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11169,7 +11169,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11203,7 +11203,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11237,7 +11237,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11271,7 +11271,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11284,10 +11284,10 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Xã Nhơn Mỹ",
-      "address": "Ấp Mỹ Lợi, xã Nhơn Mỹ, thành phố Cần Thơ",
+      "address": "Trụ sở chính: Ấp Mỹ Lợi, xã Nhơn Mỹ, thành phố Cần Thơ\r\nTrụ sở 2: Ấp Phụng An, xã Nhơn Mỹ, thành phố Cần Thơ\r\nTrụ sở 3: Ấp Mỹ Huề, xã Nhơn Mỹ, thành phố Cần Thơ",
       "phone": "0766946113",
       "sms": "0945706969",
-      "officer": "Trung tá Lâm Văn Nhuần (SĐT: 0945706969)",
+      "officer": "Lâm Văn Nhuần (SĐT: 0945706969)",
       "officer_name": "Trung tá Lâm Văn Nhuần",
       "officer_phone": "0945706969",
       "email": "xanhonmy@cantho.gov.vn",
@@ -11305,7 +11305,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11339,7 +11339,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11373,7 +11373,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11407,7 +11407,7 @@
       "jurisdictionScope": "ward",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11423,7 +11423,7 @@
       "address": "Ấp Đông Lợi. Xã Phú Hữu. TP Cần Thơ",
       "phone": "02936299779",
       "sms": "0903131790",
-      "officer": "Trung tá Nguyễn Sỹ Hoàng (SĐT: 0903131790)",
+      "officer": "Nguyễn Sỹ Hoàng (SĐT: 0903131790)",
       "officer_name": "Trung tá Nguyễn Sỹ Hoàng",
       "officer_phone": "0903131790",
       "email": "xaphuhuu@cantho.gov.vn",
@@ -11441,7 +11441,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11475,7 +11475,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11509,7 +11509,7 @@
       "jurisdictionScope": "ward",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11543,7 +11543,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11577,7 +11577,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11593,7 +11593,7 @@
       "address": "Ấp Bưng Sa, xã Tài Văn, TP Cần Thơ",
       "phone": "0782906113",
       "sms": "091 4799333",
-      "officer": "Trung tá Lư Thanh Minh (SĐT: 091 4799333)",
+      "officer": "Lư Thanh Minh (SĐT: 091 4799333)",
       "officer_name": "Trung tá Lư Thanh Minh",
       "officer_phone": "091 4799333",
       "email": "xataivan@cantho.gov.vn",
@@ -11611,7 +11611,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11645,7 +11645,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11679,7 +11679,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11713,7 +11713,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11747,7 +11747,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11781,7 +11781,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11815,7 +11815,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11849,7 +11849,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11883,7 +11883,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11917,7 +11917,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11933,7 +11933,7 @@
       "address": "Ấp Tắc Bướm, xã Thạnh Thới An, thành phố Cần Thơ",
       "phone": "02993886113",
       "sms": "0906854502",
-      "officer": "Trung tá Châu Hoàng Khương (SĐT: 0906854502)",
+      "officer": "Châu Hoàng Khương (SĐT: 0906854502)",
       "officer_name": "Trung tá Châu Hoàng Khương",
       "officer_phone": "0906854502",
       "email": "xathanhthoian@cantho.gov.vn",
@@ -11951,7 +11951,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -11964,10 +11964,10 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Xã Thạnh Xuân",
-      "address": "ấp Thạnh Lợi, xã Thạnh Xuân, thành phố Cần Thơ",
+      "address": "Cơ sở 1: ấp Thạnh Lợi, xã Thạnh Xuân, thành phố Cần Thơ\r\nCơ sở 2: ấp Thạnh Lợi, xã Thạnh Xuân, thành phố Cần Thơ",
       "phone": "02933952878",
       "sms": "0907263777",
-      "officer": "Trung tá Nguyễn Hoàng Duy (SĐT: 0907263777)",
+      "officer": "Nguyễn Hoàng Duy (SĐT: 0907263777)",
       "officer_name": "Trung tá Nguyễn Hoàng Duy",
       "officer_phone": "0907263777",
       "email": "xathanhxuan@cantho.gov.vn",
@@ -11985,7 +11985,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12019,7 +12019,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12053,7 +12053,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12087,7 +12087,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12103,7 +12103,7 @@
       "address": "Ấp Phước Hòa, xã Thuận Hòa, thành phố Cần Thơ",
       "phone": "02993833436",
       "sms": "0868884459",
-      "officer": "Trung tá Kim Dũng (SĐT: 0868884459)",
+      "officer": "Kim Dũng (SĐT: 0868884459)",
       "officer_name": "Trung tá Kim Dũng",
       "officer_phone": "0868884459",
       "email": "xathuanhoa@cantho.gov.vn",
@@ -12121,7 +12121,7 @@
       "jurisdictionScope": "ward",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12155,7 +12155,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12189,7 +12189,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12202,7 +12202,7 @@
       "agency_name": "Công An",
       "level": "ward",
       "name": "Công An Xã Trường Khánh",
-      "address": "Ấp Trường Thành B, xã Trường Khánh, thành phố Cần Thơ",
+      "address": "Ấp Hậu Thạnh, xã Trường Khánh, thành phố Cần Thơ (Cơ sở 2)\r\nẤp Trường Thành, xã Trường Khánh, thành phố Cần Thơ (Cơ sở 1)",
       "phone": "02993844918",
       "sms": "0985528270",
       "officer": "Trung tá Phan Vũ Hoàng (SĐT: 0985528270)",
@@ -12223,7 +12223,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12239,7 +12239,7 @@
       "address": "Ấp Trường Thọ xã Trường Long Tp Cần Thơ",
       "phone": "02926513113",
       "sms": "0907710572",
-      "officer": "Trung tá Võ Hoàng Sang (SĐT: 0907710572)",
+      "officer": "Võ Hoàng Sang (SĐT: 0907710572)",
       "officer_name": "Trung tá Võ Hoàng Sang",
       "officer_phone": "0907710572",
       "email": "xatruonglong@cantho.gov.vn",
@@ -12257,7 +12257,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12291,7 +12291,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12325,7 +12325,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12359,7 +12359,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12393,7 +12393,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12427,7 +12427,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12461,7 +12461,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12477,7 +12477,7 @@
       "address": "Ấp 15, xã Vĩnh Lợi, thành phố Cần Thơ",
       "phone": "0769343123",
       "sms": "0941696866",
-      "officer": "Trung tá Nguyễn Thanh Hài (SĐT: 0941696866)",
+      "officer": "Thượng tá Nguyễn Thanh Hài (SĐT: 0941696866)",
       "officer_name": "Trung tá Nguyễn Thanh Hài",
       "officer_phone": "0941696866",
       "email": "xavinhloi@cantho.gov.vn",
@@ -12495,7 +12495,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12529,7 +12529,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12563,7 +12563,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12597,7 +12597,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12631,7 +12631,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12665,7 +12665,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12699,7 +12699,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12733,7 +12733,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12749,7 +12749,7 @@
       "address": "Ấp Ngãi Hội 2, xã Đại Ngãi, thành phố Cần Thơ",
       "phone": "02993858060",
       "sms": "0919281020",
-      "officer": "Trung tá Thuợng tá Nguyễn Chí Hùng Phương (SĐT: 0919281020)",
+      "officer": "Thuợng tá Nguyễn Chí Hùng Phương (SĐT: 0919281020)",
       "officer_name": "Trung tá Thuợng tá Nguyễn Chí Hùng Phương",
       "officer_phone": "0919281020",
       "email": "xadaingai@cantho.gov.vn",
@@ -12767,7 +12767,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12801,7 +12801,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12817,7 +12817,7 @@
       "address": "Ấp Tân Phú A, xã Đông Phước, Thành phố Cần Thơ",
       "phone": "02933484297",
       "sms": "0939409599",
-      "officer": "Trung tá Phan Trọng Nghĩa (SĐT: 0939409599)",
+      "officer": "Phan Trọng Nghĩa (SĐT: 0939409599)",
       "officer_name": "Trung tá Phan Trọng Nghĩa",
       "officer_phone": "0939409599",
       "email": "xadongphuoc@cantho.gov.vn",
@@ -12835,7 +12835,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12869,7 +12869,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12903,7 +12903,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
@@ -12919,7 +12919,7 @@
       "address": "Đường số 3, KCN Tân Phú Thạnh, ấp Phú Lợi, xã Thạnh Xuân, TPCT",
       "phone": "091 9143617",
       "sms": "070 6787776",
-      "officer": "Trung tá Phạm Văn Thống Nhất (SĐT: 070 6787776)",
+      "officer": "Phạm Văn Thống Nhất (SĐT: 070 6787776)",
       "officer_name": "Trung tá Phạm Văn Thống Nhất",
       "officer_phone": "070 6787776",
       "email": "",
@@ -12937,7 +12937,7 @@
       "district": "",
       "facility_type": "Trụ sở chính",
       "maps_url": "",
-      "source_url": "",
+      "source_url": "https://bando-congan.cantho.gov.vn/",
       "auto_generated": false
     },
     {
