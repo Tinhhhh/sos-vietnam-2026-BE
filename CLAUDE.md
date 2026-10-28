@@ -21,7 +21,7 @@
 
 ## Stack / hạ tầng
 - Spring Boot 3.4, Java 21, PostgreSQL + PostGIS, Flyway (`ddl-auto=validate`), JWT, Redis (tuỳ chọn), R2 (S3 SDK), POI, springdoc.
-- **Flyway**: `src/main/resources/db/migration`, mới nhất **V23**. Đổi entity = viết file V mới (Hibernate không tự sửa bảng). Seeder chỉ ghi dữ liệu. V11–V23 mới chạy DB local, tự chạy trên VPS khi deploy BE mới.
+- **Flyway**: `src/main/resources/db/migration`, mới nhất **V24**. Đổi entity = viết file V mới (Hibernate không tự sửa bảng). Seeder chỉ ghi dữ liệu. V11–V24 mới chạy DB local, tự chạy trên VPS khi deploy BE mới.
 - VPS `103.179.185.217` (`sosvie.site`, `/opt/sos`, xem `deploy/README.md`). Traccar trên VPS đã bật forward. Render (`main` cũ) giữ tắt.
 - Một số trạng thái chỉ ở RAM, chỉ đúng khi 1 instance BE: online STOMP, điểm GPS, giới hạn tra cứu / SMS, công tắc demo, thu hồi token (có Redis thì bền).
 - Múi giờ: `main()` đặt `Asia/Ho_Chi_Minh`. CORS: `app.cors.allowed-origins` (`CORS_ALLOWED_ORIGINS`).
@@ -55,7 +55,7 @@
 - **Ca demo**: `[DEMO] ...`, công tắc `GET/PUT /settings/demo` (sinh / ẩn, `simulation_speed_kmh` 5–150, áp cho lần Mô phỏng sau). FE hỏi vị trí 3 s / lần; "Dự kiến tới nơi" tính phần tuyến còn lại từ vị trí xe.
 
 ## Khác
-- Trạm: `GET /stations` (phân trang, cán bộ), `/stations/nearest`; dữ liệu `data/rescue_stations.json`, nạp lại khi checksum + `STATIONS_SEED_FORMAT` đổi. `StationLevel` NATIONAL/PROVINCE/WARD/ENTERPRISE.
+- Trạm: `GET /stations` (phân trang, cán bộ), `/stations/nearest`; dữ liệu `data/rescue_stations.json`, nạp lại khi checksum + `STATIONS_SEED_FORMAT` đổi (trạm không còn trong file thì xoá, trừ trạm đang có ca trỏ tới). Mỗi trạm có `auto_generated` (cột DB cùng tên): `true` = trạm Công an xã tự sinh cho đủ mỗi xã (địa chỉ / SĐT chưa có, toạ độ ước), `false` = trạm thật; trạm có nguồn công bố ghi `source_url`. Bảng đối chiếu nguồn: `docs/data-sources/`. `StationLevel` NATIONAL/PROVINCE/WARD/ENTERPRISE.
 - Geo: `/geo/provinces`, `/geo/provinces/{id}/wards`, `/geo/resolve`, `/geo/road-snap`, `/geo/data-status` (3 mốc: `boundaries` = ngày bộ file ranh giới `geo/*.geojson`, hằng `WardDataSeeder.BOUNDARY_FILES_VERSION`, thay file thì sửa; `ward_names` = tên xã + sáp nhập, `BandoSync` đối chiếu `sapnhap.bando.com.vn` 6 giờ / lần, ADMIN `/geo/sync-now`; `rescue_stations`). Ranh giới tỉnh / xã chỉ nạp khi bảng rỗng. Thời tiết `/weather/current`.
 - Cán bộ: `/officers/status` (lọc theo đơn vị, phân trang), `/unit/**` (thành viên, PIN, trực ban). Admin: tạo tài khoản, xuất Excel `/admin/accounts/export`.
 - Thống kê: `GET /dashboard/summary`.
