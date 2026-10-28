@@ -69580,16 +69580,16 @@
       "province": "Đắk Lắk",
       "ward": "Xã Cư M’gar",
       "unitType": "Xã",
-      "address": "Đang cập nhật",
+      "address": "Thôn Tân Lập, xã Cư M'gar, tỉnh Đắk Lắk",
       "phone": "Đang cập nhật",
       "sms": "113",
       "officer": "Đang cập nhật",
       "lat": 12.871056,
       "lng": 108.066956,
       "isGpsVerified": false,
-      "dataNote": "Tự động bổ sung từ ranh giới hành chính 10/2026 — cần xác minh SĐT/địa chỉ thực tế",
       "services": "Tiếp nhận tin báo ANTT, xử lý vi phạm hành chính",
-      "auto_generated": true
+      "auto_generated": false,
+      "source_url": "https://thuviennhadat.vn/phap-luat/cap-nhat-dia-chi-cong-an-cap-xa-tai-dak-lak-tu-01-7-2025-sau-sap-nhap-693540.html"
     },
     {
       "id": "st-ward-dak-lak-xa-cu-m-ta",
@@ -69600,16 +69600,16 @@
       "province": "Đắk Lắk",
       "ward": "Xã Cư M’ta",
       "unitType": "Xã",
-      "address": "Đang cập nhật",
+      "address": "Thôn 18, xã Cư M'ta, tỉnh Đắk Lắk",
       "phone": "Đang cập nhật",
       "sms": "113",
       "officer": "Đang cập nhật",
       "lat": 12.736427,
       "lng": 108.882376,
       "isGpsVerified": false,
-      "dataNote": "Tự động bổ sung từ ranh giới hành chính 10/2026 — cần xác minh SĐT/địa chỉ thực tế",
       "services": "Tiếp nhận tin báo ANTT, xử lý vi phạm hành chính",
-      "auto_generated": true
+      "auto_generated": false,
+      "source_url": "https://thuviennhadat.vn/phap-luat/cap-nhat-dia-chi-cong-an-cap-xa-tai-dak-lak-tu-01-7-2025-sau-sap-nhap-693540.html"
     },
     {
       "id": "st-ward-dak-lak-xa-cu-prao",
@@ -70060,16 +70060,16 @@
       "province": "Đắk Lắk",
       "ward": "Xã Ea M’Droh",
       "unitType": "Xã",
-      "address": "Đang cập nhật",
+      "address": "Thôn Hiệp Hưng, xã Ea M'Droh, tỉnh Đắk Lắk",
       "phone": "Đang cập nhật",
       "sms": "113",
       "officer": "Đang cập nhật",
       "lat": 12.858749,
       "lng": 107.97848,
       "isGpsVerified": false,
-      "dataNote": "Tự động bổ sung từ ranh giới hành chính 10/2026 — cần xác minh SĐT/địa chỉ thực tế",
       "services": "Tiếp nhận tin báo ANTT, xử lý vi phạm hành chính",
-      "auto_generated": true
+      "auto_generated": false,
+      "source_url": "https://thuviennhadat.vn/phap-luat/cap-nhat-dia-chi-cong-an-cap-xa-tai-dak-lak-tu-01-7-2025-sau-sap-nhap-693540.html"
     },
     {
       "id": "st-ward-dak-lak-xa-ea-na",
@@ -70640,16 +70640,16 @@
       "province": "Đắk Lắk",
       "ward": "Xã M’Drắk",
       "unitType": "Xã",
-      "address": "Đang cập nhật",
+      "address": "78 Nguyễn Tất Thành, xã M'Đrắk, tỉnh Đắk Lắk",
       "phone": "Đang cập nhật",
       "sms": "113",
       "officer": "Đang cập nhật",
       "lat": 12.797822,
       "lng": 108.72523,
       "isGpsVerified": false,
-      "dataNote": "Tự động bổ sung từ ranh giới hành chính 10/2026 — cần xác minh SĐT/địa chỉ thực tế",
       "services": "Tiếp nhận tin báo ANTT, xử lý vi phạm hành chính",
-      "auto_generated": true
+      "auto_generated": false,
+      "source_url": "https://thuviennhadat.vn/phap-luat/cap-nhat-dia-chi-cong-an-cap-xa-tai-dak-lak-tu-01-7-2025-sau-sap-nhap-693540.html"
     },
     {
       "id": "st-ward-dak-lak-xa-nam-ka",
