@@ -6,6 +6,7 @@ import com.sosvietnam.model.payload.enums.DispatchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -92,4 +93,24 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
     /** Lượt chủ trì đang hoạt động của ca (không tính lượt đã bị từ chối). */
     Optional<IncidentDispatch> findFirstByIncident_IdAndRoleAndStatusNotOrderByDispatchedAtDesc(
             String incidentId, DispatchRole role, DispatchStatus status);
+
+    /**
+     * Ca bị huỷ: đóng mọi lượt chưa xong (REJECTED + lý do; link người đi hết hiệu lực). Lượt đã xong / đã đóng giữ nguyên.
+     * @return số lượt vừa đóng
+     */
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("""
+            UPDATE IncidentDispatch d
+            SET d.status = com.sosvietnam.model.payload.enums.DispatchStatus.REJECTED, d.rejectReason = :reason,
+                d.fieldTokenHash = null, d.fieldTokenIssuedAt = null, d.updatedAt = :now
+            WHERE d.incident.id = :incidentId
+              AND d.status IN (com.sosvietnam.model.payload.enums.DispatchStatus.PENDING_ACCEPT,
+                               com.sosvietnam.model.payload.enums.DispatchStatus.ACCEPTED,
+                               com.sosvietnam.model.payload.enums.DispatchStatus.EN_ROUTE,
+                               com.sosvietnam.model.payload.enums.DispatchStatus.ARRIVED)
+            """)
+    int closeOpenForIncident(@org.springframework.data.repository.query.Param("incidentId") String incidentId,
+                             @org.springframework.data.repository.query.Param("reason") String reason,
+                             @org.springframework.data.repository.query.Param("now") LocalDateTime now);
 }

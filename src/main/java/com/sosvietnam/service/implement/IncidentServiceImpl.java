@@ -1056,6 +1056,7 @@ public class IncidentServiceImpl implements IncidentService {
         if (incidentRepository.cancel(id, cancelReason, IncidentStatus.HELD, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
         }
+        closeDispatches(id, now);
         String prefix = falseAlarm ? "Báo khống: " : "Cán bộ huỷ ca: ";
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, prefix + reason.trim()));
@@ -1067,6 +1068,7 @@ public class IncidentServiceImpl implements IncidentService {
     private boolean cancel(String id, CancelReason reason, Set<IncidentStatus> fromStatuses) {
         LocalDateTime now = LocalDateTime.now();
         if (incidentRepository.cancel(id, reason, fromStatuses, now) == 0) return false;
+        closeDispatches(id, now);
         Incident cancelled = findIncident(id);
         if (cancelled.getHandlerId() != null) {
             String note = "Ca bị huỷ" + (reason == null ? "" : ": " + reason.getLabel());
@@ -1076,6 +1078,14 @@ public class IncidentServiceImpl implements IncidentService {
         }
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
         return true;
+    }
+
+    static final String CANCELLED_DISPATCH_REASON = "Ca đã bị huỷ";
+
+    /** Lượt điều động của ca vừa huỷ không còn chạy (trước đây kẹt EN_ROUTE: GPS / mô phỏng vẫn tìm thấy nó). */
+    private void closeDispatches(String id, LocalDateTime now) {
+        int closed = incidentDispatchRepository.closeOpenForIncident(id, CANCELLED_DISPATCH_REASON, now);
+        if (closed > 0) log.info("🗑️ [CANCEL] Incident {}: đóng {} lượt điều động", id, closed);
     }
 
     private IncidentTrackingResponse tracking(Incident incident) {

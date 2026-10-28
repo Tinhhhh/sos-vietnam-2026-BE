@@ -64,6 +64,10 @@ public class DemoIncidentSeeder {
     private final IncidentService incidentService;
     private final DemoModeService demoModeService;
 
+    // đóng lượt điều động của ca test khi tự đóng ca. Field không bắt buộc: test dựng tay không phải đổi constructor
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sosvietnam.repository.IncidentDispatchRepository incidentDispatchRepository;
+
     @Value("${app.demo.incidents.resolving-minutes:30}")
     private long resolvingMinutes;
 
@@ -131,6 +135,9 @@ public class DemoIncidentSeeder {
         incident.setHandlerId(null);
         incident.setUpdatedAt(now);
         incidentRepository.save(incident);
+        if (incidentDispatchRepository != null) {
+            incidentDispatchRepository.closeOpenForIncident(incident.getId(), "Ca test tự đóng", now);
+        }
         log.info("🧪 [DEMO INCIDENTS] đóng ca test {} (RESOLVING quá {} phút)", incident.getId(), resolvingMinutes);
         if (handlerId == null) return;
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(incident.getId(), handlerId)

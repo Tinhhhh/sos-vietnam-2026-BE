@@ -27,6 +27,7 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
     private static final Duration APP_PRIORITY = Duration.ofSeconds(20);
     static final String SOURCE_APP = "TRACCAR";
     static final String SOURCE_BROWSER = "BROWSER";
+    static final String SOURCE_SIMULATION = "SIMULATION";
     /** Điểm cũ hơn mức này bị dọn khỏi RAM (lượt đã xong từ lâu). */
     private static final Duration KEEP = Duration.ofHours(2);
 
@@ -35,6 +36,15 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
 
     /** dispatch id -> điểm mới nhất. */
     private final Map<Long, DispatchPlanResponse.LivePosition> positions = new ConcurrentHashMap<>();
+
+    // Mô phỏng đang chạy thì bỏ điểm thật. @Lazy: DispatchSimulationService cần service này (vòng phụ thuộc)
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private com.sosvietnam.service.DispatchSimulationService dispatchSimulationService;
+
+    private boolean simulating(Long dispatchId) {
+        return dispatchSimulationService != null && dispatchSimulationService.running(dispatchId);
+    }
 
     // SMS "sắp tới" cho người báo tin. Field không bắt buộc: test dựng tay không phải đổi constructor.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -58,8 +68,11 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
         if (trips.size() > 1) {
             log.warn("[TRACCAR] Số hiệu {} đang ở {} lượt điều động, dùng lượt {}", badge, trips.size(), trip.getId());
         }
+        if (simulating(trip.getId())) {
+            return false; // đang mô phỏng: điểm xe giả nạp thẳng, bỏ điểm thật (và điểm giả Traccar dội lại)
+        }
         OffsetDateTime now = OffsetDateTime.now();
-        positions.put(trip.getId(), DispatchPlanResponse.LivePosition.builder()
+        store(trip.getId(), DispatchPlanResponse.LivePosition.builder()
                 .latitude(p.getLatitude())
                 .longitude(p.getLongitude())
                 .speedKmh(p.getSpeed() == null ? null : Math.round(p.getSpeed() * KNOT_TO_KMH * 10) / 10.0)
@@ -69,11 +82,32 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
                 .receivedAt(now)
                 .source(SOURCE_APP)
                 .build());
-        positions.values().removeIf(old -> old.getReceivedAt().isBefore(now.minus(KEEP)));
-        // lệch tuyến thì tính lại tuyến từ vị trí xe (chạy nền)
-        routeRecalcService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
-        if (dispatchSmsService != null) dispatchSmsService.onPosition(trip.getId(), p.getLatitude(), p.getLongitude());
         return true;
+    }
+
+    @Override
+    public boolean acceptSimulated(Long dispatchId, double lat, double lng, double speedKmh, double heading) {
+        if (dispatchId == null || !validCoordinates(lat, lng)) return false;
+        OffsetDateTime now = OffsetDateTime.now();
+        store(dispatchId, DispatchPlanResponse.LivePosition.builder()
+                .latitude(lat)
+                .longitude(lng)
+                .speedKmh(Math.round(speedKmh * 10) / 10.0)
+                .heading(heading)
+                .accuracyM(5.0)
+                .fixTime(now)
+                .receivedAt(now)
+                .source(SOURCE_SIMULATION)
+                .build());
+        return true;
+    }
+
+    /** Giữ điểm mới nhất của lượt, rồi tính lại tuyến khi lệch (chạy nền) và SMS "sắp tới". */
+    private void store(Long dispatchId, DispatchPlanResponse.LivePosition point) {
+        positions.put(dispatchId, point);
+        positions.values().removeIf(old -> old.getReceivedAt().isBefore(point.getReceivedAt().minus(KEEP)));
+        routeRecalcService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
+        if (dispatchSmsService != null) dispatchSmsService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
     }
 
     @Override
@@ -81,12 +115,15 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
         if (dispatchId == null || point == null || !validCoordinates(point.getLatitude(), point.getLongitude())) {
             return false;
         }
+        if (simulating(dispatchId)) {
+            return false; // đang mô phỏng: điện thoại thật (có khi đang ở ngay hiện trường) không kéo xe về
+        }
         OffsetDateTime now = OffsetDateTime.now();
         DispatchPlanResponse.LivePosition last = positions.get(dispatchId);
         if (last != null && SOURCE_APP.equals(last.getSource()) && last.getReceivedAt().isAfter(now.minus(APP_PRIORITY))) {
             return false; // app đang gửi: giữ điểm của app
         }
-        positions.put(dispatchId, DispatchPlanResponse.LivePosition.builder()
+        store(dispatchId, DispatchPlanResponse.LivePosition.builder()
                 .latitude(point.getLatitude())
                 .longitude(point.getLongitude())
                 .speedKmh(point.getSpeedKmh() == null ? null : Math.round(point.getSpeedKmh() * 10) / 10.0)
@@ -96,8 +133,6 @@ public class DispatchTrackingServiceImpl implements DispatchTrackingService {
                 .receivedAt(now)
                 .source(SOURCE_BROWSER)
                 .build());
-        routeRecalcService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
-        if (dispatchSmsService != null) dispatchSmsService.onPosition(dispatchId, point.getLatitude(), point.getLongitude());
         return true;
     }
 

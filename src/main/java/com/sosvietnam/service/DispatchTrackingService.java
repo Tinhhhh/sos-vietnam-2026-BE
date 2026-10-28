@@ -17,6 +17,13 @@ public interface DispatchTrackingService {
      */
     boolean accept(TraccarPositionRequest request);
 
+    /**
+     * Điểm của xe giả ("Mô phỏng") cho lượt này, nạp thẳng không qua Traccar. Trong lúc mô phỏng chạy, điểm thật
+     * (Traccar, trang link) của lượt đó bị bỏ qua: điện thoại người đi đang đứng gần hiện trường sẽ không kéo xe về đó.
+     * @return true nếu điểm được dùng
+     */
+    boolean acceptSimulated(Long dispatchId, double lat, double lng, double speedKmh, double heading);
+
     /** Điểm mới nhất của lượt điều động, null nếu chưa có. */
     DispatchPlanResponse.LivePosition lastPosition(Long dispatchId);
 

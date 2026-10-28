@@ -1,7 +1,6 @@
 package com.sosvietnam.service.implement;
 
 import com.sosvietnam.model.payload.enums.DispatchStatus;
-import com.sosvietnam.model.payload.request.TraccarPositionRequest;
 import com.sosvietnam.repository.IncidentDispatchRepository;
 import com.sosvietnam.service.DemoModeService;
 import com.sosvietnam.service.DispatchSimulationService;
@@ -22,7 +21,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -87,15 +85,15 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
                     stop(dispatchId);
                     return;
                 }
-                send(badge, steps.get(i));
+                send(dispatchId, badge, steps.get(i));
                 if (i == steps.size() - 1) stop(dispatchId);
             } catch (Exception e) {
                 log.warn("[SIMULATE] Lượt {}: {}", dispatchId, e.getMessage());
             }
         }, Instant.now(), Duration.ofSeconds(intervalSeconds));
         runs.put(dispatchId, run);
-        log.info("🧪 [SIMULATE] Lượt {} chạy {} điểm, {} km/h, qua {}", dispatchId, steps.size(), speedKmh(),
-                hasTraccar() ? "Traccar" : "thẳng vào BE");
+        log.info("🧪 [SIMULATE] Lượt {} chạy {} điểm, {} km/h, nạp thẳng vào BE{}", dispatchId, steps.size(), speedKmh(),
+                hasTraccar() ? " + gửi bản sao lên Traccar" : "");
     }
 
     @Override
@@ -113,17 +111,23 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
         return osmandUrl != null && !osmandUrl.isBlank();
     }
 
-    private void send(String badge, RouteSimulation.Step step) throws Exception {
-        double speedKnot = speedKmh() * KMH_TO_KNOT;
-        if (!hasTraccar()) {
-            dispatchTrackingService.accept(TraccarPositionRequest.builder()
-                    .device(TraccarPositionRequest.Device.builder().uniqueId(badge).build())
-                    .position(TraccarPositionRequest.Position.builder()
-                            .latitude(step.lat()).longitude(step.lng()).speed(speedKnot).course(step.heading())
-                            .accuracy(5.0).fixTime(OffsetDateTime.now().toString()).valid(true).build())
-                    .build());
-            return;
+    /**
+     * Điểm xe giả nạp thẳng vào BE (không chờ Traccar: Traccar chậm / bỏ thiết bị lạ thì xe đứng im, còn điện thoại
+     * thật của người đi lại kéo xe về chỗ nó đứng). Có Traccar thì gửi thêm bản sao để xem trên bản đồ Traccar;
+     * bản Traccar dội về BE bị bỏ vì lượt đang mô phỏng.
+     */
+    private void send(Long dispatchId, String badge, RouteSimulation.Step step) {
+        double speedKmh = speedKmh();
+        dispatchTrackingService.acceptSimulated(dispatchId, step.lat(), step.lng(), speedKmh, step.heading());
+        if (!hasTraccar()) return;
+        try {
+            mirrorToTraccar(badge, step, speedKmh * KMH_TO_KNOT);
+        } catch (Exception e) {
+            log.debug("[SIMULATE] Không gửi được bản sao lên Traccar: {}", e.getMessage());
         }
+    }
+
+    private void mirrorToTraccar(String badge, RouteSimulation.Step step, double speedKnot) throws Exception {
         // Đúng như app Traccar Client (giao thức OsmAnd): GET ?id=&lat=&lon=&speed=(knot)&bearing=&timestamp=
         String query = String.format(Locale.ROOT, "id=%s&lat=%.6f&lon=%.6f&speed=%.1f&bearing=%.0f&accuracy=5&timestamp=%d",
                 URLEncoder.encode(badge, StandardCharsets.UTF_8), step.lat(), step.lng(), speedKnot, step.heading(),

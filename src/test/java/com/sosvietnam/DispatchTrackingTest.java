@@ -55,6 +55,30 @@ class DispatchTrackingTest {
     }
 
     @Test
+    void whileSimulating_onlySimulatedPointsCount_realPhoneIgnored() {
+        com.sosvietnam.service.DispatchSimulationService sim = mock(com.sosvietnam.service.DispatchSimulationService.class);
+        ReflectionTestUtils.setField(tracking, "dispatchSimulationService", sim);
+        when(sim.running(7L)).thenReturn(true);
+        when(dispatches.findEnRouteByTrackerBadge("594288")).thenReturn(List.of(trip(7L)));
+
+        assertThat(tracking.acceptSimulated(7L, 10.0300, 105.7600, 50, 45)).isTrue(); // xe giả ở gần trạm
+        // điện thoại thật của người đi đang đứng ở hiện trường: trang link + Traccar đều bị bỏ
+        com.sosvietnam.model.payload.request.FieldPositionRequest atScene = new com.sosvietnam.model.payload.request.FieldPositionRequest();
+        atScene.setLatitude(10.0455);
+        atScene.setLongitude(105.7865);
+        assertThat(tracking.acceptBrowser(7L, atScene)).isFalse();
+        assertThat(tracking.accept(point("594288", 10.0455, 105.7865))).isFalse();
+        DispatchPlanResponse.LivePosition p = tracking.lastPosition(7L);
+        assertThat(p.getLatitude()).isEqualTo(10.0300);
+        assertThat(p.getSource()).isEqualTo("SIMULATION");
+        assertThat(p.getSpeedKmh()).isEqualTo(50.0);
+
+        when(sim.running(7L)).thenReturn(false); // mô phỏng xong: điểm thật lại được nhận
+        assertThat(tracking.acceptBrowser(7L, atScene)).isTrue();
+        assertThat(tracking.lastPosition(7L).getLatitude()).isEqualTo(10.0455);
+    }
+
+    @Test
     void ignoresUnknownDevices_badCoordinates_invalidFix() {
         when(dispatches.findEnRouteByTrackerBadge(anyString())).thenReturn(List.of());
         assertThat(tracking.accept(point("000000", 10.0, 105.0))).isFalse();
