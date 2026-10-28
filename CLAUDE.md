@@ -2,7 +2,7 @@
 
 > Giao tiếp: tiếng Việt, xưng tao/mày. User code Java Spring Boot (thích `application.properties`, không dùng yml).
 > Bối cảnh chung + FE: `C:\Users\TINH KHUNG\IdeaProjects\sos-vietnam-fe-v2\CLAUDE.md`. Chi tiết từng module (lịch sử, API cũ, số test): `docs/claude-history.md` — chỉ đọc phần cần. Spec: `docs/spec-*.md`. Obsidian `Data for life\`.
-> File này giữ NGẮN: chỉ quy ước + trạng thái hiện hành. Làm xong module thì ghi 1–3 dòng vào mục liên quan ở đây, chi tiết đưa vào `docs/claude-history.md`.
+> File này giữ NGẮN: chỉ quy ước + trạng thái hiện hành. Làm xong module thì ghi 1–3 dòng vào mục liên quan ở đây, chi tiết đưa vào `docs/claude-history.md`. Chỉ ghi thiết kế hệ thống, luồng, nghiệp vụ (không ghi commit, số unit test / e2e, ngày làm).
 
 ## Cách làm việc
 - BE chỉ làm khi user đã duyệt danh sách việc (FE làm trước, báo BE cần gì). Đổi API / quy ước thì báo user + ghi lại.
