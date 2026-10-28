@@ -220,6 +220,14 @@ public class DispatchServiceImpl implements DispatchService {
     }
 
     /** Tuyến đã tính (polyline); không có thì đường thẳng trạm -> điểm đến. */
+    /** Xe giả đang chạy theo tuyến + người đi hiện tại: đổi người / điểm xuất phát / điểm đến lúc này thì 409. */
+    private void requireNotSimulating(IncidentDispatch d) {
+        if (d != null && d.getId() != null && dispatchSimulationService.running(d.getId())) {
+            throw new SosException(HttpStatus.CONFLICT,
+                    "Đang mô phỏng di chuyển: dừng mô phỏng rồi mới đổi người phụ trách / điểm xuất phát / điểm đến");
+        }
+    }
+
     private List<double[]> simulationPath(Incident incident, IncidentDispatch d) {
         IncidentRoute route = currentRoute(d);
         List<double[]> path = route == null ? List.of() : Polylines.decode(route.getPolyline());
@@ -248,6 +256,7 @@ public class DispatchServiceImpl implements DispatchService {
         currentPrimary(incidentId).ifPresent(d -> {
             requireAnswered(d);
             requireNotDeparted(d, request);
+            requireNotSimulating(d);
         });
         RescueStation station = rescueStationRepository.findById(request.getStationId())
                 .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy trạm ID: " + request.getStationId()));
@@ -568,6 +577,7 @@ public class DispatchServiceImpl implements DispatchService {
                 || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ACCEPTED)) {
             throw new SosException(HttpStatus.CONFLICT, "Chỉ chọn / đổi người phụ trách khi đơn vị đã nhận ca, chưa tới nơi");
         }
+        requireNotSimulating(d);
         d.setFieldMember(requireFieldMember(me, fieldMemberId, incidentId));
         d.setFieldTokenHash(null); // link cũ là của người cũ
         d.setFieldTokenIssuedAt(null);
@@ -889,38 +899,27 @@ public class DispatchServiceImpl implements DispatchService {
         Incident incident = findIncident(incidentId);
         IncidentDispatch d = latestPrimary(incidentId);
         boolean holder = me.memberId().equals(incident.getHandlerId());
-        ReportResult result;
+        // "Kết thúc ca" bắt buộc (bỏ qua xác nhận của dân) đã bỏ: ca đóng bằng văn bản kết thúc, ca test, hoặc Huỷ ca
         if (request.isForce()) {
-            if (!holder) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ cán bộ đang giữ ca mới kết thúc bắt buộc được");
+            throw new SosException(HttpStatus.BAD_REQUEST,
+                    "Không còn kết thúc ca bắt buộc: lập văn bản kết thúc (cần cả cán bộ và người dân xác nhận) hoặc Huỷ ca");
+        }
+        if (!holder && !IncidentAccess.isAssignee(me, d)) {
+            throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới lập văn bản được");
+        }
+        ReportResult result = request.getResult();
+        if (result == ReportResult.TEST) {
+            // ca thử nghiệm: đóng ngay ở bất kỳ bước điều động nào, không cần mô tả
+            if (incident.getStatus() != IncidentStatus.RESOLVING) {
+                throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước điều động");
             }
-            if (incident.getStatus() != IncidentStatus.RESOLVING || d == null
-                    || (d.getStatus() != DispatchStatus.EN_ROUTE && d.getStatus() != DispatchStatus.ARRIVED)) {
-                throw new SosException(HttpStatus.CONFLICT,
-                        "Chỉ kết thúc ca được khi lực lượng đã điều động (đang theo dõi). Chưa điều động thì dùng Huỷ ca");
-            }
-            if (blank(request.getNote(), 5)) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng nhập lý do kết thúc bắt buộc (ít nhất 5 ký tự)");
-            }
-            result = ReportResult.FORCED;
         } else {
-            if (!holder && !IncidentAccess.isAssignee(me, d)) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca hoặc đơn vị được giao mới lập văn bản được");
+            requireAtScene(incident, d);
+            if (result != ReportResult.RESOLVED && result != ReportResult.FALSE_ALARM) {
+                throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong, Báo khống hoặc Ca test");
             }
-            result = request.getResult();
-            if (result == ReportResult.TEST) {
-                // ca thử nghiệm: đóng ngay ở bất kỳ bước điều động nào, không cần mô tả
-                if (incident.getStatus() != IncidentStatus.RESOLVING) {
-                    throw new SosException(HttpStatus.CONFLICT, "Ca không còn ở bước điều động");
-                }
-            } else {
-                requireAtScene(incident, d);
-                if (result != ReportResult.RESOLVED && result != ReportResult.FALSE_ALARM) {
-                    throw new SosException(HttpStatus.BAD_REQUEST, "Kết quả phải là Đã xử lý xong, Báo khống hoặc Ca test");
-                }
-                if (blank(request.getSummary(), 10)) {
-                    throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng mô tả kết quả xử lý (ít nhất 10 ký tự)");
-                }
+            if (blank(request.getSummary(), 10)) {
+                throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng mô tả kết quả xử lý (ít nhất 10 ký tự)");
             }
         }
 
@@ -934,12 +933,10 @@ public class DispatchServiceImpl implements DispatchService {
                 .createdBy(me.memberId())
                 .createdAt(now)
                 .build();
-        if (result != ReportResult.FORCED) {
-            incident.setOfficerConfirmedAt(now);
-            incident.setOfficerConfirmedBy(me.memberId());
-        }
+        incident.setOfficerConfirmedAt(now);
+        incident.setOfficerConfirmedBy(me.memberId());
         // "Đã xử lý xong" cần cả hai bên (thứ tự nào cũng được): dân chưa xác nhận thì ghi văn bản + xác nhận của
-        // cán bộ, ca đóng khi dân xác nhận. Báo khống / ca test / kết thúc bắt buộc đóng ngay.
+        // cán bộ, ca đóng khi dân xác nhận. Báo khống / ca test đóng ngay.
         if (result == ReportResult.RESOLVED && incident.getCitizenConfirmedAt() == null) {
             incidentReportRepository.save(report);
             incident.setUpdatedAt(now);

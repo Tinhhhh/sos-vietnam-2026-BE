@@ -8,7 +8,7 @@ import lombok.*;
 /**
  * Body của POST /api/v1/incidents/{id}/dispatch-plan/finish: văn bản kết thúc ca.
  * force = false: bước 4 bình thường (cả cán bộ và người dân đã xác nhận xử lý xong), result RESOLVED / FALSE_ALARM,
- * summary bắt buộc (>= 10 ký tự). force = true: cán bộ giữ ca kết thúc bắt buộc, note là lý do (>= 5 ký tự).
+ * summary bắt buộc (>= 10 ký tự). force = true (kết thúc bắt buộc) đã bỏ: trả 400.
  */
 @Data
 @Builder

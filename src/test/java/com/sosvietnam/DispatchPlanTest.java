@@ -568,27 +568,15 @@ class DispatchPlanTest {
     }
 
     @Test
-    void forceFinish_onlyHolder_withReason_onceForcesAreOnTheWay() {
+    void forceFinish_isGone_400_caseStaysOpen() {
         var force = com.sosvietnam.model.payload.request.FinishIncidentRequest.builder().force(true)
                 .note("Kết thúc để test lại").build();
-        IncidentDispatch d = pending(); // chưa xuất phát -> chưa kết thúc được, dùng Huỷ ca
-        assertThatThrownBy(() -> service.finish("SOS-1", force))
-                .isInstanceOf(SosException.class).hasMessageContaining("Huỷ ca");
-
+        IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE);
-        force.setNote("ab");
         assertThatThrownBy(() -> service.finish("SOS-1", force))
-                .isInstanceOf(SosException.class).hasMessageContaining("lý do");
-
-        force.setNote("Kết thúc để test lại");
-        service.finish("SOS-1", force);
-        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVED);
-        verify(reports).save(org.mockito.ArgumentMatchers.argThat(rep -> rep.getResult() == ReportResult.FORCED));
-
-        incident.setStatus(IncidentStatus.RESOLVING);
-        incident.setHandlerId(UUID.randomUUID()); // người khác giữ
-        assertThatThrownBy(() -> service.finish("SOS-1", force))
-                .isInstanceOf(SosException.class).hasMessageContaining("đang giữ ca");
+                .isInstanceOf(SosException.class).hasMessageContaining("Không còn kết thúc ca bắt buộc");
+        assertThat(incident.getStatus()).isEqualTo(IncidentStatus.RESOLVING);
+        verify(reports, never()).save(any());
     }
 
     @Test
@@ -706,5 +694,15 @@ class DispatchPlanTest {
         assertThat(plan.getTracker().getMemberId()).isEqualTo(me.getId());
         verify(simulation).stop(11L);
         verify(notifier).notify("SOS-1", IncidentEvent.INCIDENT_UPDATED);
+    }
+
+    @Test
+    void whileSimulating_changingFieldOfficer_is409() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        when(simulation.running(11L)).thenReturn(true);
+        assertThatThrownBy(() -> service.changeFieldMember("SOS-1", me.getId()))
+                .isInstanceOf(SosException.class).hasMessageContaining("Đang mô phỏng");
+        verify(simulation, never()).stop(11L);
     }
 }
