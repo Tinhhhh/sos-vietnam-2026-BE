@@ -12,6 +12,9 @@ public interface DemoModeService {
     /** Ca [DEMO] có bị ẩn khỏi hàng đợi / lịch sử / tin STOMP của cán bộ không. */
     boolean hidden();
 
+    /** Tốc độ xe giả của "Mô phỏng" (km/h); chưa đổi ở giao diện = app.traccar.simulation.speed-kmh. */
+    double simulationSpeedKmh();
+
     DemoSettingsResponse get();
 
     DemoSettingsResponse update(DemoSettingsRequest request);
