@@ -44482,26 +44482,6 @@
       "auto_generated": true
     },
     {
-      "id": "st-ward-phu-tho-xa-lien-son",
-      "name": "Công an Xã Liên Sơn",
-      "agency": "police",
-      "agency_name": "Công An",
-      "level": "ward",
-      "province": "Phú Thọ",
-      "ward": "Xã Liên Sơn",
-      "unitType": "Xã",
-      "address": "Đang cập nhật",
-      "phone": "Đang cập nhật",
-      "sms": "113",
-      "officer": "Đang cập nhật",
-      "lat": 20.816336,
-      "lng": 105.569777,
-      "isGpsVerified": false,
-      "dataNote": "Tự động bổ sung từ ranh giới hành chính 10/2026 — cần xác minh SĐT/địa chỉ thực tế",
-      "services": "Tiếp nhận tin báo ANTT, xử lý vi phạm hành chính",
-      "auto_generated": true
-    },
-    {
       "id": "st-ward-phu-tho-xa-long-coc",
       "name": "Công an Xã Long Cốc",
       "agency": "police",
