@@ -4233,8 +4233,8 @@
       "phone": "028 3836 1444",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Bình Hòa",
-      "lat": 10.89404,
-      "lng": 106.71769,
+      "lat": 10.8702522,
+      "lng": 106.70758,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Phường Bình Hòa",
@@ -4252,7 +4252,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-phuong_binh_hung_hoa",
@@ -6048,8 +6049,8 @@
       "phone": "028 3720 3479",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Rạch Dừa",
-      "lat": 10.39686,
-      "lng": 107.1043,
+      "lat": 10.3952986,
+      "lng": 107.1065802,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Phường Rạch Dừa",
@@ -6067,7 +6068,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-phuong_sai_gon",
@@ -7104,8 +7106,8 @@
       "phone": "028 3872 4663",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Tân Đông Hiệp",
-      "lat": 10.9454,
-      "lng": 106.77345,
+      "lat": 10.9364926,
+      "lng": 106.7660882,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Phường Tân Đông Hiệp",
@@ -7123,7 +7125,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-phuong_tan_dinh",
@@ -7302,8 +7305,8 @@
       "phone": "028 3865 4885",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Vĩnh Tân",
-      "lat": 11.14703,
-      "lng": 106.72303,
+      "lat": 11.1807842,
+      "lng": 106.6995602,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Phường Vĩnh Tân",
@@ -7321,7 +7324,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-phuong_vung_tau",
@@ -8193,8 +8197,8 @@
       "phone": "028 3836 5884",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Hiệp Phước",
-      "lat": 10.63049,
-      "lng": 106.72532,
+      "lat": 10.67809,
+      "lng": 106.699499,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Xã Hiệp Phước",
@@ -8212,7 +8216,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-xa_hoa_hiep",
@@ -8292,8 +8297,8 @@
       "phone": "028 3865 5995",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Hóc Môn",
-      "lat": 10.89153,
-      "lng": 106.59877,
+      "lat": 10.8764457,
+      "lng": 106.5991438,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Xã Hóc Môn",
@@ -8311,7 +8316,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-xa_hung_long",
@@ -8754,8 +8760,8 @@
       "phone": "028 3872 6513",
       "sms": "0988 113 113",
       "officer": "Trực ban CAP Phú Hòa Đông",
-      "lat": 11.00147,
-      "lng": 106.57263,
+      "lat": 11.0257749,
+      "lng": 106.5646844,
       "isGpsVerified": true,
       "postal_code": "",
       "unit_title": "Xã Phú Hòa Đông",
@@ -8773,7 +8779,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://ketoananpha.vn/danh-sach-168-dia-diem-dang-ky-xe-tren-dia-ban-tp-hcm",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-hcm-ca-xa_phuoc_hoa",
@@ -11053,8 +11060,8 @@
       "officer_name": "Trung tá Lương Bá Vũ",
       "officer_phone": "094 1728383",
       "email": "xalongphu@cantho.gov.vn",
-      "lat": 9.64898444289808,
-      "lng": 105.62554496165168,
+      "lat": 9.6092032,
+      "lng": 106.1219337,
       "services": "Đăng ký cư tú, đăng ký phương tiện giao thông, phản ánh về ANTT, điều tra xử lý các vụ việc vụ án thuộc thẩm quyền Công an cấp xã, Tổ An ninh",
       "unit_title": "Xã Long Phú",
       "isGpsVerified": true,
@@ -11068,7 +11075,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://bando-congan.cantho.gov.vn/",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-ct-86-x-l-ng-t-m",
@@ -12379,8 +12387,8 @@
       "officer_name": "Thượng tá Nguyễn Phi Khanh",
       "officer_phone": "0388072072",
       "email": "xavithanh1@cantho.gov.vn",
-      "lat": 9.75017,
-      "lng": 105.537614,
+      "lat": 9.8199186,
+      "lng": 105.5199382,
       "services": "Trụ sở chính tiếp công về thủ tục hành chính",
       "unit_title": "Xã Vị Thanh 1",
       "isGpsVerified": true,
@@ -12394,7 +12402,8 @@
       "facility_type": "Trụ sở chính",
       "maps_url": "",
       "source_url": "https://bando-congan.cantho.gov.vn/",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Google Maps (điểm cùng tên, nằm đúng xã theo ranh giới bando; đối chiếu tay 28/10/2026)"
     },
     {
       "id": "st-ct-78-x-v-th-y",
@@ -15309,8 +15318,8 @@
       "officer_phone": "+84 2438732262",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.039735,
-      "lng": 105.872936,
+      "lat": 21.0379932,
+      "lng": 105.8719083,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/oADs7En3J8unT8Vv6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -15320,7 +15329,8 @@
       "postal_code": "",
       "unit_title": "Phường Bồ Đề",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/oADs7En3J8unT8Vv6"
     },
     {
       "id": "st-hn-ca-013-bo-de",
@@ -15581,8 +15591,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.026761,
-      "lng": 105.842638,
+      "lat": 21.0257637,
+      "lng": 105.8416365,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/XwFsaRW3kYfWFjw4A",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -15592,7 +15602,8 @@
       "postal_code": "",
       "unit_title": "Phường Cửa Nam",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/XwFsaRW3kYfWFjw4A"
     },
     {
       "id": "st-hn-ca-021-cua-nam",
@@ -15853,8 +15864,8 @@
       "officer_phone": "+84 2436405372; +84 2435598674",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Trụ sở chính",
-      "lat": 20.97641,
-      "lng": 105.822677,
+      "lat": 20.9759458,
+      "lng": 105.8211024,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/KoKNXoh2A84qs5Zm8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -15864,7 +15875,8 @@
       "postal_code": "",
       "unit_title": "Phường Định Công",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/PnwqEkyQYXJ3g2Ci9"
     },
     {
       "id": "st-hn-ca-029-dinh-cong",
@@ -15986,8 +15998,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.091461,
-      "lng": 105.777809,
+      "lat": 21.0906371,
+      "lng": 105.7773563,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/j2kpxKWZAsfzGGrw6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -15997,7 +16009,8 @@
       "postal_code": "",
       "unit_title": "Phường Đông Ngạc",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/j2kpxKWZAsfzGGrw6"
     },
     {
       "id": "st-hn-ca-033-dong-ngac",
@@ -16530,8 +16543,8 @@
       "officer_phone": "+84 2433986222",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.967586,
-      "lng": 105.77419,
+      "lat": 20.9670564,
+      "lng": 105.7751037,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/yETX9yZFrE469Yna7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -16541,7 +16554,8 @@
       "postal_code": "",
       "unit_title": "Phường Hà Đông",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/yETX9yZFrE469Yna7"
     },
     {
       "id": "st-hn-ca-049-ha-dong",
@@ -16632,8 +16646,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.026088,
-      "lng": 105.858022,
+      "lat": 21.0252003,
+      "lng": 105.8576742,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/QLL7kSjC7zfiNTwz9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -16643,7 +16657,8 @@
       "postal_code": "",
       "unit_title": "Phường Hoàn Kiếm",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/QLL7kSjC7zfiNTwz9"
     },
     {
       "id": "st-hn-ca-052-hoan-kiem",
@@ -16870,8 +16885,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 20.966608,
-      "lng": 105.84469,
+      "lat": 20.9678565,
+      "lng": 105.8454877,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/uw3EvxNyZoMifuZw5",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -16881,7 +16896,8 @@
       "postal_code": "",
       "unit_title": "Phường Hoàng Liệt",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/uw3EvxNyZoMifuZw5"
     },
     {
       "id": "st-hn-ca-059-hoang-mai",
@@ -17210,8 +17226,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.991643,
-      "lng": 105.811995,
+      "lat": 20.9905356,
+      "lng": 105.8129724,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/BiS6zPkTMVLu827K9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -17221,7 +17237,8 @@
       "postal_code": "",
       "unit_title": "Phường Khương Đình",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/BiS6zPkTMVLu827K9"
     },
     {
       "id": "st-hn-ca-069-khuong-dinh",
@@ -17890,8 +17907,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.053318,
-      "lng": 105.781894,
+      "lat": 21.0534953,
+      "lng": 105.7831421,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/hBkubsswJxkCjomZ8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -17901,7 +17918,8 @@
       "postal_code": "",
       "unit_title": "Phường Nghĩa Đô",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/hBkubsswJxkCjomZ8"
     },
     {
       "id": "st-hn-ca-089-ngoc-ha",
@@ -17958,8 +17976,8 @@
       "officer_phone": "+84 912042222",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.042066,
-      "lng": 105.81648,
+      "lat": 21.0410744,
+      "lng": 105.8155105,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/QQ2a2TpXsDZgt6uv5",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -17969,7 +17987,8 @@
       "postal_code": "",
       "unit_title": "Phường Ngọc Hà",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/QQ2a2TpXsDZgt6uv5"
     },
     {
       "id": "st-hn-ca-091-ngoc-ha",
@@ -18876,8 +18895,8 @@
       "officer_phone": "+842438364699",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.065491,
-      "lng": 105.806599,
+      "lat": 21.0640875,
+      "lng": 105.8060302,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/DTejZQfTX1osukUN6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -18887,7 +18906,8 @@
       "postal_code": "",
       "unit_title": "Phường Tây Hồ",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/DTejZQfTX1osukUN6"
     },
     {
       "id": "st-hn-ca-118-tay-ho",
@@ -19114,8 +19134,8 @@
       "officer_phone": "+84 986260892",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.067806,
-      "lng": 105.727957,
+      "lat": 21.0697661,
+      "lng": 105.7283021,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/etaoDxjWotakvRbbA",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -19125,7 +19145,8 @@
       "postal_code": "",
       "unit_title": "Phường Tây Tựu",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/etaoDxjWotakvRbbA"
     },
     {
       "id": "st-hn-ca-125-thanh-liet",
@@ -19216,8 +19237,8 @@
       "officer_phone": "+84 2435521083",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 20.987483,
-      "lng": 105.799764,
+      "lat": 20.988787,
+      "lng": 105.800882,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/n936g32VA6pE5H5Q7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -19227,7 +19248,8 @@
       "postal_code": "",
       "unit_title": "Phường Thanh Liệt",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/n936g32VA6pE5H5Q7"
     },
     {
       "id": "st-hn-ca-128-thanh-xuan",
@@ -19284,8 +19306,8 @@
       "officer_phone": "+84 2438585669",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.003563,
-      "lng": 105.809999,
+      "lat": 21.0021135,
+      "lng": 105.8104085,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/zuoUN5AKmRBh8jDw8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -19295,7 +19317,8 @@
       "postal_code": "",
       "unit_title": "Phường Thanh Xuân",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/zuoUN5AKmRBh8jDw8"
     },
     {
       "id": "st-hn-ca-130-thanh-xuan",
@@ -19454,8 +19477,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.110996,
-      "lng": 105.446109,
+      "lat": 21.109297,
+      "lng": 105.445386,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/tJrXhayBphU9eNh48",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -19465,7 +19488,8 @@
       "postal_code": "",
       "unit_title": "Phường Tùng Thiện",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/tJrXhayBphU9eNh48"
     },
     {
       "id": "st-hn-ca-135-tung-thien",
@@ -19488,8 +19512,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.116502,
-      "lng": 105.465406,
+      "lat": 21.105928,
+      "lng": 105.496558,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/D4WURx8ETRSBZxdU7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -19499,7 +19523,8 @@
       "postal_code": "",
       "unit_title": "Phường Tùng Thiện",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/D4WURx8ETRSBZxdU7"
     },
     {
       "id": "st-hn-ca-136-tung-thien",
@@ -20644,8 +20669,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.060491,
-      "lng": 105.344033,
+      "lat": 21.02281,
+      "lng": 105.31691,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/rex19prwi26cfqhS9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -20655,7 +20680,8 @@
       "postal_code": "",
       "unit_title": "Xã Ba Vì",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/rex19prwi26cfqhS9"
     },
     {
       "id": "st-hn-ca-170-bat-trang",
@@ -21324,8 +21350,8 @@
       "officer_phone": "+84 2432668365",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Trụ sở chính",
-      "lat": 20.936822,
-      "lng": 105.807884,
+      "lat": 20.946805,
+      "lng": 105.804342,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/uUeJd9aUeXr8P7o4A",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -21335,7 +21361,8 @@
       "postal_code": "",
       "unit_title": "Xã Đại Thanh",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/uUeJd9aUeXr8P7o4A"
     },
     {
       "id": "st-hn-ca-190-dai-thanh",
@@ -21698,8 +21725,8 @@
       "officer_phone": "+84 2438336286",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Trụ sở chính",
-      "lat": 21.088475,
-      "lng": 105.625302,
+      "lat": 21.074227,
+      "lng": 105.63385,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/H2U7ZiRd6TwLQeDF8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -21709,7 +21736,8 @@
       "postal_code": "",
       "unit_title": "Xã Hát Môn",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/H2U7ZiRd6TwLQeDF8"
     },
     {
       "id": "st-hn-ca-201-hat-mon",
@@ -21800,8 +21828,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.018689,
-      "lng": 105.562747,
+      "lat": 21.019082,
+      "lng": 105.582989,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/4mbQNBbB2NXYThwE7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -21811,7 +21839,8 @@
       "postal_code": "",
       "unit_title": "Xã Hạ Bằng",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/4mbQNBbB2NXYThwE7"
     },
     {
       "id": "st-hn-ca-204-ha-bang",
@@ -22616,8 +22645,8 @@
       "officer_phone": "+84 2436447972",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.9734,
-      "lng": 105.882832,
+      "lat": 20.9726919,
+      "lng": 105.8836458,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/ctRT5TKFFcpiCGSm9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -22627,7 +22656,8 @@
       "postal_code": "",
       "unit_title": "Phường Lĩnh Nam",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/ctRT5TKFFcpiCGSm9"
     },
     {
       "id": "st-hn-ca-228-me-linh",
@@ -23330,8 +23360,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 4",
-      "lat": 20.915411,
-      "lng": 105.637615,
+      "lat": 20.925017,
+      "lng": 105.636209,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/Qbx21h9cJkDfiPZY8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23341,7 +23371,8 @@
       "postal_code": "",
       "unit_title": "Xã Phú Nghĩa",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/Qbx21h9cJkDfiPZY8"
     },
     {
       "id": "st-hn-ca-249-phu-nghia",
@@ -23364,8 +23395,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 5",
-      "lat": 20.914161,
-      "lng": 105.637615,
+      "lat": 20.905983,
+      "lng": 105.623017,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/B7RTW93JDsL9JUk87",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23375,7 +23406,8 @@
       "postal_code": "",
       "unit_title": "Xã Phú Nghĩa",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/B7RTW93JDsL9JUk87"
     },
     {
       "id": "st-hn-ca-250-phu-xuyen",
@@ -23772,8 +23804,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.00729,
-      "lng": 105.646269,
+      "lat": 20.993308,
+      "lng": 105.644488,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/NdJeZJ4xAaAr4kiw8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23783,7 +23815,8 @@
       "postal_code": "",
       "unit_title": "Xã Quốc Oai",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/NdJeZJ4xAaAr4kiw8"
     },
     {
       "id": "st-hn-ca-262-quoc-oai",
@@ -23806,8 +23839,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.00729,
-      "lng": 105.645019,
+      "lat": 21.017605,
+      "lng": 105.647266,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/32CZMQjA4XW2AAas9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23817,7 +23850,8 @@
       "postal_code": "",
       "unit_title": "Xã Quốc Oai",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/32CZMQjA4XW2AAas9"
     },
     {
       "id": "st-hn-ca-263-quoc-oai",
@@ -23908,8 +23942,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.258955,
-      "lng": 105.848942,
+      "lat": 21.2579263,
+      "lng": 105.8496367,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/QC5MhVpifRiMMBTa6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23919,7 +23953,8 @@
       "postal_code": "",
       "unit_title": "Xã Sóc Sơn",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/QC5MhVpifRiMMBTa6"
     },
     {
       "id": "st-hn-ca-266-son-dong",
@@ -23976,8 +24011,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.027564,
-      "lng": 105.708251,
+      "lat": 21.035811,
+      "lng": 105.72951,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/o5LGaGdpUZ39CkBC7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -23987,7 +24022,8 @@
       "postal_code": "",
       "unit_title": "Xã Sơn Đồng",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/o5LGaGdpUZ39CkBC7"
     },
     {
       "id": "st-hn-ca-268-son-dong",
@@ -24010,8 +24046,8 @@
       "officer_phone": "+84 2433659749",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.027564,
-      "lng": 105.707001,
+      "lat": 21.026979,
+      "lng": 105.70829,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/8hRE6ULJxAzSt9zB8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24021,7 +24057,8 @@
       "postal_code": "",
       "unit_title": "Xã Sơn Đồng",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/8hRE6ULJxAzSt9zB8"
     },
     {
       "id": "st-hn-ca-269-son-dong",
@@ -24112,8 +24149,8 @@
       "officer_phone": "+84 2438555066",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.123385,
-      "lng": 105.376392,
+      "lat": 21.122934,
+      "lng": 105.389682,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/65xhZfAu84FXD9TaA",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24123,7 +24160,8 @@
       "postal_code": "",
       "unit_title": "Xã Suối Hai",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/65xhZfAu84FXD9TaA"
     },
     {
       "id": "st-hn-ca-272-tam-hung",
@@ -24180,8 +24218,8 @@
       "officer_phone": "042432079616",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.902174,
-      "lng": 105.797843,
+      "lat": 20.9012958,
+      "lng": 105.7987083,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/t8dvHdU7FUzYrwz7A",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24191,7 +24229,8 @@
       "postal_code": "",
       "unit_title": "Xã Tam Hưng",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/t8dvHdU7FUzYrwz7A"
     },
     {
       "id": "st-hn-ca-274-tam-hung",
@@ -24316,8 +24355,8 @@
       "officer_phone": "+84 93166198",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 3",
-      "lat": 21.04266,
-      "lng": 105.608455,
+      "lat": 21.052614,
+      "lng": 105.611992,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/5jaSaSYeRXnfCkVF7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24327,7 +24366,8 @@
       "postal_code": "",
       "unit_title": "Xã Tây Phương",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/5jaSaSYeRXnfCkVF7"
     },
     {
       "id": "st-hn-ca-278-thanh-oai",
@@ -24418,8 +24458,8 @@
       "officer_phone": "+84 2438615330",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.938944,
-      "lng": 105.857306,
+      "lat": 20.944622,
+      "lng": 105.844661,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/mDStzk6sUf4YwQhd6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24429,7 +24469,8 @@
       "postal_code": "",
       "unit_title": "Xã Thanh Trì",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/mDStzk6sUf4YwQhd6"
     },
     {
       "id": "st-hn-ca-281-thach-that",
@@ -24554,8 +24595,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.131371,
-      "lng": 105.771764,
+      "lat": 21.127133,
+      "lng": 105.774753,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/cGa8mHKFm18UnEyc6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24565,7 +24606,8 @@
       "postal_code": "",
       "unit_title": "Xã Thiên Lộc",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/cGa8mHKFm18UnEyc6"
     },
     {
       "id": "st-hn-ca-285-thuan-an",
@@ -24622,8 +24664,8 @@
       "officer_phone": "+84 984367882",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.033281,
-      "lng": 105.993872,
+      "lat": 21.025723,
+      "lng": 105.988275,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/WWTCaBXpeQKarF16A",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24633,7 +24675,8 @@
       "postal_code": "",
       "unit_title": "Xã Thuận An",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/WWTCaBXpeQKarF16A"
     },
     {
       "id": "st-hn-ca-287-thuan-an",
@@ -24792,8 +24835,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.87423,
-      "lng": 105.84128,
+      "lat": 20.867728,
+      "lng": 105.855779,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/wuZ7VezAjCC31Hsy5",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24803,7 +24846,8 @@
       "postal_code": "",
       "unit_title": "Xã Thường Tín",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/wuZ7VezAjCC31Hsy5"
     },
     {
       "id": "st-hn-ca-292-thuong-tin",
@@ -24928,8 +24972,8 @@
       "officer_phone": "02439982678",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Trụ sở chính",
-      "lat": 21.219419,
-      "lng": 105.680153,
+      "lat": 21.207791,
+      "lng": 105.716427,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/TrEuXUMitba22tNL7",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -24939,7 +24983,8 @@
       "postal_code": "",
       "unit_title": "Xã Tiến Thắng",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/TrEuXUMitba22tNL7"
     },
     {
       "id": "st-hn-ca-296-tran-phu",
@@ -25030,8 +25075,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.314412,
-      "lng": 105.866864,
+      "lat": 21.3133913,
+      "lng": 105.8673568,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/TPv6rNoHSrHJzqef8",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -25041,7 +25086,8 @@
       "postal_code": "",
       "unit_title": "Xã Trung Giã",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/TPv6rNoHSrHJzqef8"
     },
     {
       "id": "st-hn-ca-299-trung-gia",
@@ -25132,8 +25178,8 @@
       "officer_phone": "+84 2432079007",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.721946,
-      "lng": 105.833227,
+      "lat": 20.7208283,
+      "lng": 105.8347962,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/KfMK7UxMZs96DhTYA",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -25143,7 +25189,8 @@
       "postal_code": "",
       "unit_title": "Xã Ứng Hòa",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/KfMK7UxMZs96DhTYA"
     },
     {
       "id": "st-hn-ca-302-ung-thien",
@@ -25166,8 +25213,8 @@
       "officer_phone": "+84 2432014080",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Trụ sở chính",
-      "lat": 20.771022,
-      "lng": 105.76545,
+      "lat": 20.779058,
+      "lng": 105.785351,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/eS2hR6TPXVnEr8X4A",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -25177,7 +25224,8 @@
       "postal_code": "",
       "unit_title": "Xã Ứng Thiên",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/eS2hR6TPXVnEr8X4A"
     },
     {
       "id": "st-hn-ca-303-ung-thien",
@@ -25200,8 +25248,8 @@
       "officer_phone": "+84 2432014080",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 20.772105,
-      "lng": 105.764825,
+      "lat": 20.765139,
+      "lng": 105.766123,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/f9cWdc9anSfqyfBV6",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -25211,7 +25259,8 @@
       "postal_code": "",
       "unit_title": "Xã Ứng Thiên",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/f9cWdc9anSfqyfBV6"
     },
     {
       "id": "st-hn-ca-304-vat-lai",
@@ -25336,8 +25385,8 @@
       "officer_phone": "024 3939 6789",
       "officer_rank": "Đại úy",
       "officer_clean_name": "Trực ban Cơ sở 2",
-      "lat": 21.106336,
-      "lng": 105.824543,
+      "lat": 21.109892,
+      "lng": 105.843314,
       "isGpsVerified": true,
       "maps_url": "https://maps.app.goo.gl/uqGHZ23ZpK8sojtg9",
       "source_url": "https://anninhthudo.vn/chi-tiet-danh-sach-417-tru-so-diem-tiep-dan-kem-link-google-map-cua-cong-an-tp-ha-noi-post666267.antd",
@@ -25347,7 +25396,8 @@
       "postal_code": "",
       "unit_title": "Xã Vĩnh Thanh",
       "district": "",
-      "auto_generated": false
+      "auto_generated": false,
+      "coord_source": "Link Google Maps trong danh sách của Công an TP Hà Nội: https://maps.app.goo.gl/uqGHZ23ZpK8sojtg9"
     },
     {
       "id": "st-hn-ca-308-xuan-mai",
