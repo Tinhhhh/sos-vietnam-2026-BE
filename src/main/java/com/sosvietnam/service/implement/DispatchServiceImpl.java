@@ -501,6 +501,11 @@ public class DispatchServiceImpl implements DispatchService {
         }
         IncidentDispatch saved = incidentDispatchRepository.save(d);
         log.info("🚓 [DEPART] Incident {} by {}, field {}", incident.getId(), who, saved.getFieldMember().getFullName());
+        if (dispatchSmsService != null) {
+            String incidentId = incident.getId();
+            Long dispatchId = saved.getId();
+            afterCommitOrNow(() -> dispatchSmsService.onDeparted(incidentId, dispatchId));
+        }
         notifier.notify(incident.getId(), IncidentEvent.INCIDENT_UPDATED);
         return planView(incident, saved, officerView);
     }

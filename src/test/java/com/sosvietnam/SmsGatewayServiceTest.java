@@ -79,6 +79,7 @@ class SmsGatewayServiceTest {
         assertThat(b.at("/phoneNumbers/0").asText()).isEqualTo("+84912345678");
         assertThat(b.at("/simNumber").asInt()).isEqualTo(2);
         assertThat(b.at("/ttl").asLong()).isEqualTo(900);
+        assertThat(b.at("/priority").asInt()).isEqualTo(100); // tin khẩn cấp: app gửi ngay
     }
 
     @Test

@@ -44,6 +44,9 @@ public class SmsGatewayServiceImpl implements SmsService {
     // điện thoại tắt / mất mạng lâu hơn thế thì bỏ tin, không gửi muộn một link đã cũ
     @Value("${app.sms.gateway.ttl-seconds:900}")
     private long ttlSeconds;
+    // >= 100 = app gửi ngay, bỏ qua khoảng nghỉ / giới hạn tốc độ cài trong app (tin khẩn cấp); 0 = không gửi trường này
+    @Value("${app.sms.gateway.priority:100}")
+    private int priority = 100;
 
     private volatile HttpClient httpClient;
 
@@ -67,6 +70,7 @@ public class SmsGatewayServiceImpl implements SmsService {
             body.put("phoneNumbers", List.of(to));
             body.put("ttl", ttlSeconds);
             if (StringUtils.hasText(sim)) body.put("simNumber", Integer.parseInt(sim.trim()));
+            if (priority != 0) body.put("priority", priority);
             String auth = Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
             HttpRequest request = HttpRequest.newBuilder(URI.create(url.replaceAll("/+$", "") + "/message"))
                     .timeout(Duration.ofSeconds(8))
@@ -74,13 +78,16 @@ public class SmsGatewayServiceImpl implements SmsService {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
                     .build();
+            long started = System.nanoTime();
             HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            long tookMs = (System.nanoTime() - started) / 1_000_000;
             if (response.statusCode() / 100 != 2) {
                 log.warn("📵 [SMS] cổng SMS trả HTTP {} cho {}: {}", response.statusCode(), mask(to), response.body());
                 return new Result(false, response.statusCode() == 401
                         ? "Sai tài khoản cổng SMS" : "Cổng SMS lỗi (HTTP " + response.statusCode() + ")");
             }
-            log.info("✉️ [SMS] đã gửi lệnh tới cổng SMS cho {}", mask(to));
+            // chỉ là lúc máy chủ nhận lệnh; chậm sau đó nằm ở chặng đẩy xuống điện thoại + app gửi bằng SIM
+            log.info("✉️ [SMS] cổng SMS nhận lệnh cho {} sau {} ms", mask(to), tookMs);
             return new Result(true, null);
         } catch (Exception e) {
             log.warn("📵 [SMS] không gọi được cổng SMS: {}", e.getMessage());

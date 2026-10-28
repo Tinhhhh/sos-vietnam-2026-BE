@@ -38,6 +38,8 @@ public class DispatchSmsServiceImpl implements DispatchSmsService {
     private final SmsService smsService;
     // lượt đang được kiểm / gửi: điểm GPS dồn dập không gửi 2 tin cùng lúc
     private final Set<Long> busy = ConcurrentHashMap.newKeySet();
+    // lượt đã báo "khởi hành" (chỉ đổi ACCEPTED -> EN_ROUTE 1 lần; RAM đủ, không cần cột)
+    private final Set<Long> departedSent = ConcurrentHashMap.newKeySet();
 
     @Value("${app.sms.approach-distance-m:50}")
     private double approachDistanceM = 50;
@@ -50,6 +52,42 @@ public class DispatchSmsServiceImpl implements DispatchSmsService {
         this.incidentDispatchRepository = incidentDispatchRepository;
         this.incidentRouteRepository = incidentRouteRepository;
         this.smsService = smsService;
+    }
+
+    @Override
+    public void onDeparted(String incidentId, Long dispatchId) {
+        if (dispatchId == null || !smsService.configured()) return;
+        scheduler.schedule(() -> {
+            try {
+                sendDeparted(dispatchId);
+            } catch (Exception e) {
+                log.warn("📵 [SMS DEPART] {}: {}", incidentId, e.getMessage());
+            }
+        }, Instant.now());
+    }
+
+    /** Đồng bộ (unit test gọi thẳng). @return true khi đã gửi */
+    boolean sendDeparted(Long dispatchId) {
+        if (departedSent.contains(dispatchId)) return false;
+        Boolean sent = tx.execute(s -> {
+            IncidentDispatch d = incidentDispatchRepository.findById(dispatchId).orElse(null);
+            if (d == null || d.getStatus() != DispatchStatus.EN_ROUTE) return false;
+            Incident incident = d.getIncident();
+            if (DemoIncidents.isDemo(incident) || incident.getPhone() == null || incident.getPhone().isBlank()) return false;
+            IncidentRoute route = incidentRouteRepository
+                    .findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(dispatchId).orElse(null);
+            Integer minutes = route == null || route.getDurationS() == null ? null
+                    : Math.max(1, (int) Math.round(route.getDurationS() / 60.0));
+            SmsService.Result result = smsService.send(incident.getPhone(), departedText(incident, d.getFieldMember(), minutes));
+            if (!result.sent()) {
+                log.warn("📵 [SMS DEPART] {}: {}", incident.getId(), result.error());
+                return false;
+            }
+            log.info("✉️ [SMS DEPART] {} đã báo người báo tin: lực lượng khởi hành", incident.getId());
+            return true;
+        });
+        if (Boolean.TRUE.equals(sent)) departedSent.add(dispatchId);
+        return Boolean.TRUE.equals(sent);
     }
 
     @Override
@@ -129,6 +167,14 @@ public class DispatchSmsServiceImpl implements DispatchSmsService {
             return sent;
         });
         return n == null ? 0 : n;
+    }
+
+    /** Không dấu, không link, 1 tin (~120 ký tự). */
+    static String departedText(Incident incident, UnitMember field, Integer minutes) {
+        return "SOS VN: Luc luong chuc nang da khoi hanh toi cho ban"
+                + (minutes == null ? "" : ", du kien ~" + minutes + " phut")
+                + (field == null ? "" : ". Can bo: " + ascii(field.displayName()))
+                + ". Ma ca: " + LookupCodes.format(incident.getLookupCode()) + ".";
     }
 
     /** Không dấu, không link, 1 tin. */

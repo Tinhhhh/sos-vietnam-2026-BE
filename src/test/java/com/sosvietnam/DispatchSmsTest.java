@@ -93,6 +93,20 @@ class DispatchSmsTest {
     }
 
     @Test
+    void departed_smsToReporter_withEtaAndOfficer_once() throws Exception {
+        d.setFieldMember(UnitMember.builder().id(UUID.randomUUID()).fullName("Đỗ Đức Khang").phone("0900000001").build());
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(7L))
+                .thenReturn(Optional.of(IncidentRoute.builder().destLat(DEST_LAT).destLng(DEST_LNG).durationS(480).build()));
+        Method m = DispatchSmsServiceImpl.class.getDeclaredMethod("sendDeparted", Long.class);
+        m.setAccessible(true);
+        assertThat((boolean) m.invoke(service, 7L)).isTrue();
+        verify(sms).send(eq("0912345678"), argThat(t -> t.contains("da khoi hanh") && t.contains("~8 phut")
+                && t.contains("Do Duc Khang") && t.contains("Ma ca: K7M2-QX9P")));
+        assertThat((boolean) m.invoke(service, 7L)).isFalse(); // không gửi lần 2
+        verify(sms, times(1)).send(anyString(), anyString());
+    }
+
+    @Test
     void closed_smsToFieldOfficerAndDelegate_once_perPhone() throws Exception {
         UnitMember field = UnitMember.builder().id(UUID.randomUUID()).fullName("A").phone("0900000001").build();
         UnitMember delegate = UnitMember.builder().id(UUID.randomUUID()).fullName("B").phone("0900000002").build();
