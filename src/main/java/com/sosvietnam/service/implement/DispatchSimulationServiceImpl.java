@@ -54,7 +54,8 @@ public class DispatchSimulationServiceImpl implements DispatchSimulationService 
     @Autowired(required = false)
     private DemoModeService demoModeService;
 
-    private double speedKmh() {
+    @Override
+    public double speedKmh() {
         return demoModeService == null ? speedKmh : demoModeService.simulationSpeedKmh();
     }
 

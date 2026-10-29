@@ -189,6 +189,8 @@ public class DispatchServiceImpl implements DispatchService {
             plan.setLastPosition(dispatchTrackingService.lastPosition(latest.getId()));
         }
         if (enRoute) plan.setArrivalCheck(arrivalCheck(latest));
+        double etaSpeed = dispatchSimulationService.speedKmh();
+        plan.setEtaSpeedKmh(etaSpeed > 0 ? etaSpeed : null);
         // "Người nhận ca" trên thẻ theo dõi (trên "Người đi hiện trường"); dân / link không thấy SĐT cá nhân
         if (incident.getHandlerId() != null) {
             unitMemberRepository.findById(incident.getHandlerId()).ifPresent(h -> plan.setReceiver(

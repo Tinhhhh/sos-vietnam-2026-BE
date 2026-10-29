@@ -387,6 +387,18 @@ class DispatchPlanTest {
     }
 
     @Test
+    void plan_carriesTheSimulationSpeed_forTheEta() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        destinationAt(d);
+
+        when(simulation.speedKmh()).thenReturn(40.0);
+        assertThat(service.getPlan("SOS-1", null).getEtaSpeedKmh()).isEqualTo(40.0);
+        when(simulation.speedKmh()).thenReturn(0.0); // chưa biết tốc độ: FE dùng thời gian của tuyến
+        assertThat(service.getPlan("SOS-1", null).getEtaSpeedKmh()).isNull();
+    }
+
+    @Test
     void ownUnit_step2_holderPicksTheFieldOfficer_thenSetsOff() {
         incident.setStatus(IncidentStatus.VERIFYING);
         service.checkFieldMember("SOS-1", me.getId()); // cán bộ đơn vị mình, có số hiệu: hợp lệ

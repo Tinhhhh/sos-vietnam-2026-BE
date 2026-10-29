@@ -71,6 +71,10 @@ public class DispatchPlanResponse {
         private boolean within;
     }
 
+    /** Tốc độ dùng để tính thời gian dự kiến (= tốc độ xe mô phỏng ở Cài đặt), km/h; mọi người xem đều có. */
+    @JsonProperty("eta_speed_kmh")
+    private Double etaSpeedKmh;
+
     /** Chỉ cho cán bộ (dân nhận null): nút "Mô phỏng di chuyển" của ca demo. */
     @JsonProperty("simulation")
     private Simulation simulation;
