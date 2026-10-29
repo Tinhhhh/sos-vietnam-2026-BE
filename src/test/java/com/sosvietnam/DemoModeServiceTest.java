@@ -65,9 +65,12 @@ class DemoModeServiceTest {
         assertThat(service.update(fast).getSimulationSpeedKmh()).isEqualTo(80);
         assertThat(service.simulationSpeedKmh()).isEqualTo(80);
         DemoSettingsRequest bad = new DemoSettingsRequest();
-        bad.setSimulationSpeedKmh(300.0);
+        bad.setSimulationSpeedKmh(301.0); // giới hạn 5–300 km/h
         assertThatThrownBy(() -> service.update(bad)).isInstanceOf(SosException.class);
         assertThat(service.simulationSpeedKmh()).isEqualTo(80);
+        DemoSettingsRequest max = new DemoSettingsRequest();
+        max.setSimulationSpeedKmh(300.0);
+        assertThat(service.update(max).getSimulationSpeedKmh()).isEqualTo(300);
     }
 
     @Test
