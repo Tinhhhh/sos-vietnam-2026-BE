@@ -90653,6 +90653,72 @@
       "isGpsVerified": true,
       "coord_source": "Google Maps, quét Cần Thơ 29/10/2026 (điểm \"Đội Cảnh sát PCCC - CA Quận Ô Môn\")",
       "auto_generated": false
+    },
+    {
+      "id": "st-pccc-can-tho-doi-chua-chay-va-cnch-khu-vuc-cai-tac",
+      "name": "Đội Chữa cháy và CNCH khu vực Cái Tắc (Phòng PC07, CATP Cần Thơ)",
+      "agency": "fire",
+      "agency_name": "PCCC & CNCH",
+      "level": "ward",
+      "province": "Cần Thơ",
+      "address": "9A Quốc lộ 1A, ấp Tân Phú A, xã Đông Phước, TP. Cần Thơ",
+      "lat": 9.9313722,
+      "lng": 105.7251781,
+      "isGpsVerified": true,
+      "coord_source": "Google Maps, đối chiếu bảng Meta AI 29/10/2026 (điểm \"Cảnh sát phòng cháy huyên châu thành A\")",
+      "auto_generated": false
+    },
+    {
+      "id": "st-pccc-can-tho-doi-chua-chay-va-cnch-khu-vuc-cai-rang",
+      "name": "Đội Chữa cháy và CNCH khu vực Cái Răng (Phòng PC07, CATP Cần Thơ)",
+      "agency": "fire",
+      "agency_name": "PCCC & CNCH",
+      "level": "ward",
+      "province": "Cần Thơ",
+      "lat": 10.0160835,
+      "lng": 105.7850371,
+      "isGpsVerified": true,
+      "coord_source": "Google Maps, đối chiếu bảng Meta AI 29/10/2026 (điểm \"Phòng Cảnh Sát Phòng Cháy Chữa Cháy Quận Cái Răng\")",
+      "auto_generated": false
+    },
+    {
+      "id": "st-pccc-can-tho-doi-chua-chay-va-cnch-khu-vuc-thoi-lai",
+      "name": "Đội Chữa cháy và CNCH khu vực Thới Lai (Phòng PC07, CATP Cần Thơ)",
+      "agency": "fire",
+      "agency_name": "PCCC & CNCH",
+      "level": "ward",
+      "province": "Cần Thơ",
+      "lat": 10.0608861,
+      "lng": 105.5578111,
+      "isGpsVerified": true,
+      "coord_source": "Google Maps, đối chiếu bảng Meta AI 29/10/2026 (điểm \"Phòng Cảnh Sát Pccc Số 6\")",
+      "auto_generated": false
+    },
+    {
+      "id": "st-pccc-can-tho-doi-pccc-va-cnch-tren-song-trung-tam",
+      "name": "Đội Cảnh sát PCCC và CNCH trên sông khu vực trung tâm (Phòng PC07, CATP Cần Thơ)",
+      "agency": "fire",
+      "agency_name": "PCCC & CNCH",
+      "level": "ward",
+      "province": "Cần Thơ",
+      "lat": 10.0474388,
+      "lng": 105.7818653,
+      "isGpsVerified": true,
+      "coord_source": "Google Maps, đối chiếu bảng Meta AI 29/10/2026 (điểm \"Cảnh Sát Phòng Cháy Và Chữa Cháy Cần Thơ\")",
+      "auto_generated": false
+    },
+    {
+      "id": "st-csgt-can-tho-doi-canh-sat-duong-thuy-so-1-thot-not",
+      "name": "Đội Cảnh sát đường thủy số 1 - Thốt Nốt (Phòng CSGT, CATP Cần Thơ)",
+      "agency": "csgt",
+      "agency_name": "CSGT",
+      "level": "ward",
+      "province": "Cần Thơ",
+      "lat": 10.339803,
+      "lng": 105.4764332,
+      "isGpsVerified": true,
+      "coord_source": "Google Maps, đối chiếu bảng Meta AI 29/10/2026 (điểm \"PHÒNG CSGT ĐƯỜNG THUỶ\")",
+      "auto_generated": false
     }
   ]
 }
