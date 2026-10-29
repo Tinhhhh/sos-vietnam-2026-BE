@@ -384,6 +384,16 @@ class ApiContractTest {
     }
 
     @Test
+    void stationsNearby_publicForTheCitizenScreen() throws Exception {
+        when(geoService.findNearbyForCitizen(anyDouble(), anyDouble(), any())).thenReturn(List.of());
+        mvc.perform(get("/api/v1/stations/nearby").param("lat", "10.03").param("lng", "105.76").param("kind", "HOSPITAL"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
+        // danh bạ trạm đầy đủ vẫn chỉ cho cán bộ
+        mvc.perform(get("/api/v1/stations/nearest").param("lat", "21").param("lng", "105"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void stationsNearest_forOfficers() throws Exception {
         when(geoService.findNearestStations(anyDouble(), anyDouble(), any(), anyDouble(), anyInt())).thenReturn(List.of());
         mvc.perform(get("/api/v1/stations/nearest").header("Authorization", officerBearer()).param("lat", "21").param("lng", "105").param("agency", "POLICE"))
