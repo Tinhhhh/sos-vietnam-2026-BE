@@ -245,8 +245,8 @@ public class UnitAccountSeeder implements CommandLineRunner {
         do {
             badge = String.format("%06d", random.nextInt(1_000_000));
         } while (!badges.add(badge));
-        String phone = "09" + String.format("%08d", random.nextInt(100_000_000));
-        return new Object[]{id, accountId, fakeName(random), badge, rank.name(), position, role.name(), phone, pinHash, now};
+        // Không sinh số điện thoại: số ngẫu nhiên có thể là số thật, SMS (link hiện trường, ca kết thúc) sẽ gửi nhầm người
+        return new Object[]{id, accountId, fakeName(random), badge, rank.name(), position, role.name(), null, pinHash, now};
     }
 
     private static String commanderTitle(Unit u) {

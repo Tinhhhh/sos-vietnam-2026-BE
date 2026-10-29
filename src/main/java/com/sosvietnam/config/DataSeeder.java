@@ -140,7 +140,6 @@ public class DataSeeder implements CommandLineRunner {
                     .lastName("Hệ Thống")
                     .email(ADMIN_EMAIL)
                     .password(passwordEncoder.encode(adminPassword))
-                    .phone("0988888888")
                     .address("Bộ Chỉ Huy SOS Việt Nam")
                     .role(adminRole)
                     .unitLevel(UnitLevel.NATIONAL)

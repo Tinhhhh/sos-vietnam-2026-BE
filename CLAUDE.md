@@ -21,7 +21,7 @@
 
 ## Stack / hạ tầng
 - Spring Boot 3.4, Java 21, PostgreSQL + PostGIS, Flyway (`ddl-auto=validate`), JWT, Redis (tuỳ chọn), R2 (S3 SDK), POI, springdoc.
-- **Flyway**: `src/main/resources/db/migration`, mới nhất **V24**. Đổi entity = viết file V mới (Hibernate không tự sửa bảng). Seeder chỉ ghi dữ liệu. V11–V24 mới chạy DB local, tự chạy trên VPS khi deploy BE mới.
+- **Flyway**: `src/main/resources/db/migration`, mới nhất **V26**. Đổi entity = viết file V mới (Hibernate không tự sửa bảng). Seeder chỉ ghi dữ liệu. V11–V26 mới chạy DB local, tự chạy trên VPS khi deploy BE mới.
 - VPS `103.179.185.217` (`sosvie.site`, `/opt/sos`, xem `deploy/README.md`). Traccar trên VPS đã bật forward. Render (`main` cũ) giữ tắt.
 - Một số trạng thái chỉ ở RAM, chỉ đúng khi 1 instance BE: online STOMP, điểm GPS, giới hạn tra cứu / SMS, công tắc demo, thu hồi token (có Redis thì bền).
 - Múi giờ: `main()` đặt `Asia/Ho_Chi_Minh`. CORS: `app.cors.allowed-origins` (`CORS_ALLOWED_ORIGINS`).
@@ -37,7 +37,7 @@
 ## Tài khoản / phân quyền
 - `accounts` = tài khoản ĐƠN VỊ (lực lượng `AgencyType` POLICE/CSGT/FIRE/HOSPITAL + `UnitLevel` NATIONAL/PROVINCE/WARD); người = `unit_members` (số hiệu = mã thiết bị GPS, cấp bậc, `UnitRole` COMMANDER/MEMBER, PIN). Đăng nhập đơn vị → `unit_token` → chọn cán bộ + PIN → token cán bộ (claim `mid`). ADMIN vào thẳng. `OfficerPrincipal` = cán bộ; `security/CurrentOfficer`.
 - Đổi mật khẩu / cấp lại PIN → đá văng mọi token cũ (`TokenRevocationStore`, kể cả refresh + STOMP 1008).
-- Seed demo: `UnitAccountSeeder` mọi xã + tỉnh, email `<congan|csgt|pccc>.<xã>.<tỉnh>@sos.vn` / `<lực lượng>.<tỉnh>@sos.vn`, 3 cán bộ / đơn vị. Test hay dùng: `congan.cantho`, `congan.tanan.cantho`, `congan.caikhe.cantho`, `csgt.cantho`, `pccc.cantho` (@sos.vn).
+- Seed demo: `UnitAccountSeeder` mọi xã + tỉnh, email `<congan|csgt|pccc>.<xã>.<tỉnh>@sos.vn` / `<lực lượng>.<tỉnh>@sos.vn`, 3 cán bộ / đơn vị, không có SĐT (V26 xoá mọi SĐT cán bộ / tài khoản, chỉ giữ 2 số thử của nhóm, để SMS không gửi nhầm người thật). Test hay dùng: `congan.cantho`, `congan.tanan.cantho`, `congan.caikhe.cantho`, `csgt.cantho`, `pccc.cantho` (@sos.vn).
 - Quyền xem / nhận ca: `util/IncidentAccess`.
 
 ## Luồng ca (hiện hành)
