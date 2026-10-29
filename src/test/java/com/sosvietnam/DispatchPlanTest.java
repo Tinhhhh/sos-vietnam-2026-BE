@@ -322,20 +322,35 @@ class DispatchPlanTest {
     }
 
     @Test
-    void arrive_withoutGps_onlyTheHolderWithAReason() {
+    void arrive_withoutGps_ownUnit_onlyTheHolderWithAReason() {
         IncidentDispatch d = pending();
         d.setStatus(DispatchStatus.EN_ROUTE);
-        Account assignee = wardOfficer("ha@sos.vn");
-        d.setAssignedTo(TestGeo.member(assignee));
         destinationAt(d);
 
-        TestGeo.signIn(assignee); // cán bộ được uỷ quyền: không có quyền bỏ qua GPS
+        TestGeo.signIn(wardOfficer("other@sos.vn"));
         assertThatThrownBy(() -> service.arrive("SOS-1", null, "Điện thoại hết pin")).isInstanceOf(SosException.class)
                 .hasMessageContaining("Chỉ người giữ ca");
 
         TestGeo.signIn(me);
         assertThatThrownBy(() -> service.arrive("SOS-1", null, "pin")).isInstanceOf(SosException.class)
                 .hasMessageContaining("5 ký tự");
+        DispatchPlanResponse plan = service.arrive("SOS-1", null, "  Điện thoại hết pin  ");
+        assertThat(plan.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.HOLDER_OVERRIDE);
+    }
+
+    @Test
+    void arrive_withoutGps_delegated_theAssigneeNotTheProvinceHolder() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        Account assignee = wardOfficer("ha@sos.vn");
+        d.setAssignedTo(TestGeo.member(assignee));
+        destinationAt(d);
+
+        TestGeo.signIn(me); // tỉnh đã uỷ quyền: người giữ ca không xác nhận thay
+        assertThatThrownBy(() -> service.arrive("SOS-1", null, "Điện thoại hết pin")).isInstanceOf(SosException.class)
+                .hasMessageContaining("Ca đã uỷ quyền");
+
+        TestGeo.signIn(assignee);
         DispatchPlanResponse plan = service.arrive("SOS-1", null, "  Điện thoại hết pin  ");
         assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         assertThat(plan.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.HOLDER_OVERRIDE);

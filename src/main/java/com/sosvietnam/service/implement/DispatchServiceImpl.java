@@ -652,14 +652,16 @@ public class DispatchServiceImpl implements DispatchService {
         OfficerPrincipal me = currentOfficer();
         boolean holder = me.memberId().equals(incident.getHandlerId());
         if (reason != null && !reason.isBlank()) {
-            // mất GPS / điện thoại hỏng: chỉ người giữ ca được xác nhận không theo GPS, ghi lý do
-            if (!holder) {
-                throw new SosException(HttpStatus.FORBIDDEN, "Chỉ người giữ ca mới xác nhận đã đến không theo GPS");
+            // mất GPS / điện thoại hỏng: người xử lý ca xác nhận không theo GPS, ghi lý do. Ca đã uỷ quyền thì là cán bộ
+            // xã được uỷ quyền (người xử lý), không phải người giữ ca ở tỉnh; người đi hiện trường tự xác nhận qua link
+            boolean delegated = d != null && d.getAssignedTo() != null && d.getStatus() != DispatchStatus.REJECTED;
+            boolean handler = delegated ? IncidentAccess.isAssignee(me, d) : holder;
+            if (!handler) {
+                throw new SosException(HttpStatus.FORBIDDEN, delegated
+                        ? "Ca đã uỷ quyền: chỉ cán bộ được uỷ quyền hoặc người đi hiện trường xác nhận đã đến không theo GPS"
+                        : "Chỉ người giữ ca mới xác nhận đã đến không theo GPS");
             }
-            if (reason.trim().length() < 5) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Lý do ít nhất 5 ký tự");
-            }
-            return markArrived(incident, d, me.email(), true, ArrivalSource.HOLDER_OVERRIDE, reason.trim(), me.memberId());
+            return markArrived(incident, d, me.email(), true, ArrivalSource.HOLDER_OVERRIDE, requireArrivalReason(reason), me.memberId());
         }
         // theo GPS: đơn vị đi xử lý, chính người phụ trách hiện trường, hoặc người giữ ca
         boolean allowed = d != null && (holder || isOnSite(me, incident, d)
@@ -696,7 +698,7 @@ public class DispatchServiceImpl implements DispatchService {
         if (source == ArrivalSource.GPS) {
             if (check == null) {
                 throw new SosException(HttpStatus.CONFLICT, "Chưa có tín hiệu GPS của người đi hiện trường: bật gửi vị trí "
-                        + "(app Traccar hoặc trang link), hoặc người giữ ca xác nhận đã đến kèm lý do");
+                        + "(app Traccar hoặc trang link), hoặc người xử lý ca / người đi hiện trường xác nhận đã đến kèm lý do");
             }
             if (!check.isWithin()) {
                 throw new SosException(HttpStatus.CONFLICT, "Còn " + check.getDistanceM() + " m tới điểm đến (cần trong "
@@ -840,9 +842,21 @@ public class DispatchServiceImpl implements DispatchService {
 
     @Transactional
     @Override
-    public DispatchPlanResponse fieldArrive(String fieldToken) {
+    public DispatchPlanResponse fieldArrive(String fieldToken, String reason) {
         IncidentDispatch d = requireFieldDispatch(fieldToken);
+        if (reason != null && !reason.isBlank()) {
+            // người đi hiện trường mất GPS / điện thoại hỏng: tự xác nhận đã đến, ghi lý do
+            return markArrived(d.getIncident(), d, "field link", false, ArrivalSource.FIELD_OVERRIDE,
+                    requireArrivalReason(reason), d.getFieldMember().getId());
+        }
         return markArrived(d.getIncident(), d, "field link", false, ArrivalSource.GPS, null, d.getFieldMember().getId());
+    }
+
+    private static String requireArrivalReason(String reason) {
+        if (reason.trim().length() < 5) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Lý do ít nhất 5 ký tự");
+        }
+        return reason.trim();
     }
 
     @Transactional

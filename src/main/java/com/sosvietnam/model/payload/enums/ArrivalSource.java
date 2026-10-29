@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ArrivalSource {
     GPS("Theo GPS (trong bán kính điểm đến)"),
-    HOLDER_OVERRIDE("Người giữ ca xác nhận (không theo GPS)"),
+    HOLDER_OVERRIDE("Người xử lý ca xác nhận (không theo GPS)"),
+    FIELD_OVERRIDE("Người đi hiện trường xác nhận (không theo GPS)"),
     CITIZEN("Người báo tin xác nhận");
 
     private final String label;

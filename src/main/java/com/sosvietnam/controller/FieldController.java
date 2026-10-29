@@ -51,9 +51,12 @@ public class FieldController {
 
     @Operation(summary = "\"Đã đến\" pressed by the field officer (EN_ROUTE -> ARRIVED)",
             description = "Public (field token); 409 when the force is not on the way, has no GPS point, or the last "
-                    + "point is farther than 30 m (+ GPS accuracy, max 50 m) from the destination")
+                    + "point is farther than 30 m (+ GPS accuracy, max 50 m) from the destination. "
+                    + "Body { reason } (≥ 5 chars): confirm without GPS (phone / GPS broken)")
     @PostMapping("/arrive")
-    public ResponseEntity<Object> arrive(@RequestHeader(value = FIELD_TOKEN_HEADER, required = false) String token) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived", dispatchService.fieldArrive(token));
+    public ResponseEntity<Object> arrive(@RequestHeader(value = FIELD_TOKEN_HEADER, required = false) String token,
+                                         @RequestBody(required = false) @Valid com.sosvietnam.model.payload.request.ArriveRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Arrived",
+                dispatchService.fieldArrive(token, request == null ? null : request.getReason()));
     }
 }

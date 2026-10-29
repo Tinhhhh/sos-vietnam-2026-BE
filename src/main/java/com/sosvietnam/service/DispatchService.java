@@ -72,7 +72,7 @@ public interface DispatchService {
     boolean fieldPosition(String fieldToken, com.sosvietnam.model.payload.request.FieldPositionRequest point);
 
     /** Trang link: "Đã đến". */
-    DispatchPlanResponse fieldArrive(String fieldToken);
+    DispatchPlanResponse fieldArrive(String fieldToken, String reason);
 
     /** Đổi người phụ trách hiện trường khi lực lượng đang trên đường (cùng người được chọn như trên). */
     DispatchPlanResponse changeFieldMember(String incidentId, UUID fieldMemberId);

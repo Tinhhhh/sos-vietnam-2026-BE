@@ -189,14 +189,27 @@ class FieldLinkTest {
     }
 
     @Test
+    void fieldOfficer_confirmsArrivalWithoutGps_withAReason() {
+        String token = service.issueFieldLink("SOS-1").getToken();
+        when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.of(
+                com.sosvietnam.model.entity.IncidentRoute.builder().id(5L).dispatch(trip).destLat(10.03).destLng(105.76).build()));
+        var plan = service.fieldArrive(token, "  Điện thoại mất GPS  ");
+        assertThat(plan.getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        assertThat(trip.getArrivalSource()).isEqualTo(com.sosvietnam.model.payload.enums.ArrivalSource.FIELD_OVERRIDE);
+        assertThat(trip.getArrivalNote()).isEqualTo("Điện thoại mất GPS");
+    }
+
+    @Test
     void closedCase_410_andArriveFromTheLink() {
         String token = service.issueFieldLink("SOS-1").getToken();
         when(routes.findFirstByDispatch_IdAndSupersededAtIsNullOrderByComputedAtDesc(11L)).thenReturn(Optional.of(
                 com.sosvietnam.model.entity.IncidentRoute.builder().id(5L).dispatch(trip).destLat(10.03).destLng(105.76).build()));
-        assertThatThrownBy(() -> service.fieldArrive(token)).isInstanceOf(SosException.class)
+        assertThatThrownBy(() -> service.fieldArrive(token, null)).isInstanceOf(SosException.class)
                 .hasMessageContaining("Chưa có tín hiệu GPS");
+        assertThatThrownBy(() -> service.fieldArrive(token, "pin")).isInstanceOf(SosException.class)
+                .hasMessageContaining("5 ký tự");
         service.fieldPosition(token, FieldPositionRequest.builder().latitude(10.0301).longitude(105.76).accuracyM(8.0).build());
-        assertThat(service.fieldArrive(token).getStatus()).isEqualTo(DispatchStatus.ARRIVED);
+        assertThat(service.fieldArrive(token, null).getStatus()).isEqualTo(DispatchStatus.ARRIVED);
         incident.setStatus(IncidentStatus.RESOLVED);
         assertThatThrownBy(() -> service.getFieldPlan(token)).isInstanceOf(SosException.class)
                 .hasMessageContaining("đã kết thúc");
