@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Body POST /api/v1/admin/phone-locks/{id}/lift. */
+/** Body POST /api/v1/phone-locks/{id}/lift. */
 @Data
 @Builder
 @NoArgsConstructor

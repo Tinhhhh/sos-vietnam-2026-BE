@@ -3,6 +3,7 @@ package com.sosvietnam;
 import com.sosvietnam.model.entity.PhoneLock;
 import com.sosvietnam.model.payload.enums.PhoneLockReason;
 import com.sosvietnam.model.payload.exception.SosException;
+import com.sosvietnam.repository.AppSettingRepository;
 import com.sosvietnam.repository.PhoneLockRepository;
 import com.sosvietnam.security.CurrentOfficer;
 import com.sosvietnam.service.implement.PhoneLockServiceImpl;
@@ -24,7 +25,7 @@ class PhoneLockServiceTest {
 
     static final String PHONE = "0912345678";
     final PhoneLockRepository repo = mock(PhoneLockRepository.class);
-    final PhoneLockServiceImpl service = new PhoneLockServiceImpl(repo, new CurrentOfficer());
+    final PhoneLockServiceImpl service = new PhoneLockServiceImpl(repo, mock(AppSettingRepository.class), new CurrentOfficer());
 
     PhoneLock saved() {
         ArgumentCaptor<PhoneLock> c = ArgumentCaptor.forClass(PhoneLock.class);

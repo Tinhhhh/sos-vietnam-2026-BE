@@ -26,7 +26,7 @@ public class FieldLinkResponse {
     @JsonProperty("field_member")
     private DispatchPlanResponse.Officer fieldMember;
 
-    /** Kết quả gửi link qua SMS tới số của người phụ trách. */
+    /** Kết quả SMS báo phân công tới số của người phụ trách (tin không kèm link, link gửi qua Zalo). */
     @JsonProperty("sms")
     private Sms sms;
 

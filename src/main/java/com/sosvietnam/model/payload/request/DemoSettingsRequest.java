@@ -13,7 +13,7 @@ public class DemoSettingsRequest {
     @JsonProperty("hidden")
     private Boolean hidden;
 
-    /** Tốc độ xe giả của "Mô phỏng", 5-150 km/h (áp cho lần bấm Mô phỏng sau). */
+    /** Tốc độ xe giả của "Mô phỏng", 5-300 km/h (áp cho lần bấm Mô phỏng sau). */
     @JsonProperty("simulation_speed_kmh")
     private Double simulationSpeedKmh;
 }

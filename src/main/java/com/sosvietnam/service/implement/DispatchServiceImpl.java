@@ -65,10 +65,6 @@ public class DispatchServiceImpl implements DispatchService {
     private final com.sosvietnam.service.RoutingService routingService;
     private final com.sosvietnam.service.SmsService smsService;
 
-    // địa chỉ trang web (FE) ghép vào link trong SMS: https://sosvie.site/f/{token}
-    @org.springframework.beans.factory.annotation.Value("${app.public-url:http://localhost:5173}")
-    private String publicUrl = "http://localhost:5173";
-
 
     @Transactional(readOnly = true)
     @Override
@@ -761,23 +757,24 @@ public class DispatchServiceImpl implements DispatchService {
                 .issuedAt(now.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime())
                 .fieldMember(DispatchPlanResponse.Officer.builder().memberId(m.getId()).fullName(m.displayName())
                         .phone(m.getPhone()).badgeNumber(m.getBadgeNumber()).build())
-                .sms(sendFieldLinkSms(d, incidentId, token))
+                .sms(sendFieldLinkSms(d, incidentId))
                 .build();
     }
 
     /**
-     * SMS link cho người phụ trách (số trong hồ sơ cán bộ). Không dấu để vừa 1 tin 160 ký tự. Không có số / chưa cấu
-     * hình cổng SMS thì không gửi: cán bộ vẫn sao chép link như cũ.
+     * SMS báo người phụ trách (số trong hồ sơ cán bộ) là mình được phân công. Không kèm link: nhà mạng giữ / chặn tin
+     * có link gửi từ SIM cá nhân, nên link đi qua Zalo (nút "Gửi qua Zalo") hoặc sao chép. Không dấu để vừa 1 tin
+     * 160 ký tự. Không có số / chưa cấu hình cổng SMS thì không gửi.
      */
     private com.sosvietnam.model.payload.response.FieldLinkResponse.Sms sendFieldLinkSms(IncidentDispatch d,
-                                                                                         String incidentId, String token) {
+                                                                                         String incidentId) {
         String phone = d.getFieldMember().getPhone();
         if (phone == null || phone.isBlank()) {
             return com.sosvietnam.model.payload.response.FieldLinkResponse.Sms.builder()
                     .sent(false).error("Người phụ trách chưa có số điện thoại trong hồ sơ").build();
         }
-        String text = "SOS VN: Ca " + incidentId + " - ban la nguoi phu trach hien truong. Mo link: "
-                + publicUrl.replaceAll("/+$", "") + "/f/" + token;
+        String text = "SOS VN: Ca " + incidentId + " - ban duoc phan cong phu trach hien truong. "
+                + "Can bo dieu phoi se gui link qua Zalo, vui long mo Zalo.";
         com.sosvietnam.service.SmsService.Result r = smsService.send(phone, text);
         if (r.sent()) fieldSmsSent.put(d.getId(), java.time.Instant.now());
         return com.sosvietnam.model.payload.response.FieldLinkResponse.Sms.builder()
