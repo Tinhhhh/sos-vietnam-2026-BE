@@ -44,7 +44,7 @@ public class DemoModeServiceImpl implements DemoModeService {
     private final boolean generateDefault;
     private final double speedDefault;
     static final double MIN_SPEED_KMH = 5;
-    static final double MAX_SPEED_KMH = 150;
+    static final double MAX_SPEED_KMH = 300;
 
     private volatile Map<AppSettingKey, AppSetting> cache;
 
