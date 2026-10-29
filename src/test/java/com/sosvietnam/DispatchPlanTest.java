@@ -232,6 +232,20 @@ class DispatchPlanTest {
                 .isInstanceOf(SosException.class).hasMessageContaining("Đang chờ");
     }
 
+    /** Xã đã nhận ca uỷ quyền: tỉnh không quay lại sửa điều động (đổi trạm, uỷ quyền lại) được nữa. */
+    @Test
+    void acceptedDelegation_locksThePlanForTheProvince() {
+        IncidentDispatch d = pending();
+        d.setAssignedTo(TestGeo.member(wardOfficer("ha@sos.vn")));
+        d.setStatus(DispatchStatus.ACCEPTED);
+
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã nhận ca uỷ quyền");
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(true)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã nhận ca uỷ quyền");
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
+    }
+
     @Test
     void delegate_toOfficerBusyWithAnotherCase_409() {
         station.setWard(TestGeo.ward("Phường Tân An"));

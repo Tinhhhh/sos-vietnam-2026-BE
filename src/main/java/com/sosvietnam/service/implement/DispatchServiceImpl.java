@@ -251,6 +251,7 @@ public class DispatchServiceImpl implements DispatchService {
         }
         currentPrimary(incidentId).ifPresent(d -> {
             requireAnswered(d);
+            requireNotTakenByDelegate(d);
             requireNotDeparted(d, request);
             requireNotSimulating(d);
         });
@@ -1031,6 +1032,17 @@ public class DispatchServiceImpl implements DispatchService {
         if (d.getStatus() == DispatchStatus.PENDING_ACCEPT && d.getAssignedTo() != null) {
             throw new SosException(HttpStatus.CONFLICT, "Đang chờ " + d.getAssignedTo().displayName()
                     + " chấp nhận hoặc từ chối, chưa thay đổi được điều động");
+        }
+    }
+
+    /**
+     * Uỷ quyền đã được nhận (xã đang chọn người / chờ khởi hành): cấp tỉnh không quay lại sửa điều động (đổi trạm,
+     * điểm đến, uỷ quyền người khác) nữa; việc tiếp theo thuộc đơn vị được uỷ quyền.
+     */
+    private static void requireNotTakenByDelegate(IncidentDispatch d) {
+        if (d.getAssignedTo() != null && d.getStatus() == DispatchStatus.ACCEPTED) {
+            throw new SosException(HttpStatus.CONFLICT, d.getAssignedTo().displayName()
+                    + " đã nhận ca uỷ quyền, không quay lại sửa điều động được nữa");
         }
     }
 
