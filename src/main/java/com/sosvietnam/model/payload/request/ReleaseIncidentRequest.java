@@ -7,9 +7,9 @@ import lombok.Data;
 import java.util.UUID;
 
 /**
- * Body của POST /api/v1/incidents/{id}/release (body có thể bỏ trống).
- * to_member_id trống = trả ca về hàng đợi chung; có giá trị = giao thẳng cho cán bộ đó (unit_members, cùng đơn vị, đang rảnh).
- * note: lý do (bắt buộc khi giao ca), lưu vào incident_claims.note của lượt giữ ca vừa kết thúc.
+ * Body của POST /api/v1/incidents/{id}/release = giao ca.
+ * to_member_id: cán bộ nhận (unit_members, cùng đơn vị, đang rảnh); trống = 400 (ca đã nhận không trả về hàng đợi chung).
+ * note: lý do giao ca (bắt buộc), lưu vào incident_claims.note của lượt giữ ca vừa kết thúc.
  */
 @Data
 public class ReleaseIncidentRequest {

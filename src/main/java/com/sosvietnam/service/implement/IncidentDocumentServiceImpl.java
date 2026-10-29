@@ -9,6 +9,7 @@ import com.sosvietnam.model.entity.IncidentReport;
 import com.sosvietnam.model.payload.enums.AgencyType;
 import com.sosvietnam.model.payload.enums.CitizenSignChannel;
 import com.sosvietnam.model.payload.enums.DispatchRole;
+import com.sosvietnam.model.payload.enums.DispatchStatus;
 import com.sosvietnam.model.payload.enums.IncidentStatus;
 import com.sosvietnam.model.payload.enums.SignatureType;
 import com.sosvietnam.model.payload.enums.UnitLevel;
@@ -212,12 +213,14 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
 
     // ---------------------------------------------------------------- nháp tự điền
 
-    /** Bản nháp điền từ dữ liệu ca: đơn vị = người nhận ca cuối, kết quả = văn bản kết thúc ca (incident_reports). */
+    /**
+     * Bản nháp điền từ dữ liệu ca: cán bộ / đơn vị = người xử lý (cán bộ được uỷ quyền nếu tỉnh uỷ quyền xuống,
+     * không thì người nhận ca cuối), kết quả = văn bản kết thúc ca (incident_reports).
+     */
     IncidentDocument draft(Incident incident) {
-        IncidentClaim claim = incidentClaimRepository.findFirstByIncident_IdOrderByClaimedAtDesc(incident.getId()).orElse(null);
-        com.sosvietnam.model.entity.UnitMember member = claim == null ? null : claim.getMember();
-        Account officer = member == null ? null : member.getAccount();
         List<IncidentDispatch> dispatches = incidentDispatchRepository.findByIncident_IdOrderByDispatchedAtAsc(incident.getId());
+        com.sosvietnam.model.entity.UnitMember member = handlingMember(incident.getId(), dispatches);
+        Account officer = member == null ? null : member.getAccount();
         IncidentReport report = incidentReportRepository.findById(incident.getId()).orElse(null);
 
         AgencyType agency = officer != null && officer.getAgencyType() != null ? officer.getAgencyType() : incident.getRoutedAgency();
@@ -261,6 +264,18 @@ public class IncidentDocumentServiceImpl implements IncidentDocumentService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
+    }
+
+    /** Cán bộ được uỷ quyền của lượt chủ trì gần nhất (chưa bị từ chối), không có thì người nhận ca cuối. */
+    private com.sosvietnam.model.entity.UnitMember handlingMember(String incidentId, List<IncidentDispatch> dispatches) {
+        for (int i = dispatches.size() - 1; i >= 0; i--) {
+            IncidentDispatch d = dispatches.get(i);
+            if (d.getRole() == DispatchRole.PRIMARY && d.getAssignedTo() != null && d.getStatus() != DispatchStatus.REJECTED) {
+                return d.getAssignedTo();
+            }
+        }
+        return incidentClaimRepository.findFirstByIncident_IdOrderByClaimedAtDesc(incidentId)
+                .map(IncidentClaim::getMember).orElse(null);
     }
 
     /** Tiêu đề 2 dòng theo Nghị định 30/2020: [cơ quan cấp trên, cơ quan ban hành] */

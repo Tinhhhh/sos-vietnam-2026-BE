@@ -675,52 +675,39 @@ public class IncidentServiceImpl implements IncidentService {
         if (!me.memberId().equals(incident.getHandlerId())) {
             throw new SosException(HttpStatus.FORBIDDEN, "Bạn không giữ ca này");
         }
-        LocalDateTime now = LocalDateTime.now();
         String note = request == null ? null : request.getNote();
         UUID toId = request == null ? null : request.getToMemberId();
+        // Ca đã nhận không trả về hàng đợi chung nữa: chỉ giao cho người khác, chuyển lực lượng / lên tỉnh hoặc huỷ
+        if (toId == null) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Ca đã nhận không trả về hàng đợi; hãy giao ca cho cán bộ khác");
+        }
+        if (note == null || note.trim().length() < 5) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng nhập lý do giao ca (ít nhất 5 ký tự)");
+        }
+        LocalDateTime now = LocalDateTime.now();
         IncidentClaim myClaim = incidentClaimRepository
                 .findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .orElse(null);
-
-        if (toId != null) {
-            if (note == null || note.trim().length() < 5) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Vui lòng nhập lý do giao ca (ít nhất 5 ký tự)");
-            }
-            com.sosvietnam.model.entity.UnitMember target = unitMemberRepository.findById(toId)
-                    .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy cán bộ được giao"));
-            OfficerPrincipal to = OfficerPrincipal.of(target);
-            if (toId.equals(me.memberId()) || !to.isStaff() || !target.isActive() || target.isLocked()
-                    || !target.getAccount().isActive() || !IncidentAccess.sameUnit(me, to)) {
-                throw new SosException(HttpStatus.BAD_REQUEST, "Chỉ giao được cho cán bộ khác cùng đơn vị");
-            }
-            if (incidentRepository.existsByHandlerIdAndStatusIn(toId, IncidentStatus.ACTIVE)) {
-                throw new SosException(HttpStatus.CONFLICT, target.displayName() + " đang giữ một ca khác");
-            }
-            if (incidentRepository.handOver(id, me.memberId(), toId, now) == 0) {
-                throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
-            }
-            closeClaim(myClaim, now, ClaimEndReason.HANDED_OVER, target, note);
-            incidentClaimRepository.save(IncidentClaim.builder()
-                    .incident(incidentRepository.getReferenceById(id))
-                    .member(target)
-                    .claimedAt(now)
-                    .build()); // lý do giao ca chỉ nằm ở lượt của người giao
-            log.info("🤝 [HANDOVER] Incident {} handed from {} to {} ({})", id, me.fullName(), target.getFullName(), me.email());
-        } else {
-            if (incidentRepository.release(id, me.memberId(), now) == 0) {
-                throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
-            }
-            closeClaim(myClaim, now, ClaimEndReason.RELEASED, null, note);
-            log.info("↩️ [RELEASE] Incident {} released by {}", id, me.email());
-            // Đồng hồ leo thang tính tiếp từ lúc tạo ca: quá hạn rồi thì leo thang ngay
-            Incident released = findIncident(id);
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    escalationService.schedule(released);
-                }
-            });
+        com.sosvietnam.model.entity.UnitMember target = unitMemberRepository.findById(toId)
+                .orElseThrow(() -> new SosException(HttpStatus.NOT_FOUND, "Không tìm thấy cán bộ được giao"));
+        OfficerPrincipal to = OfficerPrincipal.of(target);
+        if (toId.equals(me.memberId()) || !to.isStaff() || !target.isActive() || target.isLocked()
+                || !target.getAccount().isActive() || !IncidentAccess.sameUnit(me, to)) {
+            throw new SosException(HttpStatus.BAD_REQUEST, "Chỉ giao được cho cán bộ khác cùng đơn vị");
         }
+        if (incidentRepository.existsByHandlerIdAndStatusIn(toId, IncidentStatus.ACTIVE)) {
+            throw new SosException(HttpStatus.CONFLICT, target.displayName() + " đang giữ một ca khác");
+        }
+        if (incidentRepository.handOver(id, me.memberId(), toId, now) == 0) {
+            throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
+        }
+        closeClaim(myClaim, now, ClaimEndReason.HANDED_OVER, target, note);
+        incidentClaimRepository.save(IncidentClaim.builder()
+                .incident(incidentRepository.getReferenceById(id))
+                .member(target)
+                .claimedAt(now)
+                .build()); // lý do giao ca chỉ nằm ở lượt của người giao
+        log.info("🤝 [HANDOVER] Incident {} handed from {} to {} ({})", id, me.fullName(), target.getFullName(), me.email());
 
         notifier.notify(id, IncidentEvent.INCIDENT_UPDATED);
         return queueView(id, me);
@@ -1056,6 +1043,7 @@ public class IncidentServiceImpl implements IncidentService {
         if (incidentRepository.cancel(id, cancelReason, IncidentStatus.HELD, now) == 0) {
             throw new SosException(HttpStatus.CONFLICT, "Ca đã thay đổi, tải lại hàng đợi");
         }
+        closeDispatches(id, now);
         String prefix = falseAlarm ? "Báo khống: " : "Cán bộ huỷ ca: ";
         incidentClaimRepository.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull(id, me.memberId())
                 .ifPresent(claim -> closeClaim(claim, now, ClaimEndReason.CLOSED, null, prefix + reason.trim()));
@@ -1067,6 +1055,7 @@ public class IncidentServiceImpl implements IncidentService {
     private boolean cancel(String id, CancelReason reason, Set<IncidentStatus> fromStatuses) {
         LocalDateTime now = LocalDateTime.now();
         if (incidentRepository.cancel(id, reason, fromStatuses, now) == 0) return false;
+        closeDispatches(id, now);
         Incident cancelled = findIncident(id);
         if (cancelled.getHandlerId() != null) {
             String note = "Ca bị huỷ" + (reason == null ? "" : ": " + reason.getLabel());
@@ -1076,6 +1065,14 @@ public class IncidentServiceImpl implements IncidentService {
         }
         notifier.notify(id, IncidentEvent.INCIDENT_REMOVED);
         return true;
+    }
+
+    static final String CANCELLED_DISPATCH_REASON = "Ca đã bị huỷ";
+
+    /** Lượt điều động của ca vừa huỷ không còn chạy (trước đây kẹt EN_ROUTE: GPS / mô phỏng vẫn tìm thấy nó). */
+    private void closeDispatches(String id, LocalDateTime now) {
+        int closed = incidentDispatchRepository.closeOpenForIncident(id, CANCELLED_DISPATCH_REASON, now);
+        if (closed > 0) log.info("🗑️ [CANCEL] Incident {}: đóng {} lượt điều động", id, closed);
     }
 
     private IncidentTrackingResponse tracking(Incident incident) {

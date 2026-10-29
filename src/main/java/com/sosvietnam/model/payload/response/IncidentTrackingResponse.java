@@ -57,8 +57,19 @@ public class IncidentTrackingResponse {
     @JsonProperty("escalated_at")
     private OffsetDateTime escalatedAt;
 
+    /** Vì sao ca lên tỉnh: cán bộ xã chuyển / quá hạn tự chuyển / người báo yêu cầu (ghi chú nội bộ không trả cho dân). */
+    @JsonProperty("escalation_reason")
+    private com.sosvietnam.model.payload.enums.EscalationReason escalationReason;
+
     @JsonProperty("accepted_at")
     private OffsetDateTime acceptedAt;
+
+    /** Cán bộ đã lập văn bản kết thúc "Đã xử lý xong" (xác nhận của cán bộ); ca đóng khi dân cũng xác nhận. */
+    @JsonProperty("officer_confirmed_at")
+    private OffsetDateTime officerConfirmedAt;
+
+    @JsonProperty("citizen_confirmed_at")
+    private OffsetDateTime citizenConfirmedAt;
 
     @JsonProperty("cancelled_at")
     private OffsetDateTime cancelledAt;
@@ -109,7 +120,10 @@ public class IncidentTrackingResponse {
                 .createdAt(withZone(i.getCreatedAt()))
                 .escalateAt(withZone(i.getEscalateAt()))
                 .escalatedAt(withZone(i.getEscalatedAt()))
+                .escalationReason(i.getEscalationReason())
                 .acceptedAt(withZone(i.getAcceptedAt()))
+                .officerConfirmedAt(withZone(i.getOfficerConfirmedAt()))
+                .citizenConfirmedAt(withZone(i.getCitizenConfirmedAt()))
                 .cancelledAt(withZone(i.getCancelledAt()))
                 .cancelReason(i.getCancelReason())
                 .cancelReasonLabel(i.getCancelReason() == null ? null : i.getCancelReason().getLabel())

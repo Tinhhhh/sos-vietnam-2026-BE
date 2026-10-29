@@ -130,6 +130,27 @@ class IncidentDocumentTest {
     }
 
     @Test
+    void draft_officerIsTheDelegatedOfficer_whenTheProvinceDelegated() {
+        // tỉnh nhận ca rồi uỷ quyền xuống phường: văn bản điền cán bộ phường (người xử lý), không phải người nhận ca
+        Account province = Account.builder().id(UUID.randomUUID()).email("congan.cantho@sos.vn").firstName("Cần Thơ")
+                .lastName("Chỉ Huy Tỉnh").role(Role.builder().id(2L).roleName("OFFICER").build())
+                .agencyType(AgencyType.POLICE).unitLevel(UnitLevel.PROVINCE).province(TestGeo.CAN_THO).isActive(true).build();
+        when(claimRepo.findFirstByIncident_IdOrderByClaimedAtDesc(anyString())).thenReturn(Optional.of(
+                IncidentClaim.builder().incident(incident).member(TestGeo.member(province)).claimedAt(incident.getCreatedAt()).build()));
+        com.sosvietnam.model.entity.RescueStation station =
+                com.sosvietnam.model.entity.RescueStation.builder().name("Công an phường Tân An").build();
+        when(dispatchRepo.findByIncident_IdOrderByDispatchedAtAsc(anyString())).thenReturn(List.of(
+                com.sosvietnam.model.entity.IncidentDispatch.builder().station(station)
+                        .role(com.sosvietnam.model.payload.enums.DispatchRole.PRIMARY)
+                        .status(com.sosvietnam.model.payload.enums.DispatchStatus.DONE)
+                        .assignedTo(TestGeo.member(officer)).build()));
+
+        IncidentDocumentRequest f = service.get(incident.getId()).getFields();
+        assertThat(f.getOfficerName()).isEqualTo("Cán Bộ Công An Tân An");
+        assertThat(f.getUnitName()).isEqualTo("Công An Phường Tân An");
+    }
+
+    @Test
     void onlyResolvedIncidents_haveADocument() {
         incident.setStatus(IncidentStatus.CANCELLED);
         assertThatThrownBy(() -> service.get(incident.getId())).isInstanceOf(SosException.class)

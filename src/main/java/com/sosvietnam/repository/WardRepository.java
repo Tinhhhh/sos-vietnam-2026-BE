@@ -20,6 +20,19 @@ public interface WardRepository extends JpaRepository<Ward, Long> {
 
     Optional<Ward> findByMalk(String malk);
 
-    @Query("SELECT w FROM Ward w WHERE ST_Contains(w.geometry, :point) = true")
-    Optional<Ward> findWardContainingPoint(@Param("point") Point point);
+    // Ranh giới gốc (cột boundary, V25) nếu đã đồng bộ từ bando, không thì bản rút gọn (geometry).
+    // boundary không map vào entity nên liệt kê cột, không SELECT w.* (khỏi kéo polygon nặng về).
+    @Query(value = """
+            SELECT w.id, w.malk, w.name, w.province_id, w.sap_nhap_tu, w.center_lat, w.center_lng, w.geometry,
+                   w.last_synced_at
+            FROM wards w
+            WHERE (w.boundary IS NOT NULL AND ST_Contains(w.boundary, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)))
+               OR (w.boundary IS NULL AND ST_Contains(w.geometry, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)))
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Ward> findWardContaining(@Param("lng") double lng, @Param("lat") double lat);
+
+    default Optional<Ward> findWardContainingPoint(Point point) {
+        return findWardContaining(point.getX(), point.getY());
+    }
 }

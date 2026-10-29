@@ -370,6 +370,15 @@ class ApiContractTest {
         verify(bandoSyncService, never()).syncFromNationalDatabase();
     }
 
+    @Test
+    void geoSyncBoundaries_requiresAdmin() throws Exception {
+        mvc.perform(post("/api/v1/geo/sync-boundaries")).andExpect(status().isUnauthorized());
+        String access = login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
+        mvc.perform(post("/api/v1/geo/sync-boundaries").header("Authorization", "Bearer " + access))
+                .andExpect(status().isForbidden());
+        verify(bandoSyncService, never()).startBoundarySync();
+    }
+
     private String officerBearer() throws Exception {
         return "Bearer " + login("officer@sos.vn", "Officer@123").get("data").get("access_token").asText();
     }
@@ -567,7 +576,7 @@ class ApiContractTest {
                 .andExpect(status().isOk());
         verify(incidentService).releaseIncident(eq("SOS-1"), argThat(r -> to.equals(r.getToMemberId()) && "Hết ca".equals(r.getNote())));
 
-        // Nhả về hàng đợi chung: không cần body
+        // Body trống vẫn tới service (service trả 400 vì ca đã nhận không trả về hàng đợi)
         mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access))
                 .andExpect(status().isOk());
     }

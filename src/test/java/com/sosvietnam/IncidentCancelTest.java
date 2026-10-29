@@ -50,7 +50,8 @@ class IncidentCancelTest {
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
     final com.sosvietnam.repository.UnitMemberRepository members = mock(com.sosvietnam.repository.UnitMemberRepository.class);
     final com.sosvietnam.service.DemoModeService demoMode = mock(com.sosvietnam.service.DemoModeService.class);
-    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), mock(com.sosvietnam.repository.IncidentDispatchRepository.class), mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
+    final com.sosvietnam.repository.IncidentDispatchRepository dispatchRepo = mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
+    final IncidentServiceImpl service = new IncidentServiceImpl(incidentRepo, claimRepo, mock(com.sosvietnam.repository.IncidentMediaRepository.class), dispatchRepo, mock(com.sosvietnam.repository.RescueStationRepository.class), accountRepo, members, new com.sosvietnam.security.CurrentOfficer(),
             mock(GeoService.class), mock(MediaStorageService.class), notifier, mock(IncidentEscalationService.class),
             mock(com.sosvietnam.repository.IncidentReportRepository.class), mock(com.sosvietnam.repository.IncidentRouteRepository.class),
             mock(com.sosvietnam.repository.IncidentDocumentRepository.class), demoMode,
@@ -159,6 +160,9 @@ class IncidentCancelTest {
         assertThat(before.getValue()).isBetween(LocalDateTime.now().minusMinutes(61), LocalDateTime.now().minusMinutes(59));
         verify(incidentRepo).cancel(eq("OLD-1"), eq(CancelReason.NO_RESPONDER), eq(Set.of(IncidentStatus.PENDING)), any());
         verify(notifier).notify("OLD-1", IncidentEvent.INCIDENT_REMOVED);
+        // lượt điều động của ca huỷ được đóng (trước đây kẹt EN_ROUTE)
+        verify(dispatchRepo).closeOpenForIncident(eq("OLD-1"), eq("Ca đã bị huỷ"), any());
+        verify(dispatchRepo, never()).closeOpenForIncident(eq("OLD-2"), any(), any());
         verify(notifier, never()).notify(eq("OLD-2"), any());
     }
 }
