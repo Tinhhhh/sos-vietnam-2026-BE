@@ -42,6 +42,16 @@ public class StationController {
                 geoService.getStations(pageNo, pageSize, province, agency, level, sortBy, sortDir));
     }
 
+    @Operation(summary = "Nearest hospitals / police for the citizen SOS screen",
+            description = "kind: HOSPITAL | POLICE. Up to 5 within 50 km, nearest first; auto-generated stations "
+                    + "(estimated point, no phone) are left out. Public info only: name, level, phone, address, point, "
+                    + "distance_m (straight line). Role required: none")
+    @GetMapping("/nearby")
+    public ResponseEntity<Object> getNearby(@RequestParam("lat") double lat, @RequestParam("lng") double lng,
+                                            @RequestParam("kind") AgencyType kind) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Nearby stations", geoService.findNearbyForCitizen(lat, lng, kind));
+    }
+
     @Operation(summary = "Find nearest stations",
             description = "agency: POLICE | CSGT | FIRE | HOSPITAL (optional). radius in meters. Unit contacts only with "
                     + "an officer token, like GET /stations. Role required: none")

@@ -66,6 +66,8 @@ public class SecurityConfig {
                         // Dân chỉ cần tra xã / tỉnh từ toạ độ (màn gửi SOS). Danh bạ trạm, danh sách tỉnh / xã chỉ màn cán bộ
                         // dùng: khoá lại để không bị cào cả danh bạ từ ngoài (25/10/2026).
                         .requestMatchers(HttpMethod.GET, "/api/v1/geo/resolve").permitAll()
+                        // màn báo SOS: 5 bệnh viện / cơ quan công an gần nhất (chỉ thông tin công bố, tối đa 5)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/stations/nearby").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/geo/**", "/api/v1/stations", "/api/v1/stations/**")
                                 .hasAnyAuthority(STAFF)
 

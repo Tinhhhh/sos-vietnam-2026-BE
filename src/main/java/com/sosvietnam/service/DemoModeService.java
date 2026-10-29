@@ -18,4 +18,7 @@ public interface DemoModeService {
     DemoSettingsResponse get();
 
     DemoSettingsResponse update(DemoSettingsRequest request);
+
+    /** Xoá hẳn ca [DEMO]: OPEN = ca đang mở, ALL = mọi ca demo. Hàng đợi đang mở gỡ thẻ ngay. */
+    com.sosvietnam.model.payload.response.DemoPurgeResponse purge(com.sosvietnam.model.payload.enums.DemoPurgeScope scope);
 }

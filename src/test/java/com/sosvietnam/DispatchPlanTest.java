@@ -232,6 +232,20 @@ class DispatchPlanTest {
                 .isInstanceOf(SosException.class).hasMessageContaining("Đang chờ");
     }
 
+    /** Xã đã nhận ca uỷ quyền: tỉnh không quay lại sửa điều động (đổi trạm, uỷ quyền lại) được nữa. */
+    @Test
+    void acceptedDelegation_locksThePlanForTheProvince() {
+        IncidentDispatch d = pending();
+        d.setAssignedTo(TestGeo.member(wardOfficer("ha@sos.vn")));
+        d.setStatus(DispatchStatus.ACCEPTED);
+
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(false)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã nhận ca uỷ quyền");
+        assertThatThrownBy(() -> service.savePlan("SOS-1", request(true)))
+                .isInstanceOf(SosException.class).hasMessageContaining("đã nhận ca uỷ quyền");
+        assertThat(d.getStatus()).isEqualTo(DispatchStatus.ACCEPTED);
+    }
+
     @Test
     void delegate_toOfficerBusyWithAnotherCase_409() {
         station.setWard(TestGeo.ward("Phường Tân An"));
@@ -370,6 +384,18 @@ class DispatchPlanTest {
         assertThat(plan.getLastPosition().getLatitude()).isEqualTo(10.0281);
         verify(simulation).stop(11L);
         assertThat(service.getPlan("SOS-1", null).getLastPosition()).isNotNull();
+    }
+
+    @Test
+    void plan_carriesTheSimulationSpeed_forTheEta() {
+        IncidentDispatch d = pending();
+        d.setStatus(DispatchStatus.EN_ROUTE);
+        destinationAt(d);
+
+        when(simulation.speedKmh()).thenReturn(40.0);
+        assertThat(service.getPlan("SOS-1", null).getEtaSpeedKmh()).isEqualTo(40.0);
+        when(simulation.speedKmh()).thenReturn(0.0); // chưa biết tốc độ: FE dùng thời gian của tuyến
+        assertThat(service.getPlan("SOS-1", null).getEtaSpeedKmh()).isNull();
     }
 
     @Test

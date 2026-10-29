@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/** Trạng thái ca demo: có tự sinh không, có ẩn không, đang có bao nhiêu ca [DEMO] còn mở. */
+/** Trạng thái ca demo: có tự sinh không, có ẩn không, đang có bao nhiêu ca [DEMO] còn mở / tổng cộng. */
 @Data
 @Builder
 @NoArgsConstructor
@@ -27,6 +27,10 @@ public class DemoSettingsResponse {
 
     @JsonProperty("open_count")
     private long openCount;
+
+    /** Mọi ca [DEMO] còn trong hệ thống (mở + đã đóng): nút "Dọn tất cả" xoá chừng này ca. */
+    @JsonProperty("total_count")
+    private long totalCount;
 
     @JsonProperty("updated_at")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

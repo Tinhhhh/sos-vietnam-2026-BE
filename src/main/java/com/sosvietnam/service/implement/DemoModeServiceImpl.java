@@ -1,5 +1,9 @@
 package com.sosvietnam.service.implement;
 
+import com.sosvietnam.model.payload.enums.DemoPurgeScope;
+import com.sosvietnam.model.payload.response.DemoPurgeResponse;
+import com.sosvietnam.repository.IncidentDispatchRepository;
+import com.sosvietnam.service.DispatchSimulationService;
 import com.sosvietnam.model.entity.AppSetting;
 import com.sosvietnam.model.payload.enums.AppSettingKey;
 import com.sosvietnam.model.payload.enums.IncidentEvent;
@@ -24,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -41,6 +47,8 @@ public class DemoModeServiceImpl implements DemoModeService {
     private final UnitMemberRepository unitMemberRepository;
     private final CurrentOfficer currentOfficer;
     private final IncidentNotifier notifier;
+    private final IncidentDispatchRepository incidentDispatchRepository;
+    private final DispatchSimulationService dispatchSimulationService;
     private final boolean generateDefault;
     private final double speedDefault;
     static final double MIN_SPEED_KMH = 5;
@@ -48,10 +56,12 @@ public class DemoModeServiceImpl implements DemoModeService {
 
     private volatile Map<AppSettingKey, AppSetting> cache;
 
-    // @Lazy: IncidentNotifierImpl cũng hỏi service này (ẩn ca demo khỏi tin STOMP)
+    // @Lazy: IncidentNotifierImpl cũng hỏi service này (ẩn ca demo khỏi tin STOMP), mô phỏng hỏi tốc độ
     public DemoModeServiceImpl(AppSettingRepository appSettingRepository, IncidentRepository incidentRepository,
                                UnitMemberRepository unitMemberRepository, CurrentOfficer currentOfficer,
                                @Lazy IncidentNotifier notifier,
+                               IncidentDispatchRepository incidentDispatchRepository,
+                               @Lazy DispatchSimulationService dispatchSimulationService,
                                @Value("${app.demo.incidents.enabled:false}") boolean generateDefault,
                                @Value("${app.traccar.simulation.speed-kmh:50}") double speedDefault) {
         this.appSettingRepository = appSettingRepository;
@@ -59,6 +69,8 @@ public class DemoModeServiceImpl implements DemoModeService {
         this.unitMemberRepository = unitMemberRepository;
         this.currentOfficer = currentOfficer;
         this.notifier = notifier;
+        this.incidentDispatchRepository = incidentDispatchRepository;
+        this.dispatchSimulationService = dispatchSimulationService;
         this.generateDefault = generateDefault;
         this.speedDefault = speedDefault;
     }
@@ -96,6 +108,7 @@ public class DemoModeServiceImpl implements DemoModeService {
                 .hidden(hidden())
                 .simulationSpeedKmh(simulationSpeedKmh())
                 .openCount(incidentRepository.findDemoIds(IncidentStatus.ACTIVE, DemoIncidents.LEGACY_NAMES).size())
+                .totalCount(incidentRepository.countDemo(DemoIncidents.LEGACY_NAMES))
                 .updatedAt(last == null ? null : last.getUpdatedAt())
                 .updatedByName(by)
                 .build();
@@ -124,6 +137,32 @@ public class DemoModeServiceImpl implements DemoModeService {
                     .forEach(id -> notifier.notify(id, IncidentEvent.INCIDENT_UPDATED));
         }
         return get();
+    }
+
+    /** Xoá hẳn theo từng lô (danh sách IN không quá dài khi còn hàng nghìn ca demo cũ). */
+    private static final int PURGE_BATCH = 500;
+
+    @Override
+    @Transactional
+    public DemoPurgeResponse purge(DemoPurgeScope scope) {
+        OfficerPrincipal me = currentOfficer.require();
+        if (scope == null) throw new SosException(HttpStatus.BAD_REQUEST, "Chọn phạm vi dọn: OPEN hoặc ALL");
+        List<String> ids = incidentRepository.findDemoIds(
+                scope == DemoPurgeScope.OPEN ? IncidentStatus.ACTIVE : EnumSet.allOf(IncidentStatus.class),
+                DemoIncidents.LEGACY_NAMES);
+        long deleted = 0;
+        if (!ids.isEmpty()) {
+            // ca còn mở: hàng đợi đang mở gỡ thẻ, xe mô phỏng dừng (ca đã đóng không còn trên hàng đợi)
+            List<String> open = scope == DemoPurgeScope.OPEN ? ids
+                    : incidentRepository.findDemoIds(IncidentStatus.ACTIVE, DemoIncidents.LEGACY_NAMES);
+            notifier.notifyDeleted(open);
+            if (!open.isEmpty()) incidentDispatchRepository.findIdsByIncidentIds(open).forEach(dispatchSimulationService::stop);
+            for (int from = 0; from < ids.size(); from += PURGE_BATCH) {
+                deleted += incidentRepository.deleteWithClaims(ids.subList(from, Math.min(ids.size(), from + PURGE_BATCH)));
+            }
+        }
+        log.info("🧹 [DEMO] {} dọn ca demo ({}): xoá {} ca", me.email(), scope, deleted);
+        return DemoPurgeResponse.builder().scope(scope).deleted(deleted).settings(get()).build();
     }
 
     private void save(AppSettingKey key, boolean value, OfficerPrincipal me) {

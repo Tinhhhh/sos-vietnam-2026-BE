@@ -38,6 +38,12 @@ public interface GeoService {
         public static final Area NONE = new Area(null, null);
     }
 
+    /**
+     * Màn báo SOS của người dân (không đăng nhập): 5 cơ sở gần nhất của một loại (POLICE / HOSPITAL), bỏ trạm tự sinh
+     * (toạ độ ước, chưa có SĐT). Chỉ trả thông tin công bố, không kèm liên hệ của đơn vị.
+     */
+    List<com.sosvietnam.model.payload.response.NearbyStationResponse> findNearbyForCitizen(double lat, double lng, AgencyType kind);
+
     List<StationResponse> findNearestStations(double lat, double lng, AgencyType agencyType, double radiusMeters, int limit);
 
     ListResponse getStations(int pageNo, int pageSize, String province, AgencyType agencyType, StationLevel level,

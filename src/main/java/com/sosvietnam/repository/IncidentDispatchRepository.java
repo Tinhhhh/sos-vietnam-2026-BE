@@ -25,6 +25,10 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
     /** Lượt chủ trì của nhiều ca (thẻ hàng đợi hiện trạng thái uỷ quyền). */
     List<IncidentDispatch> findByIncident_IdInAndRole(java.util.Collection<String> incidentIds, DispatchRole role);
 
+    /** Mã mọi lượt điều động của các ca (dừng mô phỏng trước khi xoá ca). */
+    @org.springframework.data.jpa.repository.Query("SELECT d.id FROM IncidentDispatch d WHERE d.incident.id IN :incidentIds")
+    List<Long> findIdsByIncidentIds(@org.springframework.data.repository.query.Param("incidentIds") java.util.Collection<String> incidentIds);
+
     /** Ca đang được uỷ quyền cho một đơn vị cấp xã (lực lượng + xã của trạm), để đưa vào hàng đợi của xã. */
     @org.springframework.data.jpa.repository.Query("""
             SELECT d FROM IncidentDispatch d JOIN FETCH d.incident i

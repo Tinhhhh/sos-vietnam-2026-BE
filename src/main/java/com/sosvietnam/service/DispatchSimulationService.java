@@ -21,4 +21,6 @@ public interface DispatchSimulationService {
 
     /** Quãng đường xe đi trong một bước (tốc độ x chu kỳ), để chia tuyến. */
     double stepMeters();
+    /** Tốc độ xe mô phỏng (Cài đặt › Mô phỏng), km/h: FE tính "Dự kiến tới nơi" theo tốc độ này. */
+    double speedKmh();
 }
