@@ -244,30 +244,20 @@ class IncidentRoutingTest {
     }
 
     @Test
-    void release_toQueue_closesClaim_andReschedulesEscalation() {
+    void release_toQueue_isRefused() {
         loginAs(caTanAn);
         Incident held = pendingWardIncident();
         held.setStatus(IncidentStatus.VERIFYING);
         held.setHandlerId(caTanAn.getId());
         when(incidentRepo.findById("SOS-1")).thenReturn(Optional.of(held));
-        when(incidentRepo.release(eq("SOS-1"), eq(caTanAn.getId()), any())).thenReturn(1);
-        IncidentClaim open = IncidentClaim.builder().claimedAt(LocalDateTime.now()).build();
-        when(claimRepo.findFirstByIncident_IdAndMember_IdAndReleasedAtIsNull("SOS-1", caTanAn.getId())).thenReturn(Optional.of(open));
-        when(notifier.toQueueViews(any(), any())).thenReturn(List.of(new com.sosvietnam.model.payload.response.IncidentQueueResponse()));
 
-        // Không có transaction thật trong unit test: đăng ký afterCommit cần synchronization đang bật
-        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
-        try {
-            service.releaseIncident("SOS-1", null);
-            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
-        } finally {
-            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
-        }
-
-        assertThat(open.getEndReason()).isEqualTo(ClaimEndReason.RELEASED);
-        assertThat(open.getReleasedAt()).isNotNull();
-        verify(escalation).schedule(held);
+        // Ca đã nhận không trả về hàng đợi chung: thiếu to_member_id (kể cả body trống) = 400
+        ReleaseIncidentRequest noTarget = new ReleaseIncidentRequest();
+        noTarget.setNote("Hết ca trực");
+        assertThatThrownBy(() -> service.releaseIncident("SOS-1", null)).extracting("httpStatus").isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThatThrownBy(() -> service.releaseIncident("SOS-1", noTarget)).extracting("httpStatus").isEqualTo(HttpStatus.BAD_REQUEST);
+        verify(incidentRepo, never()).release(any(), any(), any());
+        verify(escalation, never()).schedule(any());
     }
 
     @Test

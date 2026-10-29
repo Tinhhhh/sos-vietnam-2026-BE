@@ -576,7 +576,7 @@ class ApiContractTest {
                 .andExpect(status().isOk());
         verify(incidentService).releaseIncident(eq("SOS-1"), argThat(r -> to.equals(r.getToMemberId()) && "Hết ca".equals(r.getNote())));
 
-        // Nhả về hàng đợi chung: không cần body
+        // Body trống vẫn tới service (service trả 400 vì ca đã nhận không trả về hàng đợi)
         mvc.perform(post("/api/v1/incidents/SOS-1/release").header("Authorization", "Bearer " + access))
                 .andExpect(status().isOk());
     }

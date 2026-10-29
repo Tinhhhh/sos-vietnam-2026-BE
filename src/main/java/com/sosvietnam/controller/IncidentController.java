@@ -103,14 +103,14 @@ public class IncidentController {
                 incidentService.claimIncident(id));
     }
 
-    @Operation(summary = "Release or hand over an incident I hold",
-            description = "No to_account_id: back to the shared queue (the 15-minute escalation clock keeps running "
-                    + "from creation). With to_account_id: hand over to an idle officer of the same unit. "
+    @Operation(summary = "Hand over an incident I hold",
+            description = "to_member_id + note (≥ 5 chars): hand over to an idle officer of the same unit. "
+                    + "A held case is not put back in the shared queue: no to_member_id = 400. "
                     + "Role required: OFFICER, ADMIN")
     @PostMapping("/{id}/release")
     public ResponseEntity<Object> releaseIncident(@PathVariable("id") String id,
                                                   @Valid @RequestBody(required = false) ReleaseIncidentRequest request) {
-        return ResponseBuilder.returnData(HttpStatus.OK, "Đã nhả ca " + id,
+        return ResponseBuilder.returnData(HttpStatus.OK, "Đã giao ca " + id,
                 incidentService.releaseIncident(id, request));
     }
 
