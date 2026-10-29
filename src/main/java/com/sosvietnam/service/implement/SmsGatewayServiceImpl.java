@@ -69,6 +69,8 @@ public class SmsGatewayServiceImpl implements SmsService {
             body.put("textMessage", Map.of("text", text));
             body.put("phoneNumbers", List.of(to));
             body.put("ttl", ttlSeconds);
+            // "Sent" chỉ là tổng đài nhà mạng đã nhận; có báo cáo thì app ghi được lúc máy người nhận có tin (Delivered)
+            body.put("withDeliveryReport", true);
             if (StringUtils.hasText(sim)) body.put("simNumber", Integer.parseInt(sim.trim()));
             if (priority != 0) body.put("priority", priority);
             String auth = Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
@@ -87,11 +89,20 @@ public class SmsGatewayServiceImpl implements SmsService {
                         ? "Sai tài khoản cổng SMS" : "Cổng SMS lỗi (HTTP " + response.statusCode() + ")");
             }
             // chỉ là lúc máy chủ nhận lệnh; chậm sau đó nằm ở chặng đẩy xuống điện thoại + app gửi bằng SIM
-            log.info("✉️ [SMS] cổng SMS nhận lệnh cho {} sau {} ms", mask(to), tookMs);
+            // id tin: tra trạng thái (Sent / Delivered và giờ) trong app hoặc GET {url}/message/{id} để biết chậm ở đâu
+            log.info("✉️ [SMS] cổng SMS nhận lệnh cho {} sau {} ms, id {}", mask(to), tookMs, messageId(response.body()));
             return new Result(true, null);
         } catch (Exception e) {
             log.warn("📵 [SMS] không gọi được cổng SMS: {}", e.getMessage());
             return new Result(false, "Không kết nối được cổng SMS");
+        }
+    }
+
+    private String messageId(String body) {
+        try {
+            return objectMapper.readTree(body).path("id").asText("?");
+        } catch (Exception e) {
+            return "?";
         }
     }
 

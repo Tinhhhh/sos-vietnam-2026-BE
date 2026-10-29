@@ -93,7 +93,7 @@ class FieldLinkTest {
         SecurityContextHolder.clearContext();
     }
 
-    /** Người phụ trách có số: link đi qua SMS (không dấu, 1 tin), cấp lại ngay sau đó bị chặn 60 giây. */
+    /** Người phụ trách có số: SMS báo phân công (không link, không dấu, 1 tin), cấp lại ngay sau đó bị chặn 60 giây. */
     @Test
     void issueLink_smsTheFieldOfficer_thenCooldown() {
         goer.setPhone("0912345678");
@@ -102,7 +102,9 @@ class FieldLinkTest {
         FieldLinkResponse r = service.issueFieldLink("SOS-1");
         org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(sms).send(eq("0912345678"), text.capture());
-        assertThat(text.getValue()).contains("SOS-1").endsWith("/f/" + r.getToken())
+        // nhà mạng giữ / chặn tin có link: link đi qua Zalo, SMS chỉ báo
+        assertThat(text.getValue()).contains("SOS-1").contains("Zalo").doesNotContain(r.getToken())
+                .doesNotContain("http").doesNotContain("/f/")
                 .matches("\\p{ASCII}+").hasSizeLessThanOrEqualTo(160);
         assertThat(r.getSms().isSent()).isTrue();
         assertThat(r.getSms().getPhoneMasked()).doesNotContain("2345");
