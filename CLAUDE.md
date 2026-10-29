@@ -63,3 +63,4 @@
 
 ## Làm sau
 - Báo hộ (PROXY), OTP, Google Routes qua BE, "Đã xử lý xong" từ trang link, giao diện ADMIN khoá SĐT, quên mật khẩu, ghi âm / lưu video cuộc gọi, gộp ca trùng, lỗi mô phỏng "Rẽ đường khác".
+- **Siết token cán bộ** (đã rà, chưa sửa): (1) access 24h / refresh 7 ngày quá dài cho máy dùng chung → access 15–30', refresh hạn tuyệt đối ~12h (1 ca) + hết khi bỏ không ~2h, thêm "Đổi cán bộ / Khoá màn hình" giữ bước chọn cán bộ; (2) `/auth/login` không giới hạn sai mật khẩu đơn vị + khoá PIN vĩnh viễn dễ bị đồng nghiệp cố tình khoá → giới hạn IP + email, khoá PIN tạm 15' (khoá hẳn lần 3 / ngày); (3) `refresh_tokens.token` lưu nguyên văn + refresh đã thu hồi gửi lại chỉ 401 → lưu sha256 (Flyway mới), gặp token dùng lại thì `disableOldTokens(mid)`, dọn dòng hết hạn; (4) `refreshToken` chỉ kiểm cán bộ, không kiểm tài khoản đơn vị còn hoạt động / chưa khoá. Nhỏ hơn: thu hồi chỉ ở RAM khi không Redis, token ở `localStorage`, ADMIN không PIN / 2FA.
