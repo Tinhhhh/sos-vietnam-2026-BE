@@ -7,7 +7,8 @@ import lombok.Getter;
 public enum AppSettingKey {
     DEMO_GENERATE("Tự động sinh ca [DEMO] mỗi phút"),
     DEMO_HIDDEN("Ẩn ca [DEMO] khỏi hàng đợi và lịch sử"),
-    SIMULATION_SPEED_KMH("Tốc độ xe khi bấm Mô phỏng (km/h)");
+    SIMULATION_SPEED_KMH("Tốc độ xe khi bấm Mô phỏng (km/h)"),
+    PHONE_LOCK_ENABLED("Khoá SĐT báo tin giả (tắt = không khoá mới, khoá cũ không chặn)");
 
     private final String description;
 

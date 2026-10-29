@@ -1,10 +1,14 @@
 package com.sosvietnam.service.implement;
 
+import com.sosvietnam.model.entity.AppSetting;
 import com.sosvietnam.model.entity.PhoneLock;
+import com.sosvietnam.model.payload.enums.AppSettingKey;
 import com.sosvietnam.model.payload.enums.PhoneLockReason;
 import com.sosvietnam.model.payload.exception.SosException;
 import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.model.payload.response.PhoneLockResponse;
+import com.sosvietnam.model.payload.response.PhoneLockSettingsResponse;
+import com.sosvietnam.repository.AppSettingRepository;
 import com.sosvietnam.repository.PhoneLockRepository;
 import com.sosvietnam.security.CurrentOfficer;
 import com.sosvietnam.service.PhoneLockService;
@@ -37,12 +41,13 @@ public class PhoneLockServiceImpl implements PhoneLockService {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
     private final PhoneLockRepository phoneLockRepository;
+    private final AppSettingRepository appSettingRepository;
     private final CurrentOfficer currentOfficer;
 
     @Override
     @Transactional(readOnly = true)
     public void checkCanReport(String phone) {
-        if (phone == null || phone.isBlank()) return;
+        if (phone == null || phone.isBlank() || !enabled()) return;
         List<PhoneLock> active = phoneLockRepository.findActiveForPhone(phone, LocalDateTime.now());
         if (active.isEmpty()) return;
         PhoneLock lock = active.stream().filter(PhoneLock::isPermanent).findFirst().orElse(active.get(0));
@@ -71,7 +76,7 @@ public class PhoneLockServiceImpl implements PhoneLockService {
      * Đang bị khoá thì thôi (không khoá chồng).
      */
     private void evaluate(String phone, PhoneLockReason reason) {
-        if (phone == null || phone.isBlank()) return;
+        if (phone == null || phone.isBlank() || !enabled()) return;
         LocalDateTime now = LocalDateTime.now();
         if (!phoneLockRepository.findActiveForPhone(phone, now).isEmpty()) return;
         LocalDateTime since = now.minusHours(LOCK_HOURS);
@@ -145,5 +150,36 @@ public class PhoneLockServiceImpl implements PhoneLockService {
         PhoneLock saved = phoneLockRepository.save(lock);
         log.info("✅ [PHONE LOCK] lock {} lifted by {}", id, me.email());
         return PhoneLockResponse.from(saved, now);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PhoneLockSettingsResponse getSettings() {
+        AppSetting row = appSettingRepository.findById(AppSettingKey.PHONE_LOCK_ENABLED).orElse(null);
+        return PhoneLockSettingsResponse.builder()
+                .enabled(row == null || Boolean.parseBoolean(row.getValue()))
+                .updatedAt(row == null ? null : row.getUpdatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public PhoneLockSettingsResponse updateSettings(Boolean enabled) {
+        var me = currentOfficer.require();
+        if (enabled == null) throw new SosException(HttpStatus.BAD_REQUEST, "Thiếu enabled");
+        appSettingRepository.save(AppSetting.builder()
+                .key(AppSettingKey.PHONE_LOCK_ENABLED)
+                .value(Boolean.toString(enabled))
+                .updatedAt(LocalDateTime.now())
+                .updatedBy(me.memberId())
+                .build());
+        log.info("🚫 [PHONE LOCK] {} turned phone locks {}", me.email(), enabled ? "ON" : "OFF");
+        return getSettings();
+    }
+
+    // đọc thẳng DB (chỉ khi tạo ca / báo khống / bấm nhầm), không cần bản sao RAM
+    private boolean enabled() {
+        return appSettingRepository.findById(AppSettingKey.PHONE_LOCK_ENABLED)
+                .map(s -> Boolean.parseBoolean(s.getValue())).orElse(true);
     }
 }

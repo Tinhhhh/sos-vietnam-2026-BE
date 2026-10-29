@@ -2,6 +2,7 @@ package com.sosvietnam.controller;
 
 import com.sosvietnam.model.payload.exception.ResponseBuilder;
 import com.sosvietnam.model.payload.request.LiftPhoneLockRequest;
+import com.sosvietnam.model.payload.request.PhoneLockSettingsRequest;
 import com.sosvietnam.service.PhoneLockService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,5 +37,21 @@ public class AdminPhoneLockController {
     @PostMapping("/{id}/lift")
     public ResponseEntity<Object> lift(@PathVariable Long id, @RequestBody LiftPhoneLockRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã gỡ khoá", phoneLockService.lift(id, request.getNote()));
+    }
+
+    @Operation(summary = "Phone lock switch",
+            description = "data { enabled, updated_at }. Off = no new locks and existing locks do not block SOS "
+                    + "(they come back when switched on). Role required: ADMIN")
+    @GetMapping("/settings")
+    public ResponseEntity<Object> settings() {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved phone lock settings",
+                phoneLockService.getSettings());
+    }
+
+    @Operation(summary = "Turn phone locks on / off", description = "Body { enabled }. Role required: ADMIN")
+    @PutMapping("/settings")
+    public ResponseEntity<Object> updateSettings(@RequestBody PhoneLockSettingsRequest request) {
+        return ResponseBuilder.returnData(HttpStatus.OK, "Successfully updated phone lock settings",
+                phoneLockService.updateSettings(request.getEnabled()));
     }
 }

@@ -2,6 +2,7 @@ package com.sosvietnam.service;
 
 import com.sosvietnam.model.payload.response.ListResponse;
 import com.sosvietnam.model.payload.response.PhoneLockResponse;
+import com.sosvietnam.model.payload.response.PhoneLockSettingsResponse;
 
 import java.util.Collection;
 import java.util.Map;
@@ -30,4 +31,9 @@ public interface PhoneLockService {
 
     /** ADMIN gỡ khoá (người dân đã trình bày với công an / liên hệ hệ thống). */
     PhoneLockResponse lift(Long id, String note);
+
+    /** ADMIN: công tắc bật / tắt khoá SĐT (app_settings PHONE_LOCK_ENABLED, chưa có dòng = bật). */
+    PhoneLockSettingsResponse getSettings();
+
+    PhoneLockSettingsResponse updateSettings(Boolean enabled);
 }
