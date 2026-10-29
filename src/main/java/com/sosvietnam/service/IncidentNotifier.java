@@ -21,6 +21,12 @@ public interface IncidentNotifier {
     /** Gỡ thẻ ca khỏi hàng đợi của cán bộ lực lượng cũ (sau khi ca chuyển sang lực lượng khác). */
     void notifyRemovedFor(String incidentId, com.sosvietnam.model.payload.enums.AgencyType previousAgency);
 
+    /**
+     * Các ca sắp bị xoá hẳn (dọn ca demo): dựng thẻ ngay lúc còn dữ liệu, gửi INCIDENT_REMOVED cho cán bộ đang xem
+     * sau khi transaction xoá xong (lỗi thì không gửi).
+     */
+    void notifyDeleted(java.util.Collection<String> incidentIds);
+
     /** Cán bộ đang kết nối màn hình trực ban (mỗi phiên STOMP 1 cán bộ; chỉ đúng khi 1 instance BE). */
     List<OfficerPrincipal> onlineOfficers();
 

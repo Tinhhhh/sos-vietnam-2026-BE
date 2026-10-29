@@ -48,6 +48,19 @@ public interface IncidentRepository extends JpaRepository<Incident, String> {
     List<String> findDemoIds(@Param("statuses") Collection<IncidentStatus> statuses,
                              @Param("legacyNames") Collection<String> legacyNames);
 
+    /** Mọi ca [DEMO], mọi trạng thái (Cài đặt › Ca demo: số ca "Dọn tất cả" sẽ xoá). */
+    @Query("SELECT count(i) FROM Incident i WHERE i.citizenName LIKE '[DEMO] %' OR i.citizenName IN :legacyNames")
+    long countDemo(@Param("legacyNames") Collection<String> legacyNames);
+
+    /**
+     * Xoá hẳn các ca (nút "Dọn ca [DEMO]"): lượt giữ ca xoá trước (khoá ngoại không cascade); lượt điều động,
+     * tuyến, văn bản, báo cáo, ảnh / video tự xoá theo (ON DELETE CASCADE). File trên R2 không xoá.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "WITH claims AS (DELETE FROM incident_claims WHERE incident_id IN (:ids)) "
+            + "DELETE FROM incidents WHERE id IN (:ids)", nativeQuery = true)
+    int deleteWithClaims(@Param("ids") Collection<String> ids);
+
     /** Ca Công an cấp xã còn chờ, chưa leo thang: hẹn giờ lại khi BE khởi động. */
     @Query("""
         SELECT i FROM Incident i

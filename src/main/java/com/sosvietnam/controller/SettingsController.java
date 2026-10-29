@@ -35,4 +35,15 @@ public class SettingsController {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully updated demo settings",
                 demoModeService.update(request));
     }
+
+    @Operation(summary = "Delete [DEMO] incidents",
+            description = "Body { scope }: OPEN = open [DEMO] incidents (pending, verifying, dispatching), ALL = every "
+                    + "[DEMO] incident. Deleted for good with their claims, trips, routes, reports, documents and media "
+                    + "rows (R2 files stay); open queues drop the cards. Returns { scope, deleted, settings }. "
+                    + "Role required: OFFICER, ADMIN")
+    @PostMapping("/demo/purge")
+    public ResponseEntity<Object> purgeDemo(@RequestBody @jakarta.validation.Valid com.sosvietnam.model.payload.request.DemoPurgeRequest request) {
+        var result = demoModeService.purge(request.getScope());
+        return ResponseBuilder.returnData(HttpStatus.OK, "Đã xoá " + result.getDeleted() + " ca [DEMO]", result);
+    }
 }

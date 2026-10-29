@@ -102,6 +102,52 @@ public class IncidentNotifierImpl implements IncidentNotifier {
     }
 
     @Override
+    public void notifyDeleted(Collection<String> incidentIds) {
+        if (incidentIds == null || incidentIds.isEmpty()) return;
+        // dựng tin ngay (sau khi xoá thì không đọc được ca nữa), gửi sau khi xoá xong
+        List<Runnable> sends = new ArrayList<>();
+        try {
+            List<Incident> incidents = incidentRepository.findAllById(incidentIds);
+            Map<UUID, String> names = handlerNames(incidents);
+            Map<String, IncidentQueueResponse.MediaCounts> media = mediaCounts(incidents);
+            for (Incident incident : incidents) {
+                IncidentQueueResponse.MediaCounts mediaCount =
+                        media.getOrDefault(incident.getId(), IncidentQueueResponse.MediaCounts.NONE);
+                IncidentDispatch dispatch = incidentDispatchRepository
+                        .findFirstByIncident_IdAndRoleOrderByDispatchedAtDesc(incident.getId(), DispatchRole.PRIMARY).orElse(null);
+                for (SimpUser user : userRegistry.getUsers()) {
+                    if (!(user.getPrincipal() instanceof OfficerPrincipal viewer)) continue;
+                    if (!IncidentAccess.canView(viewer, incident) && !IncidentAccess.isDelegatedUnit(viewer, dispatch)
+                            && !IncidentAccess.isStationUnit(viewer, dispatch)) continue;
+                    IncidentEventMessage message = new IncidentEventMessage(IncidentEvent.INCIDENT_REMOVED,
+                            toView(incident, viewer, names.get(incident.getHandlerId()), mediaCount, dispatch));
+                    sends.add(() -> messagingTemplate.convertAndSendToUser(viewer.getName(), QUEUE_DESTINATION, message));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not prepare removal of {} deleted incident(s): {}", incidentIds.size(), e.getMessage());
+            return;
+        }
+        Runnable push = () -> sends.forEach(s -> {
+            try {
+                s.run();
+            } catch (Exception e) {
+                log.warn("Could not push removal of a deleted incident: {}", e.getMessage());
+            }
+        });
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    push.run();
+                }
+            });
+        } else {
+            push.run();
+        }
+    }
+
+    @Override
     public void notifyRemovedFor(String incidentId, com.sosvietnam.model.payload.enums.AgencyType previousAgency) {
         Runnable push = () -> {
             try {

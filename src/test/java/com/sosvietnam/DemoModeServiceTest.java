@@ -30,6 +30,8 @@ class DemoModeServiceTest {
     final AppSettingRepository settingRepo = mock(AppSettingRepository.class);
     final IncidentRepository incidentRepo = mock(IncidentRepository.class);
     final IncidentNotifier notifier = mock(IncidentNotifier.class);
+    final com.sosvietnam.repository.IncidentDispatchRepository dispatchRepo = mock(com.sosvietnam.repository.IncidentDispatchRepository.class);
+    final com.sosvietnam.service.DispatchSimulationService simulation = mock(com.sosvietnam.service.DispatchSimulationService.class);
     final CurrentOfficer currentOfficer = mock(CurrentOfficer.class);
     final List<AppSetting> rows = new ArrayList<>();
 
@@ -46,7 +48,37 @@ class DemoModeServiceTest {
         when(me.email()).thenReturn("congan.tanan@sos.vn");
         when(currentOfficer.require()).thenReturn(me);
         return new DemoModeServiceImpl(settingRepo, incidentRepo, mock(UnitMemberRepository.class), currentOfficer,
-                notifier, envDefault, 50);
+                notifier, dispatchRepo, simulation, envDefault, 50);
+    }
+
+    @Test
+    void purge_open_dropsCardsStopsSimulation_all_deletesEveryDemo() {
+        DemoModeServiceImpl service = service(false);
+        java.util.List<String> open = java.util.List.of("SOS-OPEN-1", "SOS-OPEN-2");
+        java.util.List<String> all = java.util.List.of("SOS-OPEN-1", "SOS-OPEN-2", "SOS-DONE-1");
+        when(incidentRepo.findDemoIds(eq(com.sosvietnam.model.payload.enums.IncidentStatus.ACTIVE), any())).thenReturn(open);
+        when(incidentRepo.findDemoIds(eq(java.util.EnumSet.allOf(com.sosvietnam.model.payload.enums.IncidentStatus.class)), any()))
+                .thenReturn(all);
+        when(incidentRepo.deleteWithClaims(any())).thenAnswer(i -> ((java.util.Collection<?>) i.getArgument(0)).size());
+        when(dispatchRepo.findIdsByIncidentIds(open)).thenReturn(java.util.List.of(11L));
+
+        var openResult = service.purge(com.sosvietnam.model.payload.enums.DemoPurgeScope.OPEN);
+        assertThat(openResult.getDeleted()).isEqualTo(2);
+        verify(notifier).notifyDeleted(open);
+        verify(simulation).stop(11L);
+        verify(incidentRepo).deleteWithClaims(open);
+
+        var allResult = service.purge(com.sosvietnam.model.payload.enums.DemoPurgeScope.ALL);
+        assertThat(allResult.getDeleted()).isEqualTo(3);
+        verify(incidentRepo).deleteWithClaims(all);
+        // ca đã đóng không còn trên hàng đợi: chỉ báo gỡ thẻ các ca đang mở
+        verify(notifier, times(2)).notifyDeleted(open);
+    }
+
+    @Test
+    void purge_withoutScope_400() {
+        assertThatThrownBy(() -> service(false).purge(null)).isInstanceOf(SosException.class);
+        verify(incidentRepo, never()).deleteWithClaims(any());
     }
 
     @Test
