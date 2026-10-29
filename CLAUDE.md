@@ -51,7 +51,7 @@
 - **Văn bản** `/incidents/{id}/document` (+ `/docx`, ký cán bộ / dân / ký hộ); nháp điền cán bộ / đơn vị = người xử lý (cán bộ được uỷ quyền nếu tỉnh uỷ quyền xuống, không thì người nhận ca cuối); dân xem qua tracking hoặc tra cứu (bản nháp khi chưa lưu).
 - **Tra cứu** `POST /incidents/lookup` (mã ca + 4 số cuối SĐT): ca mở → cấp token mới (`open`, `incident`, `citizen_access_token`); 5 sai / 10' / mã → 429 (cả `/lookup/document`).
 - **SMS** (SMS Gateway Android, `SMS_GATEWAY_*`, `APP_PUBLIC_URL`; chưa cấu hình = không gửi; ca demo không gửi; tin không dấu, không link): đã tiếp nhận (10s sau lần nhận đầu, 20 tin / số / 24h), khởi hành, sắp tới (≤ 50 m), ca kết thúc cho lực lượng, link người đi hiện trường.
-- **Khoá SĐT báo khống**: 3 báo khống hoặc 4 lần dân huỷ "bấm nhầm" / 24h → khoá 24h; lần 3 / 30 ngày → vĩnh viễn. ADMIN `/admin/phone-locks` (danh sách, `/{id}/lift`), công tắc `GET/PUT /admin/phone-locks/settings` `{ enabled }` (app_settings `PHONE_LOCK_ENABLED`, mặc định bật; tắt = không khoá mới, khoá cũ không chặn); FE: Cài đặt › Quản trị › Khoá SĐT (5 khoá gần nhất + gỡ).
+- **Khoá SĐT báo khống**: 3 báo khống hoặc 4 lần dân huỷ "bấm nhầm" / 24h → khoá 24h; lần 3 / 30 ngày → vĩnh viễn. Mọi cán bộ (chưa giới hạn ADMIN): `/phone-locks` (danh sách, `/{id}/lift`), công tắc `GET/PUT /phone-locks/settings` `{ enabled }` (app_settings `PHONE_LOCK_ENABLED`, mặc định bật; tắt = không khoá mới, khoá cũ không chặn); FE: Cài đặt › Hệ thống › Khoá SĐT (5 khoá gần nhất + gỡ).
 - **Ca demo**: `[DEMO] ...`, công tắc `GET/PUT /settings/demo` (sinh / ẩn, `simulation_speed_kmh` 5–300, áp cho lần Mô phỏng sau). FE hỏi vị trí 3 s / lần; "Dự kiến tới nơi" tính phần tuyến còn lại từ vị trí xe.
 
 ## Khác
@@ -62,5 +62,5 @@
 - Media: R2 private, link ký 10'. Tối đa 5 ảnh + 1 video / ca.
 
 ## Làm sau
-- Báo hộ (PROXY), OTP, Google Routes qua BE, "Đã xử lý xong" từ trang link, giao diện ADMIN khoá SĐT, quên mật khẩu, ghi âm / lưu video cuộc gọi, gộp ca trùng, lỗi mô phỏng "Rẽ đường khác".
+- Báo hộ (PROXY), OTP, Google Routes qua BE, "Đã xử lý xong" từ trang link, quên mật khẩu, ghi âm / lưu video cuộc gọi, gộp ca trùng, lỗi mô phỏng "Rẽ đường khác".
 - **Siết token cán bộ** (đã rà, chưa sửa): (1) access 24h / refresh 7 ngày quá dài cho máy dùng chung → access 15–30', refresh hạn tuyệt đối ~12h (1 ca) + hết khi bỏ không ~2h, thêm "Đổi cán bộ / Khoá màn hình" giữ bước chọn cán bộ; (2) `/auth/login` không giới hạn sai mật khẩu đơn vị + khoá PIN vĩnh viễn dễ bị đồng nghiệp cố tình khoá → giới hạn IP + email, khoá PIN tạm 15' (khoá hẳn lần 3 / ngày); (3) `refresh_tokens.token` lưu nguyên văn + refresh đã thu hồi gửi lại chỉ 401 → lưu sha256 (Flyway mới), gặp token dùng lại thì `disableOldTokens(mid)`, dọn dòng hết hạn; (4) `refreshToken` chỉ kiểm cán bộ, không kiểm tài khoản đơn vị còn hoạt động / chưa khoá. Nhỏ hơn: thu hồi chỉ ở RAM khi không Redis, token ở `localStorage`, ADMIN không PIN / 2FA.

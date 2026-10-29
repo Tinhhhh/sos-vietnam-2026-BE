@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * Chống báo tin giả theo SĐT (IP chỉ để cảnh báo, không chặn: 4G dùng CGNAT, nhiều người chung 1 IP).
  * - Cán bộ kết luận báo khống 3 ca trong 24 giờ, hoặc người dân huỷ "Bấm nhầm" lần thứ 4 trong 24 giờ: khoá 24 giờ.
- * - Lần khoá thứ 3 trong 30 ngày: khoá vĩnh viễn, chỉ ADMIN gỡ.
+ * - Lần khoá thứ 3 trong 30 ngày: khoá vĩnh viễn, chỉ cán bộ gỡ tay.
  */
 public interface PhoneLockService {
 
@@ -26,13 +26,13 @@ public interface PhoneLockService {
     /** Số ca báo khống 24 giờ qua theo IP (cờ trên thẻ hàng đợi). */
     Map<String, Long> falseAlarmsByIp(Collection<String> ips);
 
-    /** ADMIN: danh sách lần khoá (active = chỉ khoá đang hiệu lực). */
+    /** Cán bộ: danh sách lần khoá (active = chỉ khoá đang hiệu lực). */
     ListResponse list(String phone, boolean activeOnly, int pageNo, int pageSize);
 
-    /** ADMIN gỡ khoá (người dân đã trình bày với công an / liên hệ hệ thống). */
+    /** Cán bộ gỡ khoá (người dân đã trình bày với công an / liên hệ hệ thống). */
     PhoneLockResponse lift(Long id, String note);
 
-    /** ADMIN: công tắc bật / tắt khoá SĐT (app_settings PHONE_LOCK_ENABLED, chưa có dòng = bật). */
+    /** Cán bộ: công tắc bật / tắt khoá SĐT (app_settings PHONE_LOCK_ENABLED, chưa có dòng = bật). */
     PhoneLockSettingsResponse getSettings();
 
     PhoneLockSettingsResponse updateSettings(Boolean enabled);

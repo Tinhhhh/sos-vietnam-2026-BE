@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/** Công tắc khoá SĐT báo tin giả (ADMIN). */
+/** Công tắc khoá SĐT báo tin giả (mọi cán bộ). */
 @Data
 @Builder
 @NoArgsConstructor

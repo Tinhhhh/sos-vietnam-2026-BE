@@ -12,16 +12,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/admin/phone-locks")
+@RequestMapping("/api/v1/phone-locks")
 @RequiredArgsConstructor
-@Tag(name = "Admin - Phone locks", description = "SĐT bị khoá gửi SOS vì báo tin giả (chỉ ADMIN)")
-public class AdminPhoneLockController {
+@Tag(name = "Phone locks", description = "SĐT bị khoá gửi SOS vì báo tin giả (mọi cán bộ)")
+public class PhoneLockController {
 
     private final PhoneLockService phoneLockService;
 
     @Operation(summary = "List phone locks",
             description = "phone: exact number (optional); active=true (default) = only locks in force. A lock is 24 h; "
-                    + "the 3rd lock within 30 days is permanent (locked_until null). Role required: ADMIN")
+                    + "the 3rd lock within 30 days is permanent (locked_until null). Role required: OFFICER or ADMIN")
     @GetMapping
     public ResponseEntity<Object> list(@RequestParam(required = false) String phone,
                                        @RequestParam(defaultValue = "true") boolean active,
@@ -33,7 +33,7 @@ public class AdminPhoneLockController {
 
     @Operation(summary = "Lift a phone lock",
             description = "Body { note } (>= 5 characters): why it is lifted (the person explained it to the police / "
-                    + "contacted the system). Lifted locks no longer count towards the permanent lock. Role required: ADMIN")
+                    + "contacted the system). Lifted locks no longer count towards the permanent lock. Role required: OFFICER or ADMIN")
     @PostMapping("/{id}/lift")
     public ResponseEntity<Object> lift(@PathVariable Long id, @RequestBody LiftPhoneLockRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Đã gỡ khoá", phoneLockService.lift(id, request.getNote()));
@@ -41,14 +41,14 @@ public class AdminPhoneLockController {
 
     @Operation(summary = "Phone lock switch",
             description = "data { enabled, updated_at }. Off = no new locks and existing locks do not block SOS "
-                    + "(they come back when switched on). Role required: ADMIN")
+                    + "(they come back when switched on). Role required: OFFICER or ADMIN")
     @GetMapping("/settings")
     public ResponseEntity<Object> settings() {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully retrieved phone lock settings",
                 phoneLockService.getSettings());
     }
 
-    @Operation(summary = "Turn phone locks on / off", description = "Body { enabled }. Role required: ADMIN")
+    @Operation(summary = "Turn phone locks on / off", description = "Body { enabled }. Role required: OFFICER or ADMIN")
     @PutMapping("/settings")
     public ResponseEntity<Object> updateSettings(@RequestBody PhoneLockSettingsRequest request) {
         return ResponseBuilder.returnData(HttpStatus.OK, "Successfully updated phone lock settings",

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/** Một lần khoá SĐT gửi SOS (ADMIN xem / gỡ). */
+/** Một lần khoá SĐT gửi SOS (cán bộ xem / gỡ). */
 @Data
 @Builder
 @NoArgsConstructor
