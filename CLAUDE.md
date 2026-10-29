@@ -5,6 +5,7 @@
 > File này giữ NGẮN: chỉ quy ước + trạng thái hiện hành. Làm xong module thì ghi 1–3 dòng vào mục liên quan ở đây, chi tiết đưa vào `docs/claude-history.md`. Chỉ ghi thiết kế hệ thống, luồng, nghiệp vụ (không ghi commit, số unit test / e2e, ngày làm).
 
 ## Cách làm việc
+- Khi user bảo sửa: việc UI thì hỏi có sửa cả bản mobile không; việc logic thì hỏi có sửa cả BE không (trước khi bắt tay làm).
 - BE chỉ làm khi user đã duyệt danh sách việc (FE làm trước, báo BE cần gì). Đổi API / quy ước thì báo user + ghi lại.
 - Style theo `C:\Users\TINH KHUNG\IdeaProjects\HIV-TMSS`: controller → service (interface) → `service/implement/*ServiceImpl` → repository; DTO `model/payload/request|response`, enum `model/payload/enums` (có field mô tả).
 - Làm xong tự commit đúng file của mình (`type(scope): ...`), dán commit message. Không push nếu không được bảo. User tự merge `develop` → `main`, deploy từ `main`.
